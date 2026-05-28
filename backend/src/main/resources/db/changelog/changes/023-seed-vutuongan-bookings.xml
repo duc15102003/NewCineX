@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="023" author="cinex">
+
+        <sql splitStatements="false">
+            -- Tạo user vutuongan nếu chưa tồn tại
+            IF NOT EXISTS (SELECT 1 FROM users WHERE username = 'vutuongan')
+            BEGIN
+                INSERT INTO users (username, email, password, full_name, role, enabled, version, created_by, created_at, updated_at)
+                VALUES ('vutuongan', 'vutuongan@gmail.com', '$2a$10$S0EBjEByHrlV2VrdLyWqLeg9/aTVwRAWvOy4GQON8xIGn2gMQBCdy',
+                    N'Vũ Tuấn An', 'USER', 1, 0, 'system', DATEADD(day, -14, GETDATE()), DATEADD(day, -14, GETDATE()))
+            END
+        </sql>
+
+        <sql splitStatements="false">
+            DECLARE @userId BIGINT = (SELECT id FROM users WHERE username = 'vutuongan');
+            DECLARE @r1 BIGINT = (SELECT id FROM rooms WHERE name = N'Phòng 01');
+            DECLARE @r2 BIGINT = (SELECT id FROM rooms WHERE name = N'Phòng 02');
+
+            -- Lấy showtimes
+            DECLARE @stFinished1 BIGINT = (SELECT TOP 1 id FROM showtimes WHERE status = 'FINISHED' ORDER BY id ASC);
+            DECLARE @stFinished2 BIGINT = (SELECT id FROM showtimes WHERE status = 'FINISHED' ORDER BY id ASC OFFSET 1 ROWS FETCH NEXT 1 ROWS ONLY);
+            DECLARE @stFinished3 BIGINT = (SELECT TOP 1 id FROM showtimes WHERE status = 'FINISHED' ORDER BY id DESC);
+            DECLARE @stScheduled1 BIGINT = (SELECT TOP 1 id FROM showtimes WHERE status = 'SCHEDULED' ORDER BY id ASC);
+            DECLARE @stScheduled2 BIGINT = (SELECT id FROM showtimes WHERE status = 'SCHEDULED' ORDER BY id ASC OFFSET 1 ROWS FETCH NEXT 1 ROWS ONLY);
+
+            -- ===== Vé 1: Lật Mặt 7 — 5 ngày trước, CHECKED_IN (đã xem) =====
+            INSERT INTO bookings (user_id, showtime_id, total_amount, status, booking_code, confirmed_at, version, storage_state, created_by, created_at, updated_at)
+            VALUES (@userId, @stFinished1, 190000, 'CHECKED_IN', 'CX-VTA-001',
+                DATEADD(day, -5, GETDATE()), 0, 'ACTIVE', 'system',
+                DATEADD(day, -5, GETDATE()), DATEADD(day, -5, GETDATE()));
+
+            DECLARE @bk1 BIGINT = (SELECT id FROM bookings WHERE booking_code = 'CX-VTA-001');
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk1, id, 95000, 'BOOKED' FROM seats WHERE room_id = @r1 AND seat_number = 'D7';
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk1, id, 95000, 'BOOKED' FROM seats WHERE room_id = @r1 AND seat_number = 'D8';
+
+            INSERT INTO payments (booking_id, amount, method, transaction_code, status, paid_at, version, storage_state, created_by, created_at, updated_at)
+            VALUES (@bk1, 190000, 'VNPAY', 'PAY-VTA-001', 'COMPLETED',
+                DATEADD(day, -5, GETDATE()), 0, 'ACTIVE', 'system',
+                DATEADD(day, -5, GETDATE()), DATEADD(day, -5, GETDATE()));
+
+            -- ===== Vé 2: Thunderbolts — 3 ngày trước, CONFIRMED (chưa check-in) =====
+            INSERT INTO bookings (user_id, showtime_id, total_amount, status, booking_code, confirmed_at, version, storage_state, created_by, created_at, updated_at)
+            VALUES (@userId, @stFinished2, 360000, 'CONFIRMED', 'CX-VTA-002',
+                DATEADD(day, -3, GETDATE()), 0, 'ACTIVE', 'system',
+                DATEADD(day, -3, GETDATE()), DATEADD(day, -3, GETDATE()));
+
+            DECLARE @bk2 BIGINT = (SELECT id FROM bookings WHERE booking_code = 'CX-VTA-002');
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk2, id, 120000, 'BOOKED' FROM seats WHERE room_id = @r2 AND seat_number = 'C3';
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk2, id, 120000, 'BOOKED' FROM seats WHERE room_id = @r2 AND seat_number = 'C4';
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk2, id, 120000, 'BOOKED' FROM seats WHERE room_id = @r2 AND seat_number = 'C5';
+
+            INSERT INTO payments (booking_id, amount, method, transaction_code, status, paid_at, version, storage_state, created_by, created_at, updated_at)
+            VALUES (@bk2, 360000, 'MOMO', 'PAY-VTA-002', 'COMPLETED',
+                DATEADD(day, -3, GETDATE()), 0, 'ACTIVE', 'system',
+                DATEADD(day, -3, GETDATE()), DATEADD(day, -3, GETDATE()));
+
+            -- ===== Vé 3: MI — 1 ngày trước, CANCELLED (đã hủy) =====
+            INSERT INTO bookings (user_id, showtime_id, total_amount, status, booking_code, confirmed_at, cancelled_at, version, storage_state, created_by, created_at, updated_at)
+            VALUES (@userId, @stFinished3, 160000, 'CANCELLED', 'CX-VTA-003',
+                DATEADD(day, -1, GETDATE()), DATEADD(hour, -18, GETDATE()),
+                0, 'ACTIVE', 'system',
+                DATEADD(day, -1, GETDATE()), DATEADD(day, -1, GETDATE()));
+
+            DECLARE @bk3 BIGINT = (SELECT id FROM bookings WHERE booking_code = 'CX-VTA-003');
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk3, id, 160000, 'CANCELLED' FROM seats WHERE room_id = @r1 AND seat_number = 'E8';
+
+            INSERT INTO payments (booking_id, amount, method, transaction_code, status, paid_at, version, storage_state, created_by, created_at, updated_at)
+            VALUES (@bk3, 160000, 'VNPAY', 'PAY-VTA-003', 'REFUNDED',
+                DATEADD(day, -1, GETDATE()), 0, 'ACTIVE', 'system',
+                DATEADD(day, -1, GETDATE()), DATEADD(day, -1, GETDATE()));
+
+            -- ===== Vé 4: Lật Mặt 7 hôm nay — CONFIRMED (vé sắp tới) =====
+            INSERT INTO bookings (user_id, showtime_id, total_amount, status, booking_code, confirmed_at, version, storage_state, created_by, created_at, updated_at)
+            VALUES (@userId, @stScheduled1, 265000, 'CONFIRMED', 'CX-VTA-004',
+                GETDATE(), 0, 'ACTIVE', 'system', GETDATE(), GETDATE());
+
+            DECLARE @bk4 BIGINT = (SELECT id FROM bookings WHERE booking_code = 'CX-VTA-004');
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk4, id, 95000, 'BOOKED' FROM seats WHERE room_id = @r1 AND seat_number = 'D9';
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk4, id, 95000, 'BOOKED' FROM seats WHERE room_id = @r1 AND seat_number = 'D10';
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk4, id, 75000, 'BOOKED' FROM seats WHERE room_id = @r1 AND seat_number = 'C7';
+
+            INSERT INTO payments (booking_id, amount, method, transaction_code, status, paid_at, version, storage_state, created_by, created_at, updated_at)
+            VALUES (@bk4, 265000, 'VNPAY', 'PAY-VTA-004', 'COMPLETED',
+                GETDATE(), 0, 'ACTIVE', 'system', GETDATE(), GETDATE());
+
+            -- ===== Vé 5: Thunderbolts ngày mai — HOLDING (đang giữ ghế) =====
+            INSERT INTO bookings (user_id, showtime_id, total_amount, status, booking_code, version, storage_state, created_by, created_at, updated_at)
+            VALUES (@userId, @stScheduled2, 180000, 'HOLDING', 'CX-VTA-005',
+                0, 'ACTIVE', 'system', GETDATE(), GETDATE());
+
+            DECLARE @bk5 BIGINT = (SELECT id FROM bookings WHERE booking_code = 'CX-VTA-005');
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk5, id, 90000, 'HELD' FROM seats WHERE room_id = @r2 AND seat_number = 'B7';
+            INSERT INTO booking_seats (booking_id, seat_id, price, status)
+            SELECT @bk5, id, 90000, 'HELD' FROM seats WHERE room_id = @r2 AND seat_number = 'B8';
+        </sql>
+
+    </changeSet>
+
+</databaseChangeLog>

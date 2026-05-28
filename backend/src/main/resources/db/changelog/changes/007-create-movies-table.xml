@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="007" author="cinex">
+        <createTable tableName="movies">
+            <!-- BaseEntity -->
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0"/>
+            <column name="storage_state" type="NVARCHAR(20)"/>
+            <column name="created_by" type="NVARCHAR(50)"/>
+            <column name="updated_by" type="NVARCHAR(50)"/>
+            <column name="created_at" type="DATETIME2"/>
+            <column name="updated_at" type="DATETIME2"/>
+
+            <!-- Movie fields -->
+            <column name="title" type="NVARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="NTEXT"/>
+            <column name="duration" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="release_date" type="DATE"/>
+            <column name="end_date" type="DATE"/>
+            <column name="poster_url" type="NVARCHAR(500)"/>
+            <column name="trailer_url" type="NVARCHAR(500)"/>
+            <column name="director" type="NVARCHAR(100)"/>
+            <column name="cast" type="NVARCHAR(500)"/>
+            <column name="language" type="NVARCHAR(50)"/>
+            <column name="rating" type="DECIMAL(3,1)"/>
+            <column name="status" type="NVARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- movie_genres (N:N join table, no BaseEntity) -->
+        <createTable tableName="movie_genres">
+            <column name="movie_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="genre_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey tableName="movie_genres" columnNames="movie_id, genre_id"/>
+        <addForeignKeyConstraint baseTableName="movie_genres" baseColumnNames="movie_id"
+                                 referencedTableName="movies" referencedColumnNames="id"
+                                 constraintName="fk_movie_genres_movie_id"/>
+        <addForeignKeyConstraint baseTableName="movie_genres" baseColumnNames="genre_id"
+                                 referencedTableName="genres" referencedColumnNames="id"
+                                 constraintName="fk_movie_genres_genre_id"/>
+    </changeSet>
+
+</databaseChangeLog>

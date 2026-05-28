@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="004" author="cinex">
+        <createTable tableName="system_config">
+            <!-- No BaseEntity -->
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="config_key" type="NVARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="config_value" type="NVARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="NVARCHAR(255)"/>
+        </createTable>
+
+        <insert tableName="system_config">
+            <column name="config_key" value="booking.hold_minutes"/>
+            <column name="config_value" value="10"/>
+            <column name="description" value="Hold seat duration (minutes)"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="config_key" value="booking.max_seats"/>
+            <column name="config_value" value="8"/>
+            <column name="description" value="Max seats per booking"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="config_key" value="showtime.buffer_minutes"/>
+            <column name="config_value" value="15"/>
+            <column name="description" value="Room cleanup buffer (minutes)"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="013" author="cinex">
+
+        <!-- Admin account (password: Admin@123) -->
+        <insert tableName="users">
+            <column name="username" value="admin"/>
+            <column name="email" value="admin@cinex.com"/>
+            <column name="password" value="$2a$10$S0EBjEByHrlV2VrdLyWqLeg9/aTVwRAWvOy4GQON8xIGn2gMQBCdy"/>
+            <column name="full_name" value="System Admin"/>
+            <column name="role" value="ADMIN"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_by" value="system"/>
+            <column name="created_at" valueComputed="GETDATE()"/>
+            <column name="updated_at" valueComputed="GETDATE()"/>
+        </insert>
+
+        <!-- Genres -->
+        <insert tableName="genres"><column name="name" value="Action"/><column name="version" valueNumeric="0"/><column name="created_by" value="system"/><column name="created_at" valueComputed="GETDATE()"/><column name="updated_at" valueComputed="GETDATE()"/></insert>
+        <insert tableName="genres"><column name="name" value="Horror"/><column name="version" valueNumeric="0"/><column name="created_by" value="system"/><column name="created_at" valueComputed="GETDATE()"/><column name="updated_at" valueComputed="GETDATE()"/></insert>
+        <insert tableName="genres"><column name="name" value="Comedy"/><column name="version" valueNumeric="0"/><column name="created_by" value="system"/><column name="created_at" valueComputed="GETDATE()"/><column name="updated_at" valueComputed="GETDATE()"/></insert>
+        <insert tableName="genres"><column name="name" value="Romance"/><column name="version" valueNumeric="0"/><column name="created_by" value="system"/><column name="created_at" valueComputed="GETDATE()"/><column name="updated_at" valueComputed="GETDATE()"/></insert>
+        <insert tableName="genres"><column name="name" value="Sci-Fi"/><column name="version" valueNumeric="0"/><column name="created_by" value="system"/><column name="created_at" valueComputed="GETDATE()"/><column name="updated_at" valueComputed="GETDATE()"/></insert>
+        <insert tableName="genres"><column name="name" value="Animation"/><column name="version" valueNumeric="0"/><column name="created_by" value="system"/><column name="created_at" valueComputed="GETDATE()"/><column name="updated_at" valueComputed="GETDATE()"/></insert>
+        <insert tableName="genres"><column name="name" value="Adventure"/><column name="version" valueNumeric="0"/><column name="created_by" value="system"/><column name="created_at" valueComputed="GETDATE()"/><column name="updated_at" valueComputed="GETDATE()"/></insert>
+        <insert tableName="genres"><column name="name" value="Drama"/><column name="version" valueNumeric="0"/><column name="created_by" value="system"/><column name="created_at" valueComputed="GETDATE()"/><column name="updated_at" valueComputed="GETDATE()"/></insert>
+        <insert tableName="genres"><column name="name" value="Documentary"/><column name="version" valueNumeric="0"/><column name="created_by" value="system"/><column name="created_at" valueComputed="GETDATE()"/><column name="updated_at" valueComputed="GETDATE()"/></insert>
+        <insert tableName="genres"><column name="name" value="Musical"/><column name="version" valueNumeric="0"/><column name="created_by" value="system"/><column name="created_at" valueComputed="GETDATE()"/><column name="updated_at" valueComputed="GETDATE()"/></insert>
+
+    </changeSet>
+
+</databaseChangeLog>

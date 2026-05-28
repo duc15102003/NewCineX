@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="003" author="cinex">
+        <createTable tableName="id_tracker">
+            <!-- No BaseEntity -->
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="entity_type" type="NVARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="prefix" type="NVARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="current_value" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="NVARCHAR(100)"/>
+        </createTable>
+
+        <insert tableName="id_tracker">
+            <column name="entity_type" value="BOOKING"/>
+            <column name="prefix" value="CX"/>
+            <column name="current_value" value="0"/>
+            <column name="description" value="Booking code: CX-20260510-001"/>
+        </insert>
+        <insert tableName="id_tracker">
+            <column name="entity_type" value="PAYMENT"/>
+            <column name="prefix" value="PAY"/>
+            <column name="current_value" value="0"/>
+            <column name="description" value="Payment code: PAY-20260510-001"/>
+        </insert>
+        <insert tableName="id_tracker">
+            <column name="entity_type" value="USER"/>
+            <column name="prefix" value="USR"/>
+            <column name="current_value" value="0"/>
+            <column name="description" value="User code: USR-001"/>
+        </insert>
+        <insert tableName="id_tracker">
+            <column name="entity_type" value="MOVIE"/>
+            <column name="prefix" value="MOV"/>
+            <column name="current_value" value="0"/>
+            <column name="description" value="Movie code: MOV-001"/>
+        </insert>
+        <insert tableName="id_tracker">
+            <column name="entity_type" value="ROOM"/>
+            <column name="prefix" value="RM"/>
+            <column name="current_value" value="0"/>
+            <column name="description" value="Room code: RM-001"/>
+        </insert>
+        <insert tableName="id_tracker">
+            <column name="entity_type" value="GENRE"/>
+            <column name="prefix" value="GNR"/>
+            <column name="current_value" value="0"/>
+            <column name="description" value="Genre code: GNR-001"/>
+        </insert>
+        <insert tableName="id_tracker">
+            <column name="entity_type" value="SHOWTIME"/>
+            <column name="prefix" value="ST"/>
+            <column name="current_value" value="0"/>
+            <column name="description" value="Showtime code: ST-20260515-001"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

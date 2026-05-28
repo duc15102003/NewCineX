@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="001" author="cinex">
+        <createTable tableName="users">
+            <!-- BaseEntity -->
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0"/>
+            <column name="storage_state" type="NVARCHAR(20)"/>
+            <column name="created_by" type="NVARCHAR(50)"/>
+            <column name="updated_by" type="NVARCHAR(50)"/>
+            <column name="created_at" type="DATETIME2"/>
+            <column name="updated_at" type="DATETIME2"/>
+
+            <!-- User fields -->
+            <column name="username" type="NVARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="email" type="NVARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="password" type="NVARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="full_name" type="NVARCHAR(100)"/>
+            <column name="phone" type="NVARCHAR(20)"/>
+            <column name="avatar_url" type="NVARCHAR(500)"/>
+            <column name="role" type="NVARCHAR(20)" defaultValue="USER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="BIT" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>

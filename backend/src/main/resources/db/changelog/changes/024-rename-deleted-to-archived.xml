@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="024" author="cinex">
+        <comment>Rename storage_state DELETED to ARCHIVED across all tables</comment>
+        <sql>
+            UPDATE users SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+            UPDATE movies SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+            UPDATE genres SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+            UPDATE rooms SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+            UPDATE seats SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+            UPDATE showtimes SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+            UPDATE bookings SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+            UPDATE payments SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+            UPDATE vouchers SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+            UPDATE reviews SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+            UPDATE snacks SET storage_state = 'ARCHIVED' WHERE storage_state = 'DELETED';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

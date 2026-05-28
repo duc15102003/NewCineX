@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="025" author="cinex">
+        <comment>Drop unique constraint on reviews(user_id, movie_id) — soft delete cần cho phép nhiều record cùng user+movie (chỉ 1 ACTIVE)</comment>
+        <dropUniqueConstraint tableName="reviews" constraintName="uq_reviews_user_movie"/>
+    </changeSet>
+
+</databaseChangeLog>

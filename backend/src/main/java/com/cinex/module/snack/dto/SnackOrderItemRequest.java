@@ -1,0 +1,18 @@
+package com.cinex.module.snack.dto;
+
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class SnackOrderItemRequest {
+
+    @NotNull(message = "Vui lòng chọn món")
+    private Long snackId;
+
+    @NotNull(message = "Số lượng không được để trống")
+    @Min(value = 1, message = "Số lượng tối thiểu là 1")
+    private Integer quantity;
+}

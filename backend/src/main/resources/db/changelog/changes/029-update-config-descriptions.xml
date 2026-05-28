@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!-- Cập nhật mô tả config sang tiếng Việt cho đồng bộ UI -->
+    <changeSet id="029-update-config-descriptions" author="cinex">
+        <update tableName="system_config">
+            <column name="description" value="Thời gian giữ ghế khi đặt vé (phút)"/>
+            <where>config_key = 'booking.hold_minutes'</where>
+        </update>
+        <update tableName="system_config">
+            <column name="description" value="Tối đa số ghế mỗi lần đặt vé"/>
+            <where>config_key = 'booking.max_seats'</where>
+        </update>
+        <update tableName="system_config">
+            <column name="description" value="Thời gian vệ sinh phòng giữa 2 suất chiếu (phút)"/>
+            <where>config_key = 'showtime.buffer_minutes'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

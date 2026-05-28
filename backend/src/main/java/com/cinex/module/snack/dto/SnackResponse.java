@@ -1,0 +1,23 @@
+package com.cinex.module.snack.dto;
+
+import lombok.Builder;
+import lombok.Getter;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Getter
+@Builder
+public class SnackResponse {
+
+    private Long id;
+    private String storageState;
+    private String name;
+    private String description;
+    private BigDecimal price;
+    private String imageUrl;
+    private String category;
+    private boolean available;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}

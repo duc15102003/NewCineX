@@ -1,0 +1,46 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "CineX@2026"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8088:8088"
+    environment:
+      DB_HOST: sqlserver
+      DB_PORT: 1433
+      DB_NAME: cinex
+      DB_USERNAME: sa
+      DB_PASSWORD: "CineX@2026"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: "dGhpcyBpcyBhIHZlcnkgbG9uZyBzZWNyZXQga2V5IGZvciBkZXZlbG9wbWVudCBvbmx5IDEyMzQ1Njc4OTA="
+    depends_on:
+      - sqlserver
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  sqlserver-data:

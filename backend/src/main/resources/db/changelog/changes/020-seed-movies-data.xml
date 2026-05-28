@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="020" author="cinex">
+
+        <!-- ==================== PHIM ĐANG CHIẾU (NOW_SHOWING) ==================== -->
+
+        <!-- 1. Lật Mặt 7: Một Điều Ước -->
+        <insert tableName="movies">
+            <column name="title" value="Lật Mặt 7: Một Điều Ước"/>
+            <column name="description" value="Phần 7 của loạt phim Lật Mặt do Lý Hải đạo diễn. Câu chuyện xoay quanh những mâu thuẫn gia đình, tình yêu và sự hy sinh giữa các thế hệ trong một gia đình Việt Nam."/>
+            <column name="duration" valueNumeric="132"/>
+            <column name="release_date" valueDate="2026-04-25"/>
+            <column name="end_date" valueDate="2026-06-25"/>
+            <column name="poster_url" value="https://image.tmdb.org/t/p/w500/lMnkKkELuOEWCs5mBBsYnl4jSGA.jpg"/>
+            <column name="trailer_url" value="https://www.youtube.com/watch?v=example1"/>
+            <column name="director" value="Lý Hải"/>
+            <column name="cast" value="Lý Hải, Trấn Thành, Kiều Minh Tuấn, Hứa Vĩ Văn"/>
+            <column name="language" value="Tiếng Việt"/>
+            <column name="rating" valueNumeric="8.2"/>
+            <column name="status" value="NOW_SHOWING"/>
+            <column name="storage_state" value="ACTIVE"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_by" value="system"/>
+            <column name="created_at" valueComputed="GETDATE()"/>
+            <column name="updated_at" valueComputed="GETDATE()"/>
+        </insert>
+
+        <!-- 2. Thunderbolts* -->
+        <insert tableName="movies">
+            <column name="title" value="Thunderbolts*"/>
+            <column name="description" value="Nhóm phản anh hùng của Marvel Studios được tập hợp lại để thực hiện nhiệm vụ bí mật. Với sự dẫn dắt của Valentina Allegra de Fontaine, họ phải đối mặt với kẻ thù chung và tìm ra mục đích thực sự của mình."/>
+            <column name="duration" valueNumeric="127"/>
+            <column name="release_date" valueDate="2026-05-02"/>
+            <column name="end_date" valueDate="2026-07-02"/>
+            <column name="poster_url" value="https://image.tmdb.org/t/p/w500/m0lSxkCScubJNrQ4tp3iVHhXAIL.jpg"/>
+            <column name="trailer_url" value="https://www.youtube.com/watch?v=example2"/>
+            <column name="director" value="Jake Schreier"/>
+            <column name="cast" value="Florence Pugh, Sebastian Stan, David Harbour, Wyatt Russell"/>
+            <column name="language" value="Tiếng Anh"/>
+            <column name="rating" valueNumeric="7.5"/>
+            <column name="status" value="NOW_SHOWING"/>
+            <column name="storage_state" value="ACTIVE"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_by" value="system"/>
+            <column name="created_at" valueComputed="GETDATE()"/>
+            <column name="updated_at" valueComputed="GETDATE()"/>
+        </insert>
+
+        <!-- 3. Quỷ Cẩu -->
+        <insert tableName="movies">
+            <column name="title" value="Quỷ Cẩu"/>
+            <column name="description" value="Một bộ phim kinh dị Việt Nam lấy cảm hứng từ truyền thuyết dân gian. Khi một gia đình chuyển về quê sinh sống, họ phát hiện bí mật đen tối ẩn giấu trong ngôi nhà cổ và phải đối mặt với thế lực siêu nhiên đáng sợ."/>
+            <column name="duration" valueNumeric="108"/>
+            <column name="release_date" valueDate="2026-05-10"/>
+            <column name="end_date" valueDate="2026-07-10"/>
+            <column name="poster_url" value="https://image.tmdb.org/t/p/w500/sUXYKaenUOonVOlTbABIHvJaHzT.jpg"/>
+            <column name="trailer_url" value="https://www.youtube.com/watch?v=example3"/>
+            <column name="director" value="Lưu Thành Luân"/>
+            <column name="cast" value="Quốc Trường, Bảo Ngọc, Ngọc Hiệp"/>
+            <column name="language" value="Tiếng Việt"/>
+            <column name="rating" valueNumeric="6.8"/>
+            <column name="status" value="NOW_SHOWING"/>
+            <column name="storage_state" value="ACTIVE"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_by" value="system"/>
+            <column name="created_at" valueComputed="GETDATE()"/>
+            <column name="updated_at" valueComputed="GETDATE()"/>
+        </insert>
+
+        <!-- 4. Mission: Impossible - The Final Reckoning -->
+        <insert tableName="movies">
+            <column name="title" value="Mission: Impossible - The Final Reckoning"/>
+            <column name="description" value="Ethan Hunt đối mặt với nhiệm vụ nguy hiểm nhất trong sự nghiệp khi phải ngăn chặn một trí tuệ nhân tạo có khả năng kiểm soát toàn bộ hệ thống vũ khí trên thế giới."/>
+            <column name="duration" valueNumeric="169"/>
+            <column name="release_date" valueDate="2026-05-21"/>
+            <column name="end_date" valueDate="2026-08-21"/>
+            <column name="poster_url" value="https://image.tmdb.org/t/p/w500/z6SBjzrmVIYOCSssCGYo0PRDdYo.jpg"/>
+            <column name="trailer_url" value="https://www.youtube.com/watch?v=example4"/>
+            <column name="director" value="Christopher McQuarrie"/>
+            <column name="cast" value="Tom Cruise, Hayley Atwell, Simon Pegg, Ving Rhames"/>
+            <column name="language" value="Tiếng Anh"/>
+            <column name="rating" valueNumeric="8.5"/>
+            <column name="status" value="NOW_SHOWING"/>
+            <column name="storage_state" value="ACTIVE"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_by" value="system"/>
+            <column name="created_at" valueComputed="GETDATE()"/>
+            <column name="updated_at" valueComputed="GETDATE()"/>
+        </insert>
+
+        <!-- 5. Doraemon: Nobita và Vùng Đất Lý Tưởng Trên Bầu Trời -->
+        <insert tableName="movies">
+            <column name="title" value="Doraemon: Nobita và Vùng Đất Lý Tưởng Trên Bầu Trời"/>
+            <column name="description" value="Nobita phát hiện một hòn đảo bí ẩn trôi nổi trên bầu trời — nơi mọi người sống trong xã hội hoàn hảo. Nhưng ẩn sau vẻ đẹp đó là bí mật đáng sợ mà Doraemon và nhóm bạn phải khám phá."/>
+            <column name="duration" valueNumeric="108"/>
+            <column name="release_date" valueDate="2026-05-20"/>
+            <column name="end_date" valueDate="2026-07-20"/>
+            <column name="poster_url" value="https://image.tmdb.org/t/p/w500/hy3IqMHqJHJOAX3pgKtXqEqfMCq.jpg"/>
+            <column name="trailer_url" value="https://www.youtube.com/watch?v=example5"/>
+            <column name="director" value="Takumi Doyama"/>
+            <column name="cast" value="Wasabi Mizuta, Megumi Oohara, Yumi Kakazu"/>
+            <column name="language" value="Tiếng Nhật (Phụ đề Việt)"/>
+            <column name="rating" valueNumeric="7.8"/>
+            <column name="status" value="NOW_SHOWING"/>
+            <column name="storage_state" value="ACTIVE"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_by" value="system"/>
+            <column name="created_at" valueComputed="GETDATE()"/>
+            <column name="updated_at" valueComputed="GETDATE()"/>
+        </insert>
+
+        <!-- ==================== PHIM SẮP CHIẾU (COMING_SOON) ==================== -->
+
+        <!-- 6. Superman -->
+        <insert tableName="movies">
+            <column name="title" value="Superman"/>
+            <column name="description" value="Phim reboot về Superman trong vũ trụ DC mới do James Gunn đạo diễn. Clark Kent phải cân bằng giữa cuộc sống người thường tại Metropolis và vai trò siêu anh hùng bảo vệ Trái Đất."/>
+            <column name="duration" valueNumeric="143"/>
+            <column name="release_date" valueDate="2026-07-11"/>
+            <column name="poster_url" value="https://image.tmdb.org/t/p/w500/ykqOm6QiL2ergUSmPk3JkOOKMCi.jpg"/>
+            <column name="trailer_url" value="https://www.youtube.com/watch?v=example6"/>
+            <column name="director" value="James Gunn"/>
+            <column name="cast" value="David Corenswet, Rachel Brosnahan, Nicholas Hoult"/>
+            <column name="language" value="Tiếng Anh"/>
+            <column name="status" value="COMING_SOON"/>
+            <column name="storage_state" value="ACTIVE"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_by" value="system"/>
+            <column name="created_at" valueComputed="GETDATE()"/>
+            <column name="updated_at" valueComputed="GETDATE()"/>
+        </insert>
+
+        <!-- 7. Elio -->
+        <insert tableName="movies">
+            <column name="title" value="Elio"/>
+            <column name="description" value="Phim hoạt hình mới của Pixar kể về cậu bé Elio — một fan cuồng khoa học viễn tưởng bất ngờ được đưa lên vũ trụ và trở thành đại sứ Trái Đất trong liên minh các hành tinh."/>
+            <column name="duration" valueNumeric="100"/>
+            <column name="release_date" valueDate="2026-06-13"/>
+            <column name="poster_url" value="https://image.tmdb.org/t/p/w500/9nhjGaFLKtddDPtPaX5EmKqsWdH.jpg"/>
+            <column name="trailer_url" value="https://www.youtube.com/watch?v=example7"/>
+            <column name="director" value="Adrian Molina"/>
+            <column name="cast" value="Yonas Kibreab, America Ferrera, Jemaine Clement"/>
+            <column name="language" value="Tiếng Anh"/>
+            <column name="status" value="COMING_SOON"/>
+            <column name="storage_state" value="ACTIVE"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_by" value="system"/>
+            <column name="created_at" valueComputed="GETDATE()"/>
+            <column name="updated_at" valueComputed="GETDATE()"/>
+        </insert>
+
+        <!-- 8. 28 Years Later -->
+        <insert tableName="movies">
+            <column name="title" value="28 Years Later"/>
+            <column name="description" value="28 năm sau đại dịch virus Rage, nước Anh vẫn bị cách ly. Một nhóm người sống sót phải vượt qua vùng đất hoang tàn đầy zombie để tìm kiếm hy vọng sống cuối cùng."/>
+            <column name="duration" valueNumeric="141"/>
+            <column name="release_date" valueDate="2026-06-20"/>
+            <column name="poster_url" value="https://image.tmdb.org/t/p/w500/dT5WJEcFLBFTJFDtoxGoBTDkHig.jpg"/>
+            <column name="trailer_url" value="https://www.youtube.com/watch?v=example8"/>
+            <column name="director" value="Danny Boyle"/>
+            <column name="cast" value="Cillian Murphy, Aaron Taylor-Johnson, Jodie Comer, Ralph Fiennes"/>
+            <column name="language" value="Tiếng Anh"/>
+            <column name="status" value="COMING_SOON"/>
+            <column name="storage_state" value="ACTIVE"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_by" value="system"/>
+            <column name="created_at" valueComputed="GETDATE()"/>
+            <column name="updated_at" valueComputed="GETDATE()"/>
+        </insert>
+
+        <!-- ==================== GÁN THỂ LOẠI CHO PHIM ==================== -->
+        <!-- Genre IDs giả định theo seed 013:
+             1=Action, 2=Horror, 3=Comedy, 4=Romance, 5=Sci-Fi,
+             6=Animation, 7=Adventure, 8=Drama, 9=Documentary, 10=Musical -->
+
+        <!-- Lật Mặt 7: Drama, Comedy -->
+        <sql>
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = N'Lật Mặt 7: Một Điều Ước' AND g.name = 'Drama';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = N'Lật Mặt 7: Một Điều Ước' AND g.name = 'Comedy';
+        </sql>
+
+        <!-- Thunderbolts*: Action, Adventure, Sci-Fi -->
+        <sql>
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Thunderbolts*' AND g.name = 'Action';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Thunderbolts*' AND g.name = 'Adventure';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Thunderbolts*' AND g.name = 'Sci-Fi';
+        </sql>
+
+        <!-- Quỷ Cẩu: Horror, Drama -->
+        <sql>
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = N'Quỷ Cẩu' AND g.name = 'Horror';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = N'Quỷ Cẩu' AND g.name = 'Drama';
+        </sql>
+
+        <!-- Mission: Impossible: Action, Adventure -->
+        <sql>
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Mission: Impossible - The Final Reckoning' AND g.name = 'Action';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Mission: Impossible - The Final Reckoning' AND g.name = 'Adventure';
+        </sql>
+
+        <!-- Doraemon: Animation, Adventure -->
+        <sql>
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = N'Doraemon: Nobita và Vùng Đất Lý Tưởng Trên Bầu Trời' AND g.name = 'Animation';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = N'Doraemon: Nobita và Vùng Đất Lý Tưởng Trên Bầu Trời' AND g.name = 'Adventure';
+        </sql>
+
+        <!-- Superman: Action, Sci-Fi, Adventure -->
+        <sql>
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Superman' AND g.name = 'Action';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Superman' AND g.name = 'Sci-Fi';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Superman' AND g.name = 'Adventure';
+        </sql>
+
+        <!-- Elio: Animation, Sci-Fi, Adventure -->
+        <sql>
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Elio' AND g.name = 'Animation';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Elio' AND g.name = 'Sci-Fi';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = 'Elio' AND g.name = 'Adventure';
+        </sql>
+
+        <!-- 28 Years Later: Horror, Action, Drama -->
+        <sql>
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = '28 Years Later' AND g.name = 'Horror';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = '28 Years Later' AND g.name = 'Action';
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g
+            WHERE m.title = '28 Years Later' AND g.name = 'Drama';
+        </sql>
+
+    </changeSet>
+
+</databaseChangeLog>
