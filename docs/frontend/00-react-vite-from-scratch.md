@@ -1,38 +1,38 @@
-# Tao du an React + Vite + Tailwind tu dau
+# Tạo dự án React + Vite + Tailwind từ đầu
 
-> Huong dan chi tiet tung buoc, danh cho nguoi chua biet gi ve React.
-> Tat ca code mau lay tu du an CineX thuc te.
+> Hướng dẫn chi tiết từng bước, dành cho người chưa biết gì về React.
+> Tất cả code mẫu lấy từ dự án CineX thực tế.
 
 ---
 
-## Muc luc
+## Mục lục
 
-1. [Cai dat moi truong](#1-cai-dat-moi-truong)
-2. [Tao project Vite + React + TypeScript](#2-tao-project-vite--react--typescript)
-3. [Cai Tailwind CSS 4](#3-cai-tailwind-css-4)
-4. [Cai shadcn/ui](#4-cai-shadcnui)
-5. [Cai dependencies du an](#5-cai-dependencies-du-an)
-6. [Cau truc folder du an](#6-cau-truc-folder-du-an)
+1. [Cài đặt môi trường](#1-cai-dat-moi-truong)
+2. [Tạo project Vite + React + TypeScript](#2-tao-project-vite--react--typescript)
+3. [Cài Tailwind CSS 4](#3-cai-tailwind-css-4)
+4. [Cài shadcn/ui](#4-cai-shadcnui)
+5. [Cài dependencies dự án](#5-cai-dependencies-du-an)
+6. [Cấu trúc folder dự án](#6-cau-truc-folder-du-an)
 7. [Setup Axios + JWT interceptor](#7-setup-axios--jwt-interceptor)
 8. [Setup React Router](#8-setup-react-router)
 9. [Setup Zustand store (Auth)](#9-setup-zustand-store-auth)
-10. [Tao trang dau tien (Login)](#10-tao-trang-dau-tien-login)
-11. [Chay va test](#11-chay-va-test)
+10. [Tạo trang đầu tiên (Login)](#10-tao-trang-dau-tien-login)
+11. [Chạy và test](#11-chay-va-test)
 
 ---
 
-## 1. Cai dat moi truong
+## 1. Cài đặt môi trường
 
-### 1.1. Cai Node.js 20+
+### 1.1. Cài Node.js 20+
 
-Node.js la **runtime** de chay JavaScript ngoai trinh duyet. React can Node.js de:
-- Chay dev server (Vite)
-- Cai dat thu vien qua npm
-- Build code thanh file tinh (HTML/CSS/JS) de deploy
+Node.js là **runtime** để chạy JavaScript ngoài trình duyệt. React cần Node.js để:
+- Chạy dev server (Vite)
+- Cài đặt thư viện qua npm
+- Build code thành file tĩnh (HTML/CSS/JS) để deploy
 
-**Cach 1: Dung nvm (khuyen dung)**
+**Cách 1: Dùng nvm (khuyên dùng)**
 
-nvm (Node Version Manager) cho phep cai nhieu phien ban Node.js va chuyen doi de dang:
+nvm (Node Version Manager) cho phép cài nhiều phiên bản Node.js và chuyển đổi dễ dàng:
 
 ```bash
 # Cai nvm (macOS/Linux)
@@ -43,65 +43,65 @@ nvm install 20
 nvm use 20
 ```
 
-**Cach 2: Download truc tiep**
+**Cách 2: Download trực tiếp**
 
-Vao https://nodejs.org, tai ban LTS (Long Term Support) ve cai.
+Vào https://nodejs.org, tải bản LTS (Long Term Support) về cài.
 
-### 1.2. Kiem tra cai dat
+### 1.2. Kiểm tra cài đặt
 
 ```bash
 node -v   # Ket qua mong doi: v20.x.x tro len
 npm -v    # Ket qua mong doi: 10.x.x tro len
 ```
 
-> **npm la gi?** npm (Node Package Manager) la cong cu quan ly thu vien JavaScript.
-> Khi ban `npm install react`, npm se tai React tu registry ve folder `node_modules/`.
+> **npm là gì?** npm (Node Package Manager) là công cụ quản lý thư viện JavaScript.
+> Khi bạn `npm install react`, npm sẽ tải React từ registry về folder `node_modules/`.
 
 ### 1.3. IDE: VS Code + Extensions
 
-Tai VS Code tai https://code.visualstudio.com, sau do cai cac extension:
+Tải VS Code tại https://code.visualstudio.com, sau đó cài các extension:
 
-| Extension | Tac dung |
+| Extension | Tác dụng |
 |---|---|
-| **ESLint** | Kiem tra loi code JavaScript/TypeScript theo quy tac |
-| **Prettier** | Tu dong format code cho dep, nhat quan |
-| **Tailwind CSS IntelliSense** | Goi y class Tailwind khi go, xem preview mau sac |
-| **TypeScript Vue Plugin (Volar)** | Ho tro TypeScript tot hon (du khong dung Vue) |
-| **Error Lens** | Hien thi loi ngay tren dong code, khong can hover |
+| **ESLint** | Kiểm tra lỗi code JavaScript/TypeScript theo quy tắc |
+| **Prettier** | Tự động format code cho đẹp, nhất quán |
+| **Tailwind CSS IntelliSense** | Gợi ý class Tailwind khi gõ, xem preview màu sắc |
+| **TypeScript Vue Plugin (Volar)** | Hỗ trợ TypeScript tốt hơn (dù không dùng Vue) |
+| **Error Lens** | Hiển thị lỗi ngay trên dòng code, không cần hover |
 
-> **Tai sao can ESLint + Prettier?**
-> - ESLint: tim loi logic (bien chua dung, import thua)
-> - Prettier: format code (dau cham phay, tab/space, xuong dong)
-> - Hai cong cu bo sung nhau: ESLint lo "dung/sai", Prettier lo "dep/xau"
+> **Tại sao cần ESLint + Prettier?**
+> - ESLint: tìm lỗi logic (biến chưa dùng, import thừa)
+> - Prettier: format code (dấu chấm phẩy, tab/space, xuống dòng)
+> - Hai công cụ bổ sung nhau: ESLint lo "đúng/sai", Prettier lo "đẹp/xấu"
 
 ---
 
-## 2. Tao project Vite + React + TypeScript
+## 2. Tạo project Vite + React + TypeScript
 
-### 2.1. Tao project
+### 2.1. Tạo project
 
 ```bash
 npm create vite@latest frontend -- --template react-ts
 ```
 
-Giai thich tung phan:
-- `npm create vite@latest` — chay tool tao project cua Vite (phien ban moi nhat)
-- `frontend` — ten folder se duoc tao
-- `--template react-ts` — dung template React + TypeScript (thay vi JavaScript thuong)
+Giải thích từng phần:
+- `npm create vite@latest` — chạy tool tạo project của Vite (phiên bản mới nhất)
+- `frontend` — tên folder sẽ được tạo
+- `--template react-ts` — dùng template React + TypeScript (thay vì JavaScript thường)
 
-> **Tai sao dung Vite thay vi Create React App (CRA)?**
-> - CRA da ngung phat trien tu 2023, React chinh thuc khuyen dung Vite
-> - Vite khoi dong dev server trong **vai tram mili giay** (CRA mat vai giay)
-> - Vite dung ESBuild (viet bang Go) de transform code, nhanh hon Webpack 10-100 lan
-> - Hot Module Replacement (HMR) cua Vite cap nhat tuc thi khi ban sua code
+> **Tại sao dùng Vite thay vì Create React App (CRA)?**
+> - CRA đã ngừng phát triển từ 2023, React chính thức khuyên dùng Vite
+> - Vite khởi động dev server trong **vài trăm mili giây** (CRA mất vài giây)
+> - Vite dùng ESBuild (viết bằng Go) để transform code, nhanh hơn Webpack 10-100 lần
+> - Hot Module Replacement (HMR) của Vite cập nhật tức thì khi bạn sửa code
 
-> **Tai sao TypeScript thay vi JavaScript?**
-> - TypeScript = JavaScript + kieu du lieu (type). Vi du: `name: string` thay vi chi `name`
-> - Loi bi bat ngay luc viet code (compile-time) thay vi luc chay (runtime)
-> - IDE goi y tot hon vi biet kieu du lieu cua moi bien
-> - Du an thuc te 90%+ dung TypeScript
+> **Tại sao TypeScript thay vì JavaScript?**
+> - TypeScript = JavaScript + kiểu dữ liệu (type). Ví dụ: `name: string` thay vì chỉ `name`
+> - Lỗi bị bắt ngay lúc viết code (compile-time) thay vì lúc chạy (runtime)
+> - IDE gợi ý tốt hơn vì biết kiểu dữ liệu của mỗi biến
+> - Dự án thực tế 90%+ dùng TypeScript
 
-### 2.2. Cau truc folder sinh ra
+### 2.2. Cấu trúc folder sinh ra
 
 ```
 frontend/
@@ -123,9 +123,9 @@ frontend/
 └── eslint.config.js       # Cau hinh ESLint
 ```
 
-### 2.3. Giai thich tsconfig.json
+### 2.3. Giải thích tsconfig.json
 
-File `tsconfig.json` cua CineX:
+File `tsconfig.json` của CineX:
 
 ```json
 {
@@ -137,15 +137,15 @@ File `tsconfig.json` cua CineX:
 }
 ```
 
-Day la **Project References** — tach cau hinh TypeScript thanh 2 phan:
-- `tsconfig.app.json`: cho code trong `src/` (chay tren trinh duyet)
-- `tsconfig.node.json`: cho `vite.config.ts` (chay tren Node.js)
+Đây là **Project References** — tách cấu hình TypeScript thành 2 phần:
+- `tsconfig.app.json`: cho code trong `src/` (chạy trên trình duyệt)
+- `tsconfig.node.json`: cho `vite.config.ts` (chạy trên Node.js)
 
-> **Tai sao tach?** Vi `vite.config.ts` chay tren Node.js (can `module: "esnext"`, truy cap file system),
-> con `src/` chay tren trinh duyet (can `jsx: "react-jsx"`, DOM API). Hai moi truong khac nhau
-> nen can cau hinh khac nhau.
+> **Tại sao tách?** Vì `vite.config.ts` chạy trên Node.js (cần `module: "esnext"`, truy cập file system),
+> còn `src/` chạy trên trình duyệt (cần `jsx: "react-jsx"`, DOM API). Hai môi trường khác nhau
+> nên cần cấu hình khác nhau.
 
-File `tsconfig.app.json` cua CineX:
+File `tsconfig.app.json` của CineX:
 
 ```json
 {
@@ -164,14 +164,14 @@ File `tsconfig.app.json` cua CineX:
 }
 ```
 
-> **Path alias la gi?**
-> Thay vi viet `import Button from '../../../components/ui/button'`
-> ban viet `import Button from '@/components/ui/button'`
-> Ngan gon hon, khong bi loi khi di chuyen file.
+> **Path alias là gì?**
+> Thay vì viết `import Button from '../../../components/ui/button'`
+> bạn viết `import Button from '@/components/ui/button'`
+> Ngắn gọn hơn, không bị lỗi khi di chuyển file.
 
-### 2.4. Giai thich vite.config.ts
+### 2.4. Giải thích vite.config.ts
 
-File `vite.config.ts` cua CineX:
+File `vite.config.ts` của CineX:
 
 ```typescript
 import path from 'path'
@@ -192,12 +192,12 @@ export default defineConfig({
 })
 ```
 
-> **Luu y quan trong:** Path alias phai cau hinh o **CA HAI noi**:
-> 1. `tsconfig.app.json` — de TypeScript hieu `@/` nghia la gi
-> 2. `vite.config.ts` — de Vite biet resolve `@/` khi build
-> Neu chi cau hinh 1 noi, se bi loi!
+> **Lưu ý quan trọng:** Path alias phải cấu hình ở **CẢ HAI nơi**:
+> 1. `tsconfig.app.json` — để TypeScript hiểu `@/` nghĩa là gì
+> 2. `vite.config.ts` — để Vite biết resolve `@/` khi build
+> Nếu chỉ cấu hình 1 nơi, sẽ bị lỗi!
 
-### 2.5. Cai dat va chay thu
+### 2.5. Cài đặt và chạy thử
 
 ```bash
 cd frontend
@@ -205,19 +205,19 @@ npm install    # Tai tat ca dependencies ve node_modules/
 npm run dev    # Khoi dong dev server
 ```
 
-Mo trinh duyet tai http://localhost:5173 — ban se thay trang mac dinh cua Vite.
+Mở trình duyệt tại http://localhost:5173 — bạn sẽ thấy trang mặc định của Vite.
 
-> **`npm install` lam gi?**
-> Doc file `package.json`, tai tat ca thu vien (dependencies + devDependencies) ve folder `node_modules/`.
-> Dong thoi tao file `package-lock.json` ghi lai phien ban chinh xac cua tung thu vien.
+> **`npm install` làm gì?**
+> Đọc file `package.json`, tải tất cả thư viện (dependencies + devDependencies) về folder `node_modules/`.
+> Đồng thời tạo file `package-lock.json` ghi lại phiên bản chính xác của từng thư viện.
 
 ---
 
-## 3. Cai Tailwind CSS 4
+## 3. Cài Tailwind CSS 4
 
-### 3.1. Tailwind CSS la gi?
+### 3.1. Tailwind CSS là gì?
 
-Tailwind CSS la framework CSS theo huong **utility-first**. Thay vi viet CSS rieng:
+Tailwind CSS là framework CSS theo hướng **utility-first**. Thay vì viết CSS riêng:
 
 ```css
 /* CSS truyen thong */
@@ -230,7 +230,7 @@ Tailwind CSS la framework CSS theo huong **utility-first**. Thay vi viet CSS rie
 }
 ```
 
-Ban viet class truc tiep trong HTML/JSX:
+Bạn viết class trực tiếp trong HTML/JSX:
 
 ```jsx
 {/* Tailwind — utility classes */}
@@ -239,27 +239,27 @@ Ban viet class truc tiep trong HTML/JSX:
 </button>
 ```
 
-> **Tai sao dung Tailwind?**
-> 1. **Khong can dat ten class** — khong mat thoi gian nghi ten `.btn-primary-large-gold`
-> 2. **Khong bi xung dot CSS** — class utility khong bao gio de len nhau
-> 3. **File CSS nho** — Tailwind chi sinh CSS cho class ban thuc su dung
-> 4. **Nhat quan** — spacing, mau sac, font size deu tu he thong co san
+> **Tại sao dùng Tailwind?**
+> 1. **Không cần đặt tên class** — không mất thời gian nghĩ tên `.btn-primary-large-gold`
+> 2. **Không bị xung đột CSS** — class utility không bao giờ đè lên nhau
+> 3. **File CSS nhỏ** — Tailwind chỉ sinh CSS cho class bạn thực sự dùng
+> 4. **Nhất quán** — spacing, màu sắc, font size đều từ hệ thống có sẵn
 
-### 3.2. Cai dat
+### 3.2. Cài đặt
 
-Tailwind CSS 4 dung **Vite plugin** (khac voi v3 dung PostCSS):
+Tailwind CSS 4 dùng **Vite plugin** (khác với v3 dùng PostCSS):
 
 ```bash
 npm install tailwindcss @tailwindcss/vite
 ```
 
-> **Tai sao 2 package?**
-> - `tailwindcss`: engine chinh (xử ly class, sinh CSS)
-> - `@tailwindcss/vite`: plugin tich hop vao Vite (tu dong scan file, rebuild khi thay doi)
+> **Tại sao 2 package?**
+> - `tailwindcss`: engine chính (xử lý class, sinh CSS)
+> - `@tailwindcss/vite`: plugin tích hợp vào Vite (tự động scan file, rebuild khi thay đổi)
 
-### 3.3. Cau hinh vite.config.ts
+### 3.3. Cấu hình vite.config.ts
 
-Them plugin Tailwind:
+Thêm plugin Tailwind:
 
 ```typescript
 import path from 'path'
@@ -280,23 +280,23 @@ export default defineConfig({
 })
 ```
 
-### 3.4. Cau hinh index.css
+### 3.4. Cấu hình index.css
 
-Thay toan bo noi dung `src/index.css` bang:
+Thay toàn bộ nội dung `src/index.css` bằng:
 
 ```css
 @import 'tailwindcss';
 ```
 
-Dong nay noi voi Tailwind: "Hay inject tat ca utility classes vao day."
+Dòng này nói với Tailwind: "Hãy inject tất cả utility classes vào đây."
 
 > **Tailwind 4 vs Tailwind 3:**
-> - v3: can file `tailwind.config.js` + `postcss.config.js` + 3 directive (`@tailwind base/components/utilities`)
-> - v4: chi can `@import 'tailwindcss'` + Vite plugin. Don gian hon nhieu!
+> - v3: cần file `tailwind.config.js` + `postcss.config.js` + 3 directive (`@tailwind base/components/utilities`)
+> - v4: chỉ cần `@import 'tailwindcss'` + Vite plugin. Đơn giản hơn nhiều!
 
 ### 3.5. Test Tailwind
 
-Sua file `src/App.tsx`:
+Sửa file `src/App.tsx`:
 
 ```tsx
 function App() {
@@ -312,56 +312,56 @@ function App() {
 export default App
 ```
 
-Chay `npm run dev`, mo trinh duyet — neu thay nen do va chu trang la thanh cong.
+Chạy `npm run dev`, mở trình duyệt — nếu thấy nền đỏ và chữ trắng là thành công.
 
 ---
 
-## 4. Cai shadcn/ui
+## 4. Cài shadcn/ui
 
-### 4.1. shadcn/ui la gi?
+### 4.1. shadcn/ui là gì?
 
-shadcn/ui **KHONG PHAI** la mot npm package thong thuong. No la **bo suu tap component** ma ban **copy truc tiep vao du an**.
+shadcn/ui **KHÔNG PHẢI** là một npm package thông thường. Nó là **bộ sưu tập component** mà bạn **copy trực tiếp vào dự án**.
 
-| Thu vien UI thong thuong (Material UI, Ant Design) | shadcn/ui |
+| Thư viện UI thông thường (Material UI, Ant Design) | shadcn/ui |
 |---|---|
-| Cai qua `npm install` | Copy code vao `src/components/ui/` |
-| Code nam trong `node_modules/`, KHONG sua duoc | Code nam trong du an, TUY CHINH thoai mai |
-| Update = `npm update`, co the break | Update = copy lai file moi, ban quyet dinh |
-| Bundle size lon (import ca thu vien) | Chi co component ban dung |
+| Cài qua `npm install` | Copy code vào `src/components/ui/` |
+| Code nằm trong `node_modules/`, KHÔNG sửa được | Code nằm trong dự án, TÙY CHỈNH thoải mái |
+| Update = `npm update`, có thể break | Update = copy lại file mới, bạn quyết định |
+| Bundle size lớn (import cả thư viện) | Chỉ có component bạn dùng |
 
-> **Vi du thuc te:** Khi dung Material UI, ban bi "khoa" vao style cua ho.
-> Muon doi mau nen cua Button? Phai doc docs, override theme phuc tap.
-> Voi shadcn/ui, ban mo file `components/ui/button.tsx` va sua truc tiep — vi no la code cua ban.
+> **Ví dụ thực tế:** Khi dùng Material UI, bạn bị "khóa" vào style của họ.
+> Muốn đổi màu nền của Button? Phải đọc docs, override theme phức tạp.
+> Với shadcn/ui, bạn mở file `components/ui/button.tsx` và sửa trực tiếp — vì nó là code của bạn.
 
-### 4.2. Cai dat
+### 4.2. Cài đặt
 
 ```bash
 npx shadcn@latest init
 ```
 
-Tool se hoi ban mot so cau hoi:
+Tool sẽ hỏi bạn một số câu hỏi:
 - **Style:** `default` (Clean, minimal style)
-- **Base color:** `neutral` (Mau nen trung tinh)
-- **CSS variables:** `yes` (Dung CSS variables de de doi theme)
+- **Base color:** `neutral` (Màu nền trung tính)
+- **CSS variables:** `yes` (Dùng CSS variables để dễ đổi theme)
 
-Sau khi chay xong, shadcn tao ra:
-- `src/components/ui/` — folder chua component
-- `src/lib/utils.ts` — ham `cn()` ghep class name
-- Cap nhat `tsconfig.json` voi path alias
+Sau khi chạy xong, shadcn tạo ra:
+- `src/components/ui/` — folder chứa component
+- `src/lib/utils.ts` — hàm `cn()` ghép class name
+- Cập nhật `tsconfig.json` với path alias
 
-### 4.3. Them component
+### 4.3. Thêm component
 
 ```bash
 npx shadcn@latest add button card input dialog table select textarea badge
 ```
 
-Moi lenh `add` se copy file component vao `src/components/ui/`. Vi du:
-- `button.tsx` — Component Button voi nhieu variant (default, destructive, outline, ghost)
+Mỗi lệnh `add` sẽ copy file component vào `src/components/ui/`. Ví dụ:
+- `button.tsx` — Component Button với nhiều variant (default, destructive, outline, ghost)
 - `card.tsx` — Component Card (Header, Content, Footer)
-- `input.tsx` — Component Input da style san
+- `input.tsx` — Component Input đã style sẵn
 - `dialog.tsx` — Component Modal/Dialog
 
-### 4.4. Su dung component
+### 4.4. Sử dụng component
 
 ```tsx
 import { Button } from '@/components/ui/button'
@@ -385,7 +385,7 @@ function MyPage() {
 }
 ```
 
-> **Ham `cn()` la gi?**
+> **Hàm `cn()` là gì?**
 > ```typescript
 > import { clsx } from 'clsx'
 > import { twMerge } from 'tailwind-merge'
@@ -394,15 +394,15 @@ function MyPage() {
 >   return twMerge(clsx(inputs))
 > }
 > ```
-> `cn()` ghep nhieu class name lai va **xu ly xung dot Tailwind**.
-> Vi du: `cn('bg-red-500', 'bg-blue-500')` tra ve `'bg-blue-500'` (class sau thang).
-> Neu dung string thuong: `"bg-red-500 bg-blue-500"` — ca hai deu ton tai, ket qua khong doan truoc duoc.
+> `cn()` ghép nhiều class name lại và **xử lý xung đột Tailwind**.
+> Ví dụ: `cn('bg-red-500', 'bg-blue-500')` trả về `'bg-blue-500'` (class sau thắng).
+> Nếu dùng string thường: `"bg-red-500 bg-blue-500"` — cả hai đều tồn tại, kết quả không đoán trước được.
 
 ---
 
-## 5. Cai dependencies du an
+## 5. Cài dependencies dự án
 
-### 5.1. Cai tat ca cung luc
+### 5.1. Cài tất cả cùng lúc
 
 ```bash
 # Routing
@@ -430,30 +430,30 @@ npm install sonner
 npm install @fontsource/inter
 ```
 
-Hoac cai tat ca trong 1 lenh:
+Hoặc cài tất cả trong 1 lệnh:
 
 ```bash
 npm install react-router-dom @tanstack/react-query zustand axios react-hook-form @hookform/resolvers zod lucide-react sonner @fontsource/inter
 ```
 
-### 5.2. Giai thich tung thu vien
+### 5.2. Giải thích từng thư viện
 
-| Thu vien | Dung de lam gi | Vi du thuc te |
+| Thư viện | Dùng để làm gì | Ví dụ thực tế |
 |---|---|---|
-| **react-router-dom** | Dinh tuyen (chuyen trang) trong SPA | `/login` hien trang Login, `/admin/movies` hien trang quan ly phim |
-| **@tanstack/react-query** | Goi API + cache ket qua + tu dong refetch | Goi API lay danh sach phim, cache 5 phut, tu dong refetch khi focus tab |
-| **zustand** | Quan ly state toan cuc (global state) | Luu thong tin user dang nhap, token JWT, gio hang |
-| **axios** | HTTP client (goi API) | `axios.get('/api/movies')`, tu dong dinh JWT vao header |
-| **react-hook-form** | Quan ly form (validation, submit, error) | Form dang nhap: kiem tra email hop le, mat khau du dai |
-| **@hookform/resolvers** | Ket noi react-hook-form voi Zod | De Zod schema lam validator cho react-hook-form |
-| **zod** | Dinh nghia + validate schema du lieu | `z.string().email("Email khong hop le")` |
-| **lucide-react** | Bo icon SVG nhe, dep | Icon `<Search />`, `<Trash2 />`, `<Plus />` |
-| **sonner** | Hien thi toast notification | "Dang nhap thanh cong!", "Da xoa phim" |
-| **@fontsource/inter** | Font Inter (self-hosted, khong can Google Fonts) | Font chu chinh cua toan bo giao dien |
+| **react-router-dom** | Định tuyến (chuyển trang) trong SPA | `/login` hiện trang Login, `/admin/movies` hiện trang quản lý phim |
+| **@tanstack/react-query** | Gọi API + cache kết quả + tự động refetch | Gọi API lấy danh sách phim, cache 5 phút, tự động refetch khi focus tab |
+| **zustand** | Quản lý state toàn cục (global state) | Lưu thông tin user đăng nhập, token JWT, giỏ hàng |
+| **axios** | HTTP client (gọi API) | `axios.get('/api/movies')`, tự động đính JWT vào header |
+| **react-hook-form** | Quản lý form (validation, submit, error) | Form đăng nhập: kiểm tra email hợp lệ, mật khẩu đủ dài |
+| **@hookform/resolvers** | Kết nối react-hook-form với Zod | Để Zod schema làm validator cho react-hook-form |
+| **zod** | Định nghĩa + validate schema dữ liệu | `z.string().email("Email khong hop le")` |
+| **lucide-react** | Bộ icon SVG nhẹ, đẹp | Icon `<Search />`, `<Trash2 />`, `<Plus />` |
+| **sonner** | Hiển thị toast notification | "Đăng nhập thành công!", "Đã xóa phim" |
+| **@fontsource/inter** | Font Inter (self-hosted, không cần Google Fonts) | Font chữ chính của toàn bộ giao diện |
 
-> **Tai sao TanStack Query thay vi chi dung `useEffect` + `fetch`?**
+> **Tại sao TanStack Query thay vì chỉ dùng `useEffect` + `fetch`?**
 >
-> Voi `useEffect` thuong:
+> Với `useEffect` thường:
 > ```tsx
 > // Cach "tho" — phai tu quan ly loading, error, cache
 > const [movies, setMovies] = useState([])
@@ -468,7 +468,7 @@ npm install react-router-dom @tanstack/react-query zustand axios react-hook-form
 > }, [])
 > ```
 >
-> Voi TanStack Query:
+> Với TanStack Query:
 > ```tsx
 > // TanStack Query — 1 dong, tu dong co loading, error, cache, refetch
 > const { data: movies, isLoading, error } = useQuery({
@@ -477,21 +477,21 @@ npm install react-router-dom @tanstack/react-query zustand axios react-hook-form
 > })
 > ```
 
-> **Tai sao Zustand thay vi Redux?**
-> - Redux: nhieu boilerplate (action, reducer, dispatch, connect...) — phuc tap cho du an vua
-> - Zustand: don gian, code it, khong can Provider boc toan bo app
-> - CineX chi can luu auth state (user, token) → Zustand la du
+> **Tại sao Zustand thay vì Redux?**
+> - Redux: nhiều boilerplate (action, reducer, dispatch, connect...) — phức tạp cho dự án vừa
+> - Zustand: đơn giản, code ít, không cần Provider bọc toàn bộ app
+> - CineX chỉ cần lưu auth state (user, token) → Zustand là đủ
 
-> **Tai sao Zod thay vi Yup?**
-> - Zod thiet ke cho TypeScript tu dau (type-safe, infer type tu schema)
-> - Yup thiet ke cho JavaScript, TypeScript support la "them vao sau"
-> - Zod nho hon, nhanh hon, API truc quan hon
+> **Tại sao Zod thay vì Yup?**
+> - Zod thiết kế cho TypeScript từ đầu (type-safe, infer type từ schema)
+> - Yup thiết kế cho JavaScript, TypeScript support là "thêm vào sau"
+> - Zod nhỏ hơn, nhanh hơn, API trực quan hơn
 
 ---
 
-## 6. Cau truc folder du an
+## 6. Cấu trúc folder dự án
 
-### 6.1. Cau truc tong the
+### 6.1. Cấu trúc tổng thể
 
 ```
 src/
@@ -536,9 +536,9 @@ src/
 └── index.css                  # Tailwind CSS import + global styles
 ```
 
-### 6.2. Tai sao cau truc nhu vay?
+### 6.2. Tại sao cấu trúc như vậy?
 
-**Feature-based (theo chuc nang), KHONG PHAI type-based (theo loai file)**
+**Feature-based (theo chức năng), KHÔNG PHẢI type-based (theo loại file)**
 
 ```
 # SAI — type-based (kho tim file khi du an lon)
@@ -564,12 +564,12 @@ src/
 │       └── LoginPage.tsx
 ```
 
-> **Loi ich thuc te:**
-> - Khi sua chuc nang "Quan ly phim", ban chi can mo folder `features/admin/movies/`
-> - Khi xoa chuc nang, xoa ca folder — khong so sot file
-> - Team moi nguoi lam 1 feature, khong bi conflict git
+> **Lợi ích thực tế:**
+> - Khi sửa chức năng "Quản lý phim", bạn chỉ cần mở folder `features/admin/movies/`
+> - Khi xóa chức năng, xóa cả folder — không sợ sót file
+> - Team mỗi người làm 1 feature, không bị conflict git
 
-**Hooks tach rieng khoi component**
+**Hooks tách riêng khỏi component**
 
 ```
 # SAI — goi API trong component
@@ -592,23 +592,23 @@ function MoviesPage() {
 }
 ```
 
-> **Day la nguyen tac Single Responsibility (SOLID):**
-> - Component chi lo **hien thi** (render UI)
-> - Hook chi lo **du lieu** (goi API, cache, mutation)
-> - Utils chi lo **xu ly** (format tien, ngay)
+> **Đây là nguyên tắc Single Responsibility (SOLID):**
+> - Component chỉ lo **hiển thị** (render UI)
+> - Hook chỉ lo **dữ liệu** (gọi API, cache, mutation)
+> - Utils chỉ lo **xử lý** (format tiền, ngày)
 
 ---
 
 ## 7. Setup Axios + JWT interceptor
 
-### 7.1. JWT la gi?
+### 7.1. JWT là gì?
 
-JWT (JSON Web Token) la cach xac thuc nguoi dung trong API:
-1. User dang nhap → server tra ve **access token** (het han nhanh, 15 phut) + **refresh token** (het han cham, 7 ngay)
-2. Moi request, frontend gui access token trong header `Authorization: Bearer <token>`
-3. Server doc token, biet ai dang goi API
+JWT (JSON Web Token) là cách xác thực người dùng trong API:
+1. User đăng nhập → server trả về **access token** (hết hạn nhanh, 15 phút) + **refresh token** (hết hạn chậm, 7 ngày)
+2. Mỗi request, frontend gửi access token trong header `Authorization: Bearer <token>`
+3. Server đọc token, biết ai đang gọi API
 
-### 7.2. Code mau — api/axios.ts
+### 7.2. Code mẫu — api/axios.ts
 
 ```typescript
 import axios from 'axios'
@@ -733,18 +733,18 @@ function forceLogout() {
 export default api
 ```
 
-### 7.3. Giai thich luong xu ly
+### 7.3. Giải thích luồng xử lý
 
 ```
-User goi API (vd: GET /api/movies)
+User gọi API (vd: GET /api/movies)
         │
         ▼
 [Request Interceptor]
-  Lay token tu localStorage
-  Gan header: Authorization: Bearer <token>
+  Lấy token từ localStorage
+  Gắn header: Authorization: Bearer <token>
         │
         ▼
-   GUI REQUEST ──────► Server
+   GỬI REQUEST ──────► Server
         │                 │
         │            Response 200?
         │           /           \
@@ -752,35 +752,35 @@ User goi API (vd: GET /api/movies)
         │          │              │
         ▼          ▼              ▼
 [Response Interceptor]    [Response Interceptor]
-   Tra ve data             Goi /auth/refresh
+   Trả về data             Gọi /auth/refresh
                                   │
-                            Thanh cong?
+                            Thành công?
                            /          \
                          Yes           No
                           │             │
-                   Luu token moi    forceLogout()
-                   Gui lai request   → /login
-                   ban dau
+                   Lưu token mới    forceLogout()
+                   Gửi lại request   → /login
+                   ban đầu
 ```
 
-> **Tai sao can `failedQueue`?**
-> Hinh dung: ban dang o trang admin, trang nay goi 5 API cung luc (phim, phong, suat chieu...).
-> Token het han → ca 5 deu bi 401. Neu khong co queue:
-> - Ca 5 deu goi /auth/refresh → 5 refresh token → server co the reject 4 cai
-> Voi queue: chi request dau tien refresh, 4 request con lai cho → token moi → gui lai ca 5.
+> **Tại sao cần `failedQueue`?**
+> Hình dung: bạn đang ở trang admin, trang này gọi 5 API cùng lúc (phim, phòng, suất chiếu...).
+> Token hết hạn → cả 5 đều bị 401. Nếu không có queue:
+> - Cả 5 đều gọi /auth/refresh → 5 refresh token → server có thể reject 4 cái
+> Với queue: chỉ request đầu tiên refresh, 4 request còn lại chờ → token mới → gửi lại cả 5.
 
 ---
 
 ## 8. Setup React Router
 
-### 8.1. React Router la gi?
+### 8.1. React Router là gì?
 
-React la SPA (Single Page Application) — chi co 1 file `index.html`. React Router giup "gia lap" nhieu trang:
-- URL `/login` → hien component `LoginPage`
-- URL `/admin/movies` → hien component `MoviesPage`
-- Trinh duyet KHONG tai lai trang (khong co request HTML moi), chi thay doi component hien thi
+React là SPA (Single Page Application) — chỉ có 1 file `index.html`. React Router giúp "giả lập" nhiều trang:
+- URL `/login` → hiện component `LoginPage`
+- URL `/admin/movies` → hiện component `MoviesPage`
+- Trình duyệt KHÔNG tải lại trang (không có request HTML mới), chỉ thay đổi component hiển thị
 
-### 8.2. Code mau — App.tsx
+### 8.2. Code mẫu — App.tsx
 
 ```tsx
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
@@ -860,17 +860,17 @@ function App() {
 export default App
 ```
 
-### 8.3. Giai thich cac khai niem
+### 8.3. Giải thích các khái niệm
 
 **Public vs Protected Routes:**
 
 ```
-/login, /register         → Ai cung vao duoc (Public)
-/                         → Phai dang nhap (Protected)
-/admin/*                  → Phai dang nhap + role ADMIN (Protected + Role check)
+/login, /register         → Ai cũng vào được (Public)
+/                         → Phải đăng nhập (Protected)
+/admin/*                  → Phải đăng nhập + role ADMIN (Protected + Role check)
 ```
 
-**Code Splitting voi `React.lazy()`:**
+**Code Splitting với `React.lazy()`:**
 
 ```tsx
 // KHONG dung lazy — tat ca trang tai cung luc khi mo app
@@ -884,14 +884,14 @@ const LoginPage = lazy(() => import('@/features/auth/LoginPage'))
 // → User mo trang Login chi tai 50KB. Khi vao /admin/movies moi tai 100KB.
 ```
 
-> **`<Outlet />` la gi?**
-> La "cho trong" (placeholder) de render route con. Khi ban viet:
+> **`<Outlet />` là gì?**
+> Là "chỗ trống" (placeholder) để render route con. Khi bạn viết:
 > ```tsx
 > <Route element={<ProtectedRoute />}>
 >   <Route path="/admin/movies" element={<MoviesPage />} />
 > </Route>
 > ```
-> `ProtectedRoute` kiem tra quyen xong, `<Outlet />` se render `MoviesPage`.
+> `ProtectedRoute` kiểm tra quyền xong, `<Outlet />` sẽ render `MoviesPage`.
 
 **Layout pattern:**
 
@@ -922,27 +922,27 @@ function AdminLayout() {
 
 ## 9. Setup Zustand store (Auth)
 
-### 9.1. Tai sao can global state?
+### 9.1. Tại sao cần global state?
 
-Thong tin dang nhap (user, token) can duoc **nhieu component truy cap**:
-- Header hien ten user + avatar
-- Sidebar hien menu theo role
-- API interceptor can token de gan vao header
-- Moi trang admin can kiem tra quyen
+Thông tin đăng nhập (user, token) cần được **nhiều component truy cập**:
+- Header hiện tên user + avatar
+- Sidebar hiện menu theo role
+- API interceptor cần token để gắn vào header
+- Mỗi trang admin cần kiểm tra quyền
 
-Neu khong co global state, ban phai **truyen props qua nhieu tang** (prop drilling):
+Nếu không có global state, bạn phải **truyền props qua nhiều tầng** (prop drilling):
 
 ```
-App → Header → UserMenu → AvatarButton (truyen user qua 4 tang!)
+App → Header → UserMenu → AvatarButton (truyền user qua 4 tầng!)
 ```
 
-Voi Zustand, bat ky component nao cung truy cap duoc:
+Với Zustand, bất kỳ component nào cũng truy cập được:
 
 ```tsx
 const user = useAuthStore((state) => state.user)  // Truy cap truc tiep, khong can props
 ```
 
-### 9.2. Code mau — store/authStore.ts
+### 9.2. Code mẫu — store/authStore.ts
 
 ```typescript
 import { create } from 'zustand'
@@ -1017,7 +1017,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 }))
 ```
 
-### 9.3. Su dung trong component
+### 9.3. Sử dụng trong component
 
 ```tsx
 import { useAuthStore } from '@/store/authStore'
@@ -1035,7 +1035,7 @@ function Header() {
 }
 ```
 
-> **Tai sao dung `(state) => state.user` thay vi `useAuthStore()`?**
+> **Tại sao dùng `(state) => state.user` thay vì `useAuthStore()`?**
 > ```tsx
 > // SAI — lay toan bo store → re-render khi BAT KY field nao thay doi
 > const { user, token, logout } = useAuthStore()
@@ -1043,14 +1043,14 @@ function Header() {
 > // DUNG — chi lay field can → chi re-render khi field DO thay doi
 > const user = useAuthStore((state) => state.user)
 > ```
-> Day goi la **selector** — chi "dang ky" lang nghe 1 phan cua store,
-> tranh re-render khong can thiet (performance tot hon).
+> Đây gọi là **selector** — chỉ "đăng ký" lắng nghe 1 phần của store,
+> tránh re-render không cần thiết (performance tốt hơn).
 
 ### 9.4. Persist to localStorage
 
-Zustand store nam trong **bo nho RAM** — khi reload trang, state mat het. De giu trang thai:
+Zustand store nằm trong **bộ nhớ RAM** — khi reload trang, state mất hết. Để giữ trạng thái:
 
-CineX dung cach **thu cong**: doc tu localStorage khi khoi tao, ghi vao localStorage khi thay doi.
+CineX dùng cách **thủ công**: đọc từ localStorage khi khởi tạo, ghi vào localStorage khi thay đổi.
 
 ```typescript
 // Khoi tao: doc tu localStorage
@@ -1063,7 +1063,7 @@ setAuth: (token, refreshToken, user) => {
 },
 ```
 
-> **Cach khac:** Zustand co middleware `persist` tu dong lam viec nay:
+> **Cách khác:** Zustand có middleware `persist` tự động làm việc này:
 > ```typescript
 > import { persist } from 'zustand/middleware'
 >
@@ -1074,13 +1074,13 @@ setAuth: (token, refreshToken, user) => {
 >   )
 > )
 > ```
-> CineX khong dung middleware vi muon kiem soat ro rang (chi luu field can thiet, xu ly loi JSON).
+> CineX không dùng middleware vì muốn kiểm soát rõ ràng (chỉ lưu field cần thiết, xử lý lỗi JSON).
 
 ---
 
-## 10. Tao trang dau tien (Login)
+## 10. Tạo trang đầu tiên (Login)
 
-### 10.1. Tao type — types/auth.ts
+### 10.1. Tạo type — types/auth.ts
 
 ```typescript
 // Request gui len server
@@ -1098,7 +1098,7 @@ export interface LoginResponse {
 }
 ```
 
-### 10.2. Tao hook — hooks/useAuth.ts
+### 10.2. Tạo hook — hooks/useAuth.ts
 
 ```typescript
 import { useMutation } from '@tanstack/react-query'
@@ -1138,12 +1138,12 @@ export function useLogin() {
 }
 ```
 
-> **`useMutation` la gi?**
-> - `useQuery` dung cho **doc du lieu** (GET) — tu dong goi, cache, refetch
-> - `useMutation` dung cho **thay doi du lieu** (POST, PUT, DELETE) — goi khi user click
-> - `useMutation` tra ve: `mutate()` (goi API), `isPending` (dang cho), `isError` (bi loi)
+> **`useMutation` là gì?**
+> - `useQuery` dùng cho **đọc dữ liệu** (GET) — tự động gọi, cache, refetch
+> - `useMutation` dùng cho **thay đổi dữ liệu** (POST, PUT, DELETE) — gọi khi user click
+> - `useMutation` trả về: `mutate()` (gọi API), `isPending` (đang chờ), `isError` (bị lỗi)
 
-### 10.3. Tao component — features/auth/LoginPage.tsx
+### 10.3. Tạo component — features/auth/LoginPage.tsx
 
 ```tsx
 import { useForm } from 'react-hook-form'
@@ -1238,41 +1238,41 @@ export default function LoginPage() {
 }
 ```
 
-### 10.4. Luong xu ly Login
+### 10.4. Luồng xử lý Login
 
 ```
-User nhap username + password
+User nhập username + password
             │
             ▼
      [React Hook Form]
-  Validate bang Zod schema
-    username khong rong?
-    password >= 6 ky tu?
+  Validate bằng Zod schema
+    username không rỗng?
+    password >= 6 ký tự?
             │
       Valid?
      /       \
    No         Yes
     │          │
-Hien loi    Goi login(data)
-do input         │
+Hiện lỗi    Gọi login(data)
+dỏ input         │
                  ▼
           [useLogin hook]
     mutate → api.post('/api/auth/login')
                  │
                  ▼
        [Request Interceptor]
-    (Chua co token → khong gan)
+    (Chưa có token → không gắn)
                  │
                  ▼
-           SERVER XU LY
+           SERVER XỬ LÝ
     Check username/password
                  │
-           Dung / Sai?
+           Đúng / Sai?
           /          \
-        Dung          Sai
+        Đúng          Sai
          │              │
-    Tra 200 +       Tra 401
-    tokens + user   "Sai mat khau"
+    Trả 200 +       Trả 401
+    tokens + user   "Sai mật khẩu"
          │              │
          ▼              ▼
    [onSuccess]     [onError]
@@ -1283,9 +1283,9 @@ do input         │
 
 ---
 
-## 11. Chay va test
+## 11. Chạy và test
 
-### 11.1. Chay backend
+### 11.1. Chạy backend
 
 ```bash
 # Terminal 1: Chay database
@@ -1295,83 +1295,83 @@ cd /Users/vutuongan/cinex && docker-compose up sqlserver redis -d
 cd /Users/vutuongan/cinex/backend && ./gradlew bootRun
 ```
 
-Doi den khi thay log:
+Đợi đến khi thấy log:
 ```
 Started CinexApplication in X.XX seconds
 ```
 
-### 11.2. Chay frontend
+### 11.2. Chạy frontend
 
 ```bash
 # Terminal 3: Chay frontend
 cd /Users/vutuongan/cinex/frontend && npm run dev
 ```
 
-Ket qua:
+Kết quả:
 ```
   VITE v8.x.x  ready in xxx ms
 
   ➜  Local:   http://localhost:5173/
 ```
 
-### 11.3. Test tren trinh duyet
+### 11.3. Test trên trình duyệt
 
-1. Mo http://localhost:5173/login
-2. Nhap username va password
-3. Nhan "Dang nhap"
-4. Neu thanh cong → chuyen sang trang admin/home + toast "Dang nhap thanh cong!"
-5. Neu sai → toast do "Sai mat khau"
+1. Mở http://localhost:5173/login
+2. Nhập username và password
+3. Nhấn "Đăng nhập"
+4. Nếu thành công → chuyển sang trang admin/home + toast "Đăng nhập thành công!"
+5. Nếu sai → toast đỏ "Sai mật khẩu"
 
-### 11.4. Kiem tra voi DevTools
+### 11.4. Kiểm tra với DevTools
 
-Mo trinh duyet → F12 (Developer Tools):
+Mở trình duyệt → F12 (Developer Tools):
 
 **Tab Network:**
-- Tim request `login` → xem Request Payload va Response
-- Status 200 = thanh cong, 401 = sai thong tin
+- Tìm request `login` → xem Request Payload và Response
+- Status 200 = thành công, 401 = sai thông tin
 
 **Tab Application → Local Storage:**
-- Sau khi dang nhap thanh cong, kiem tra:
-  - `token` — access token (chuoi JWT dai)
+- Sau khi đăng nhập thành công, kiểm tra:
+  - `token` — access token (chuỗi JWT dài)
   - `refreshToken` — refresh token
-  - `user` — JSON chua username va role
+  - `user` — JSON chứa username và role
 
 **Tab Console:**
-- Xem co loi JavaScript nao khong
-- Cac loi thuong gap: CORS (backend chua cho phep frontend goi), Network Error (backend chua chay)
+- Xem có lỗi JavaScript nào không
+- Các lỗi thường gặp: CORS (backend chưa cho phép frontend gọi), Network Error (backend chưa chạy)
 
-### 11.5. Loi thuong gap va cach fix
+### 11.5. Lỗi thường gặp và cách fix
 
-| Loi | Nguyen nhan | Cach fix |
+| Lỗi | Nguyên nhân | Cách fix |
 |---|---|---|
-| `Network Error` | Backend chua chay hoac sai port | Kiem tra backend chay tren port 8088 |
-| `CORS error` | Backend chua cau hinh CORS | Them `@CrossOrigin` hoac cau hinh `SecurityFilterChain` |
-| `404 Not Found` | Sai URL API | Kiem tra URL trong axios.ts va controller backend |
-| `401 Unauthorized` | Sai username/password | Kiem tra tai khoan trong database |
-| Trang trang, khong hien gi | Loi JavaScript | Mo Console (F12) de xem loi |
-| Tailwind class khong co tac dung | Chua cau hinh Tailwind | Kiem tra `@import 'tailwindcss'` trong index.css |
+| `Network Error` | Backend chưa chạy hoặc sai port | Kiểm tra backend chạy trên port 8088 |
+| `CORS error` | Backend chưa cấu hình CORS | Thêm `@CrossOrigin` hoặc cấu hình `SecurityFilterChain` |
+| `404 Not Found` | Sai URL API | Kiểm tra URL trong axios.ts và controller backend |
+| `401 Unauthorized` | Sai username/password | Kiểm tra tài khoản trong database |
+| Trang trắng, không hiện gì | Lỗi JavaScript | Mở Console (F12) để xem lỗi |
+| Tailwind class không có tác dụng | Chưa cấu hình Tailwind | Kiểm tra `@import 'tailwindcss'` trong index.css |
 
 ---
 
-## Tong ket
+## Tổng kết
 
-Sau khi hoan thanh 11 buoc tren, ban da co:
+Sau khi hoàn thành 11 bước trên, bạn đã có:
 
-| Thanh phan | Cong cu | Trang thai |
+| Thành phần | Công cụ | Trạng thái |
 |---|---|---|
-| Build tool | Vite | Khoi dong nhanh, HMR |
+| Build tool | Vite | Khởi động nhanh, HMR |
 | UI framework | React 19 + TypeScript | Type-safe |
 | Styling | Tailwind CSS 4 | Utility-first |
-| UI components | shadcn/ui | Copy code, tuy chinh thoai mai |
+| UI components | shadcn/ui | Copy code, tùy chỉnh thoải mái |
 | Routing | React Router 7 | Code splitting, Protected routes |
 | Data fetching | TanStack Query + Axios | Cache, auto refetch, JWT interceptor |
-| State management | Zustand | Don gian, persist localStorage |
+| State management | Zustand | Đơn giản, persist localStorage |
 | Form + Validation | React Hook Form + Zod | Type-safe validation |
-| Notifications | Sonner | Toast dep, nhieu variant |
+| Notifications | Sonner | Toast đẹp, nhiều variant |
 
-**Buoc tiep theo:** Doc cac file docs khac trong `/docs/frontend/` de hieu sau tung thu vien:
-- `01-react-basics.md` — Co ban ve React (component, props, state)
-- `02-react-router.md` — Chi tiet ve routing
-- `03-tanstack-query.md` — Chi tiet ve data fetching
-- `04-zustand-state.md` — Chi tiet ve state management
-- `06-form-validation.md` — Chi tiet ve form + Zod
+**Bước tiếp theo:** Đọc các file docs khác trong `/docs/frontend/` để hiểu sâu từng thư viện:
+- `01-react-basics.md` — Cơ bản về React (component, props, state)
+- `02-react-router.md` — Chi tiết về routing
+- `03-tanstack-query.md` — Chi tiết về data fetching
+- `04-zustand-state.md` — Chi tiết về state management
+- `06-form-validation.md` — Chi tiết về form + Zod
