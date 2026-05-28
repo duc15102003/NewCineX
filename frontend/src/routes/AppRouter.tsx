@@ -4,6 +4,9 @@ import MainLayout from '@/components/layout/MainLayout'
 
 const HomePage = lazy(() => import('@/features/home/HomePage'))
 const LoginPage = lazy(() => import('@/features/auth/LoginPage'))
+const AdminLayout = lazy(() => import('@/components/admin/AdminLayout'))
+const AdminMoviePage = lazy(() => import('@/features/admin/AdminMoviePage'))
+const AdminGenrePage = lazy(() => import('@/features/admin/AdminGenrePage'))
 
 export default function AppRouter() {
   return (
@@ -13,6 +16,10 @@ export default function AppRouter() {
           <Route element={<MainLayout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
+          </Route>
+          <Route element={<AdminLayout />}>
+            <Route path="/admin/movies" element={<AdminMoviePage />} />
+            <Route path="/admin/genres" element={<AdminGenrePage />} />
           </Route>
         </Routes>
       </Suspense>

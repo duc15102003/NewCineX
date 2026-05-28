@@ -1,0 +1,93 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import api, { getErrorMessage } from '@/api/axios'
+import type { ApiResponse } from '@/types/auth'
+import type { PageResponse } from '@/types/movie'
+
+export interface AdminMovie {
+  id: number
+  title: string
+  posterUrl: string | null
+  duration: number
+  rating: number | null
+  status: string
+  genres: string[]
+  storageState: string
+}
+
+export function useAdminMovies(params: Record<string, any> = {}) {
+  return useQuery({
+    queryKey: ['admin', 'movies', params],
+    queryFn: async () => {
+      const res = await api.get<ApiResponse<PageResponse<AdminMovie>>>('/api/movies', { params: { ...params, includeDeleted: true } })
+      return res.data.data
+    },
+  })
+}
+
+export function useCreateMovie() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await api.post<ApiResponse<unknown>>('/api/movies', data)
+      return res.data.data
+    },
+    onSuccess: () => { toast.success('Tạo phim thành công'); qc.invalidateQueries({ queryKey: ['admin', 'movies'] }) },
+    onError: (e) => toast.error(getErrorMessage(e, 'Lỗi')),
+  })
+}
+
+export function useUpdateMovie() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Record<string, unknown> }) => {
+      const res = await api.put<ApiResponse<unknown>>(`/api/movies/${id}`, data)
+      return res.data.data
+    },
+    onSuccess: () => { toast.success('Cập nhật thành công'); qc.invalidateQueries({ queryKey: ['admin', 'movies'] }) },
+    onError: (e) => toast.error(getErrorMessage(e, 'Lỗi')),
+  })
+}
+
+export function useUploadPoster() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: number; file: File }) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await api.post(`/api/movies/${id}/poster`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      return res.data.data
+    },
+    onSuccess: () => { toast.success('Upload poster thành công'); qc.invalidateQueries({ queryKey: ['admin', 'movies'] }) },
+    onError: (e) => toast.error(getErrorMessage(e, 'Upload thất bại')),
+  })
+}
+
+export function useDeleteMovie() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: number) => { await api.delete(`/api/movies/${id}`) },
+    onSuccess: () => { toast.success('Đã xóa'); qc.invalidateQueries({ queryKey: ['admin', 'movies'] }) },
+    onError: (e) => toast.error(getErrorMessage(e, 'Lỗi')),
+  })
+}
+
+export function useBulkDeleteMovies() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (ids: number[]) => { await api.post('/api/movies/bulk-delete', { ids }) },
+    onSuccess: () => { toast.success('Đã lưu trữ thành công'); qc.invalidateQueries({ queryKey: ['admin', 'movies'] }) },
+    onError: (e) => toast.error(getErrorMessage(e, 'Lỗi')),
+  })
+}
+
+export function useBulkRestoreMovies() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (ids: number[]) => { await api.post('/api/movies/bulk-restore', { ids }) },
+    onSuccess: () => { toast.success('Đã khôi phục thành công'); qc.invalidateQueries({ queryKey: ['admin', 'movies'] }) },
+    onError: (e) => toast.error(getErrorMessage(e, 'Lỗi')),
+  })
+}
