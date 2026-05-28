@@ -1,91 +1,91 @@
-# Tao Du An Spring Boot Tu Dau — Huong Dan Chi Tiet
+# Tạo Dự Án Spring Boot Từ Đầu — Hướng Dẫn Chi Tiết
 
-> **Doi tuong:** Sinh vien chua biet gi ve Spring Boot, muon hieu SAU tu buoc dau tien.
-> **Du an mau:** CineX — He thong dat ve xem phim online.
-
----
-
-## Muc luc
-
-1. [Cai dat moi truong](#1-cai-dat-moi-truong)
-2. [Tao project Spring Boot](#2-tao-project-spring-boot)
-3. [Cau hinh build.gradle](#3-cau-hinh-buildgradle)
-4. [Cau hinh application.yml](#4-cau-hinh-applicationyml)
-5. [Tao cau truc package](#5-tao-cau-truc-package)
-6. [Tao BaseEntity](#6-tao-baseentity)
-7. [Tao ApiResponse wrapper](#7-tao-apiresponse-wrapper)
-8. [Tao module dau tien (User)](#8-tao-module-dau-tien-user)
-9. [Chay va test](#9-chay-va-test)
+> **Đối tượng:** Sinh viên chưa biết gì về Spring Boot, muốn hiểu SÂU từ bước đầu tiên.
+> **Dự án mẫu:** CineX — Hệ thống đặt vé xem phim online.
 
 ---
 
-## 1. Cai dat moi truong
+## Mục lục
 
-### 1.1. Cai JDK 21
+1. [Cài đặt môi trường](#1-cai-dat-moi-truong)
+2. [Tạo project Spring Boot](#2-tao-project-spring-boot)
+3. [Cấu hình build.gradle](#3-cau-hinh-buildgradle)
+4. [Cấu hình application.yml](#4-cau-hinh-applicationyml)
+5. [Tạo cấu trúc package](#5-tao-cau-truc-package)
+6. [Tạo BaseEntity](#6-tao-baseentity)
+7. [Tạo ApiResponse wrapper](#7-tao-apiresponse-wrapper)
+8. [Tạo module đầu tiên (User)](#8-tao-module-dau-tien-user)
+9. [Chạy và test](#9-chay-va-test)
 
-**Tai sao can JDK 21?**
-JDK (Java Development Kit) la bo cong cu de viet va chay code Java. Spring Boot 3.x yeu cau **toi thieu Java 17**, nhung chung ta dung **Java 21** vi day la phien ban LTS (Long Term Support — duoc ho tro lau dai, giong nhu Windows 10 duoc ho tro nhieu nam hon Windows 8).
+---
 
-#### Cach 1: Dung SDKMAN (khuyen dung cho macOS/Linux)
+## 1. Cài đặt môi trường
 
-SDKMAN giong nhu "app store" cho cac cong cu Java — cai, chuyen doi version de dang:
+### 1.1. Cài JDK 21
+
+**Tại sao cần JDK 21?**
+JDK (Java Development Kit) là bộ công cụ để viết và chạy code Java. Spring Boot 3.x yêu cầu **tối thiểu Java 17**, nhưng chúng ta dùng **Java 21** vì đây là phiên bản LTS (Long Term Support — được hỗ trợ lâu dài, giống như Windows 10 được hỗ trợ nhiều năm hơn Windows 8).
+
+#### Cách 1: Dùng SDKMAN (khuyên dùng cho macOS/Linux)
+
+SDKMAN giống như "app store" cho các công cụ Java — cài, chuyển đổi version dễ dàng:
 
 ```bash
-# Cai SDKMAN
+# Cài SDKMAN
 curl -s "https://get.sdkman.io" | bash
 source "$HOME/.sdkman/bin/sdkman-init.sh"
 
-# Xem cac phien ban Java co the cai
+# Xem các phiên bản Java có thể cài
 sdk list java
 
-# Cai JDK 21 (Temurin — ban mien phi cua Eclipse Foundation)
+# Cài JDK 21 (Temurin — bản miễn phí của Eclipse Foundation)
 sdk install java 21.0.3-tem
 
-# Kiem tra
+# Kiểm tra
 java -version
 # openjdk version "21.0.3" ...
 ```
 
-#### Cach 2: Download truc tiep
+#### Cách 2: Download trực tiếp
 
-- Vao [https://adoptium.net/](https://adoptium.net/)
-- Chon **JDK 21**, he dieu hanh cua ban (macOS/Windows/Linux)
-- Tai ve, cai dat nhu phan mem binh thuong
-- Them vao PATH (Windows: System Environment Variables; macOS/Linux: export trong `~/.zshrc` hoac `~/.bashrc`)
+- Vào [https://adoptium.net/](https://adoptium.net/)
+- Chọn **JDK 21**, hệ điều hành của bạn (macOS/Windows/Linux)
+- Tải về, cài đặt như phần mềm bình thường
+- Thêm vào PATH (Windows: System Environment Variables; macOS/Linux: export trong `~/.zshrc` hoặc `~/.bashrc`)
 
 ```bash
-# macOS/Linux — them vao ~/.zshrc
+# macOS/Linux — thêm vào ~/.zshrc
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 export PATH=$JAVA_HOME/bin:$PATH
 ```
 
-### 1.2. Cai IDE
+### 1.2. Cài IDE
 
-#### Lua chon 1: IntelliJ IDEA Community (mien phi, khuyen dung)
+#### Lựa chọn 1: IntelliJ IDEA Community (miễn phí, khuyên dùng)
 
-- Tai tai [https://www.jetbrains.com/idea/download/](https://www.jetbrains.com/idea/download/)
-- Chon phien ban **Community** (mien phi, du dung cho Spring Boot)
-- IntelliJ hieu Java rat tot: auto-complete, refactor, debug, tich hop Gradle
+- Tải tại [https://www.jetbrains.com/idea/download/](https://www.jetbrains.com/idea/download/)
+- Chọn phiên bản **Community** (miễn phí, đủ dùng cho Spring Boot)
+- IntelliJ hiểu Java rất tốt: auto-complete, refactor, debug, tích hợp Gradle
 
-#### Lua chon 2: VS Code + Extension Pack for Java
+#### Lựa chọn 2: VS Code + Extension Pack for Java
 
-- Tai VS Code tai [https://code.visualstudio.com/](https://code.visualstudio.com/)
-- Cai cac extension:
-  - **Extension Pack for Java** (bao gom tat ca extension can thiet)
-  - **Spring Boot Extension Pack** (ho tro Spring Boot)
-  - **Gradle for Java** (ho tro build Gradle)
+- Tải VS Code tại [https://code.visualstudio.com/](https://code.visualstudio.com/)
+- Cài các extension:
+  - **Extension Pack for Java** (bao gồm tất cả extension cần thiết)
+  - **Spring Boot Extension Pack** (hỗ trợ Spring Boot)
+  - **Gradle for Java** (hỗ trợ build Gradle)
 
-**Tai sao IntelliJ tot hon cho Java?**
-VS Code la text editor duoc mo rong thanh IDE. IntelliJ la IDE chuyen cho Java tu dau — no hieu cau truc du an, annotation, dependency injection tot hon nhieu. Giong nhu so sanh dao Thuy Si (VS Code — da nang) voi dao dau bep (IntelliJ — chuyen biet).
+**Tại sao IntelliJ tốt hơn cho Java?**
+VS Code là text editor được mở rộng thành IDE. IntelliJ là IDE chuyên cho Java từ đầu — nó hiểu cấu trúc dự án, annotation, dependency injection tốt hơn nhiều. Giống như so sánh dao Thụy Sĩ (VS Code — đa năng) với dao đầu bếp (IntelliJ — chuyên biệt).
 
-### 1.3. Cai Docker Desktop
+### 1.3. Cài Docker Desktop
 
-**Tai sao can Docker?**
-Thay vi cai SQL Server, Redis truc tiep vao may (phuc tap, kho go), Docker cho phep chay chung trong "container" — giong nhu may ao nhe, bat/tat trong 1 giay, xoa sach khong de lai rac.
+**Tại sao cần Docker?**
+Thay vì cài SQL Server, Redis trực tiếp vào máy (phức tạp, khó gỡ), Docker cho phép chạy chúng trong "container" — giống như máy ảo nhẹ, bật/tắt trong 1 giây, xóa sạch không để lại rác.
 
-- Tai tai [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
-- Cai dat, khoi dong Docker Desktop
-- Kiem tra:
+- Tải tại [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+- Cài đặt, khởi động Docker Desktop
+- Kiểm tra:
 
 ```bash
 docker --version
@@ -95,171 +95,171 @@ docker compose version
 # Docker Compose version v2.x.x
 ```
 
-### 1.4. Kiem tra tat ca
+### 1.4. Kiểm tra tất cả
 
-Chay lan luot de dam bao moi thu da san sang:
+Chạy lần lượt để đảm bảo mọi thứ đã sẵn sàng:
 
 ```bash
-java -version        # Phai thay "21.x.x"
-gradle -v            # Khong bat buoc — Spring Boot co Gradle Wrapper
-docker --version     # Phai thay "Docker version 2x.x"
-docker compose version  # Phai thay "v2.x"
+java -version        # Phải thấy "21.x.x"
+gradle -v            # Không bắt buộc — Spring Boot có Gradle Wrapper
+docker --version     # Phải thấy "Docker version 2x.x"
+docker compose version  # Phải thấy "v2.x"
 ```
 
-> **Luu y:** Khong can cai Gradle rieng. Spring Boot sinh ra file `gradlew` (Gradle Wrapper) — no tu tai dung phien ban Gradle can thiet. Day la cach lam chuan trong thuc te.
+> **Lưu ý:** Không cần cài Gradle riêng. Spring Boot sinh ra file `gradlew` (Gradle Wrapper) — nó tự tải đúng phiên bản Gradle cần thiết. Đây là cách làm chuẩn trong thực tế.
 
 ---
 
-## 2. Tao project Spring Boot
+## 2. Tạo project Spring Boot
 
-### 2.1. Vao Spring Initializr
+### 2.1. Vào Spring Initializr
 
-Spring Initializr ([https://start.spring.io](https://start.spring.io)) la "cong cu sinh du an" chinh thuc cua Spring. No tao san cau truc folder, file build, va cau hinh co ban.
+Spring Initializr ([https://start.spring.io](https://start.spring.io)) là "công cụ sinh dự án" chính thức của Spring. Nó tạo sẵn cấu trúc folder, file build, và cấu hình cơ bản.
 
-**Tai sao khong tao tay?** Vi cau hinh Spring Boot kha phuc tap (phien ban phu hop, auto-configuration, ...). Initializr dam bao moi thu tuong thich voi nhau.
+**Tại sao không tạo tay?** Vì cấu hình Spring Boot khá phức tạp (phiên bản phù hợp, auto-configuration, ...). Initializr đảm bảo mọi thứ tương thích với nhau.
 
-### 2.2. Chon cac tuy chon
+### 2.2. Chọn các tùy chọn
 
-| Muc | Gia tri | Giai thich |
+| Mục | Giá trị | Giải thích |
 |---|---|---|
-| Project | **Gradle - Groovy** | Build tool. Gradle nhanh hon Maven, Groovy la ngon ngu viet file build |
-| Language | **Java** | Ngon ngu chinh |
-| Spring Boot | **3.3.5** | Phien ban on dinh moi nhat |
-| Group | **com.cinex** | Ten to chuc (giong domain nguoc: cinex.com → com.cinex) |
-| Artifact | **backend** | Ten du an |
-| Packaging | **Jar** | File chay duoc (java -jar backend.jar) |
-| Java | **21** | Phien ban JDK |
+| Project | **Gradle - Groovy** | Build tool. Gradle nhanh hơn Maven, Groovy là ngôn ngữ viết file build |
+| Language | **Java** | Ngôn ngữ chính |
+| Spring Boot | **3.3.5** | Phiên bản ổn định mới nhất |
+| Group | **com.cinex** | Tên tổ chức (giống domain ngược: cinex.com → com.cinex) |
+| Artifact | **backend** | Tên dự án |
+| Packaging | **Jar** | File chạy được (java -jar backend.jar) |
+| Java | **21** | Phiên bản JDK |
 
-### 2.3. Chon Dependencies
+### 2.3. Chọn Dependencies
 
-Tick chon cac dependency sau:
+Tick chọn các dependency sau:
 
-| Dependency | Tac dung |
+| Dependency | Tác dụng |
 |---|---|
-| **Spring Web** | Xay dung REST API (nhan HTTP request, tra JSON response) |
-| **Spring Data JPA** | ORM — tuong tac database bang Java object thay vi viet SQL tay |
-| **Spring Security** | Xac thuc (login) va phan quyen (ai duoc lam gi) |
-| **Validation** | Kiem tra du lieu dau vao (@NotBlank, @Email, @Size, ...) |
-| **Spring Boot Starter Mail** | Gui email (reset password, xac nhan dat ve) |
-| **WebSocket** | Giao tiep 2 chieu realtime (cap nhat ghe dang chon) |
-| **Spring Data Redis** | Cache du lieu vao RAM de tang toc (Redis) |
-| **Liquibase Migration** | Quan ly thay doi database co kiem soat (giong git cho DB) |
+| **Spring Web** | Xây dựng REST API (nhận HTTP request, trả JSON response) |
+| **Spring Data JPA** | ORM — tương tác database bằng Java object thay vì viết SQL tay |
+| **Spring Security** | Xác thực (login) và phân quyền (ai được làm gì) |
+| **Validation** | Kiểm tra dữ liệu đầu vào (@NotBlank, @Email, @Size, ...) |
+| **Spring Boot Starter Mail** | Gửi email (reset password, xác nhận đặt vé) |
+| **WebSocket** | Giao tiếp 2 chiều realtime (cập nhật ghế đang chọn) |
+| **Spring Data Redis** | Cache dữ liệu vào RAM để tăng tốc (Redis) |
+| **Liquibase Migration** | Quản lý thay đổi database có kiểm soát (giống git cho DB) |
 
-Nhan **Generate**, tai file `.zip` ve, giai nen.
+Nhấn **Generate**, tải file `.zip` về, giải nén.
 
-### 2.4. Mo du an bang IDE
+### 2.4. Mở dự án bằng IDE
 
 **IntelliJ:**
-- File → Open → Chon folder `backend` vua giai nen
-- Cho IntelliJ download dependencies (goc duoi ben phai se thay progress bar)
+- File → Open → Chọn folder `backend` vừa giải nén
+- Chờ IntelliJ download dependencies (góc dưới bên phải sẽ thấy progress bar)
 
 **VS Code:**
-- File → Open Folder → Chon folder `backend`
-- VS Code tu dong nhan dien du an Java va goi y cai extension
+- File → Open Folder → Chọn folder `backend`
+- VS Code tự động nhận diện dự án Java và gợi ý cài extension
 
-### 2.5. Cau truc folder sinh ra
+### 2.5. Cấu trúc folder sinh ra
 
 ```
 backend/
-├── build.gradle              ← File cau hinh build (tuong tu package.json cua Node.js)
-├── settings.gradle           ← Ten du an
+├── build.gradle              ← File cấu hình build (tương tự package.json của Node.js)
+├── settings.gradle           ← Tên dự án
 ├── gradlew                   ← Gradle Wrapper (Linux/macOS)
 ├── gradlew.bat               ← Gradle Wrapper (Windows)
 ├── gradle/
 │   └── wrapper/
-│       └── gradle-wrapper.properties  ← Phien ban Gradle se dung
+│       └── gradle-wrapper.properties  ← Phiên bản Gradle sẽ dùng
 └── src/
     ├── main/
     │   ├── java/com/cinex/backend/
-    │   │   └── BackendApplication.java    ← Diem khoi dong cua ung dung
+    │   │   └── BackendApplication.java    ← Điểm khởi động của ứng dụng
     │   └── resources/
-    │       ├── application.properties     ← File cau hinh (ta doi thanh .yml)
-    │       ├── static/                    ← File tinh (HTML, CSS, JS — ta khong dung)
-    │       └── templates/                 ← Template engine (ta khong dung — dung React)
+    │       ├── application.properties     ← File cấu hình (ta đổi thành .yml)
+    │       ├── static/                    ← File tĩnh (HTML, CSS, JS — ta không dùng)
+    │       └── templates/                 ← Template engine (ta không dùng — dùng React)
     └── test/
         └── java/com/cinex/backend/
-            └── BackendApplicationTests.java  ← Test tu dong
+            └── BackendApplicationTests.java  ← Test tự động
 ```
 
-**Giai thich:**
+**Giải thích:**
 
-- `build.gradle` — "danh sach nguyen lieu" cua du an. Khai bao dung thu vien nao, phien ban bao nhieu.
-- `gradlew` — Tuong tu `npx` cua Node.js. Chay `./gradlew build` se tu tai Gradle ve neu chua co.
-- `BackendApplication.java` — File `main()` cua Java. Spring Boot khoi dong tu day.
-- `application.properties` — File cau hinh (URL database, port server, ...). Ta se doi thanh `.yml` cho de doc.
+- `build.gradle` — "danh sách nguyên liệu" của dự án. Khai báo dùng thư viện nào, phiên bản bao nhiêu.
+- `gradlew` — Tương tự `npx` của Node.js. Chạy `./gradlew build` sẽ tự tải Gradle về nếu chưa có.
+- `BackendApplication.java` — File `main()` của Java. Spring Boot khởi động từ đây.
+- `application.properties` — File cấu hình (URL database, port server, ...). Ta sẽ đổi thành `.yml` cho dễ đọc.
 
 ---
 
-## 3. Cau hinh build.gradle
+## 3. Cấu hình build.gradle
 
-### 3.1. Hieu cau truc file build.gradle
+### 3.1. Hiểu cấu trúc file build.gradle
 
-File `build.gradle` giong nhu "cong thuc nau an" — no noi cho Gradle biet: du an can nhung gi, lay o dau, build the nao.
+File `build.gradle` giống như "công thức nấu ăn" — nó nói cho Gradle biết: dự án cần những gì, lấy ở đâu, build thế nào.
 
 ```groovy
 // === PLUGINS ===
-// Plugin la "ky nang" ma Gradle can de build du an.
-// Giong nhu ban can biet "nau an" (java), "lam banh" (spring boot).
+// Plugin là "kỹ năng" mà Gradle cần để build dự án.
+// Giống như bạn cần biết "nấu ăn" (java), "làm bánh" (spring boot).
 plugins {
-    id 'java'                                                    // 1) Biet compile Java
-    id 'org.springframework.boot' version '3.3.5'                // 2) Biet dong goi Spring Boot JAR
-    id 'io.spring.dependency-management' version '1.1.6'         // 3) Quan ly phien ban thu vien tu dong
+    id 'java'                                                    // 1) Biết compile Java
+    id 'org.springframework.boot' version '3.3.5'                // 2) Biết đóng gói Spring Boot JAR
+    id 'io.spring.dependency-management' version '1.1.6'         // 3) Quản lý phiên bản thư viện tự động
 }
 
-// === THONG TIN DU AN ===
-group = 'com.cinex'             // Ten to chuc (giong ho cua ban)
-version = '0.0.1-SNAPSHOT'     // Phien ban du an (SNAPSHOT = dang phat trien)
+// === THÔNG TIN DỰ ÁN ===
+group = 'com.cinex'             // Tên tổ chức (giống họ của bạn)
+version = '0.0.1-SNAPSHOT'     // Phiên bản dự án (SNAPSHOT = đang phát triển)
 
-// === PHIEN BAN JAVA ===
+// === PHIÊN BẢN JAVA ===
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)  // Dung JDK 21 de compile
+        languageVersion = JavaLanguageVersion.of(21)  // Dùng JDK 21 để compile
     }
 }
 
-// === CAU HINH DAC BIET ===
-// Dam bao Lombok co the "nhom" voi annotation processor khac
+// === CẤU HÌNH ĐẶC BIỆT ===
+// Đảm bảo Lombok có thể "nhóm" với annotation processor khác
 configurations {
     compileOnly {
         extendsFrom annotationProcessor
     }
 }
 
-// === LAY THU VIEN TU DAU ===
+// === LẤY THƯ VIỆN TỪ ĐÂU ===
 repositories {
-    mavenCentral()  // Kho thu vien lon nhat cua Java (giong npm registry)
+    mavenCentral()  // Kho thư viện lớn nhất của Java (giống npm registry)
 }
 
-// === DANH SACH THU VIEN (DEPENDENCIES) ===
+// === DANH SÁCH THƯ VIỆN (DEPENDENCIES) ===
 dependencies {
-    // ... (chi tiet ben duoi)
+    // ... (chi tiết bên dưới)
 }
 
-// === CAU HINH TEST ===
+// === CẤU HÌNH TEST ===
 tasks.named('test') {
-    useJUnitPlatform()  // Dung JUnit 5 de chay test
+    useJUnitPlatform()  // Dùng JUnit 5 để chạy test
 }
 ```
 
-### 3.2. Giai thich cac loai dependency
+### 3.2. Giải thích các loại dependency
 
-Trong Gradle, moi dependency co 1 **scope** (pham vi):
+Trong Gradle, mỗi dependency có 1 **scope** (phạm vi):
 
-| Scope | Y nghia | Vi du |
+| Scope | Ý nghĩa | Ví dụ |
 |---|---|---|
-| `implementation` | Can khi COMPILE va khi CHAY | Spring Web, JPA, JWT |
-| `compileOnly` | Chi can khi COMPILE, khong dong goi vao JAR | Lombok (chi sinh code luc compile) |
-| `runtimeOnly` | Chi can khi CHAY, khong can luc compile | JDBC Driver (JPA tu tim) |
-| `annotationProcessor` | Xu ly annotation luc compile, sinh code tu dong | Lombok, MapStruct |
-| `testImplementation` | Chi dung trong test | JUnit, Mockito |
+| `implementation` | Cần khi COMPILE và khi CHẠY | Spring Web, JPA, JWT |
+| `compileOnly` | Chỉ cần khi COMPILE, không đóng gói vào JAR | Lombok (chỉ sinh code lúc compile) |
+| `runtimeOnly` | Chỉ cần khi CHẠY, không cần lúc compile | JDBC Driver (JPA tự tìm) |
+| `annotationProcessor` | Xử lý annotation lúc compile, sinh code tự động | Lombok, MapStruct |
+| `testImplementation` | Chỉ dùng trong test | JUnit, Mockito |
 
-**Vi du doi thuong:** Giong nhu xay nha:
-- `implementation` = gach, xi mang (can khi xay VA khi su dung)
-- `compileOnly` = dan giao (can khi xay, nhung go bo sau khi xong)
-- `runtimeOnly` = dien, nuoc (khong can khi xay, nhung can khi o)
-- `annotationProcessor` = robot tho (giup xay nhanh hon, nhung khong o lai trong nha)
+**Ví dụ đời thường:** Giống như xây nhà:
+- `implementation` = gạch, xi măng (cần khi xây VÀ khi sử dụng)
+- `compileOnly` = dàn giáo (cần khi xây, nhưng gỡ bỏ sau khi xong)
+- `runtimeOnly` = điện, nước (không cần khi xây, nhưng cần khi ở)
+- `annotationProcessor` = robot thợ (giúp xây nhanh hơn, nhưng không ở lại trong nhà)
 
-### 3.3. File build.gradle hoan chinh cua CineX
+### 3.3. File build.gradle hoàn chỉnh của CineX
 
 ```groovy
 plugins {
@@ -290,100 +290,100 @@ repositories {
 dependencies {
     // =====================================================
     // SPRING BOOT STARTERS
-    // "Starter" la goi combo — 1 starter bao gom nhieu thu vien lien quan.
-    // Giong nhu mua "combo pho" thay vi mua tung mon rieng le.
+    // "Starter" là gói combo — 1 starter bao gồm nhiều thư viện liên quan.
+    // Giống như mua "combo phở" thay vì mua từng món riêng lẻ.
     // =====================================================
 
-    // Web — xay dung REST API (nhung Tomcat, Jackson JSON, DispatcherServlet)
+    // Web — xây dựng REST API (nhúng Tomcat, Jackson JSON, DispatcherServlet)
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
-    // JPA — ORM framework, tuong tac DB bang Java object
+    // JPA — ORM framework, tương tác DB bằng Java object
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
-    // Security — xac thuc, phan quyen, bao mat
+    // Security — xác thực, phân quyền, bảo mật
     implementation 'org.springframework.boot:spring-boot-starter-security'
 
-    // Validation — kiem tra du lieu dau vao: @NotBlank, @Email, @Size, ...
+    // Validation — kiểm tra dữ liệu đầu vào: @NotBlank, @Email, @Size, ...
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
-    // Redis — cache du lieu trong RAM de tang toc truy van
+    // Redis — cache dữ liệu trong RAM để tăng tốc truy vấn
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
-    // WebSocket — giao tiep 2 chieu realtime (cap nhat ghe dang chon)
+    // WebSocket — giao tiếp 2 chiều realtime (cập nhật ghế đang chọn)
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
     // =====================================================
     // DATABASE
     // =====================================================
 
-    // JDBC Driver cho SQL Server — cau noi giua Java va SQL Server
-    // runtimeOnly vi JPA tu dong tim driver, code khong goi truc tiep
+    // JDBC Driver cho SQL Server — cầu nối giữa Java và SQL Server
+    // runtimeOnly vì JPA tự động tìm driver, code không gọi trực tiếp
     runtimeOnly 'com.microsoft.sqlserver:mssql-jdbc'
 
-    // Liquibase — quan ly thay doi database (giong git cho DB schema)
-    // Moi thay doi (them bang, sua cot) duoc ghi vao file XML → chay tu dong khi start
+    // Liquibase — quản lý thay đổi database (giống git cho DB schema)
+    // Mỗi thay đổi (thêm bảng, sửa cột) được ghi vào file XML → chạy tự động khi start
     implementation 'org.liquibase:liquibase-core'
 
     // =====================================================
-    // JWT (JSON Web Token) — xac thuc khong trang thai (stateless)
-    // Can 3 thu vien: API (interface), Impl (code thuc thi), Jackson (doc/ghi JSON)
+    // JWT (JSON Web Token) — xác thực không trạng thái (stateless)
+    // Cần 3 thư viện: API (interface), Impl (code thực thi), Jackson (đọc/ghi JSON)
     // =====================================================
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
     // =====================================================
-    // MAPSTRUCT — tu dong chuyen doi Entity <-> DTO
-    // Giong nhu robot tu dong dich tieng Anh sang tieng Viet:
-    // ban chi can noi "dich entity User thanh UserResponse" → no lam het.
+    // MAPSTRUCT — tự động chuyển đổi Entity <-> DTO
+    // Giống như robot tự động dịch tiếng Anh sang tiếng Việt:
+    // bạn chỉ cần nói "dịch entity User thành UserResponse" → nó làm hết.
     //
-    // QUAN TRONG: MapStruct chay luc COMPILE (khong dung reflection luc runtime)
-    // → nhanh hon va an toan hon cac thu vien khac (ModelMapper, Dozer).
+    // QUAN TRỌNG: MapStruct chạy lúc COMPILE (không dùng reflection lúc runtime)
+    // → nhanh hơn và an toàn hơn các thư viện khác (ModelMapper, Dozer).
     // =====================================================
     implementation 'org.mapstruct:mapstruct:1.6.3'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 
     // =====================================================
-    // LOMBOK — giam code boilerplate (getter, setter, constructor, builder)
-    // Thay vi viet 50 dong getter/setter, chi can @Getter @Setter.
+    // LOMBOK — giảm code boilerplate (getter, setter, constructor, builder)
+    // Thay vì viết 50 dòng getter/setter, chỉ cần @Getter @Setter.
     //
-    // ⚠️ THU TU ANNOTATION PROCESSOR RAT QUAN TRONG:
-    // Lombok PHAI dung TRUOC MapStruct trong danh sach annotationProcessor.
+    // THỨ TỰ ANNOTATION PROCESSOR RẤT QUAN TRỌNG:
+    // Lombok PHẢI đứng TRƯỚC MapStruct trong danh sách annotationProcessor.
     //
-    // Tai sao? Vi Lombok sinh getter/setter truoc → MapStruct doc getter/setter
-    // de biet cach mapping. Neu MapStruct chay truoc → no khong thay getter/setter
-    // → mapping bi loi.
+    // Tại sao? Vì Lombok sinh getter/setter trước → MapStruct đọc getter/setter
+    // để biết cách mapping. Nếu MapStruct chạy trước → nó không thấy getter/setter
+    // → mapping bị lỗi.
     //
-    // Giong nhu: phai co banh mi (Lombok sinh getter) truoc khi kep thit
-    // (MapStruct doc getter de map).
+    // Giống như: phải có bánh mì (Lombok sinh getter) trước khi kẹp thịt
+    // (MapStruct đọc getter để map).
     // =====================================================
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
-    // Cau noi giua Lombok va MapStruct — dam bao 2 thu vien "noi chuyen" duoc voi nhau
+    // Cầu nối giữa Lombok và MapStruct — đảm bảo 2 thư viện "nói chuyện" được với nhau
     annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
 
     // =====================================================
-    // EMAIL — gui email xac nhan, reset password
+    // EMAIL — gửi email xác nhận, reset password
     // =====================================================
     implementation 'org.springframework.boot:spring-boot-starter-mail'
 
     // =====================================================
-    // CLOUDINARY — upload anh len cloud (poster phim, avatar user)
-    // Thay vi luu anh tren server → luu tren Cloudinary (CDN toan cau, nhanh hon)
+    // CLOUDINARY — upload ảnh lên cloud (poster phim, avatar user)
+    // Thay vì lưu ảnh trên server → lưu trên Cloudinary (CDN toàn cầu, nhanh hơn)
     // =====================================================
     implementation 'com.cloudinary:cloudinary-http5:2.0.0'
 
     // =====================================================
-    // QR CODE — sinh ma QR cho ve xem phim
-    // ZXing (Zebra Crossing) la thu vien ma nguon mo cua Google
+    // QR CODE — sinh mã QR cho vé xem phim
+    // ZXing (Zebra Crossing) là thư viện mã nguồn mở của Google
     // =====================================================
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'com.google.zxing:javase:3.5.3'
 
     // =====================================================
-    // SWAGGER / OPENAPI — tu dong sinh trang tai lieu API
-    // Truy cap http://localhost:8088/swagger-ui.html de xem
-    // Moi endpoint tu dong xuat hien, co the test truc tiep tren trinh duyet
+    // SWAGGER / OPENAPI — tự động sinh trang tài liệu API
+    // Truy cập http://localhost:8088/swagger-ui.html để xem
+    // Mỗi endpoint tự động xuất hiện, có thể test trực tiếp trên trình duyệt
     // =====================================================
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 
@@ -401,33 +401,33 @@ tasks.named('test') {
 }
 ```
 
-### 3.4. Ve thu tu annotationProcessor
+### 3.4. Về thứ tự annotationProcessor
 
-Day la loi **rat pho bien** khi dung Lombok + MapStruct cung luc:
+Đây là lỗi **rất phổ biến** khi dùng Lombok + MapStruct cùng lúc:
 
 ```
-// SAI — MapStruct khong thay getter/setter
+// SAI — MapStruct không thấy getter/setter
 annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 annotationProcessor 'org.projectlombok:lombok'
 
-// DUNG — Lombok sinh getter truoc, MapStruct doc sau
+// ĐÚNG — Lombok sinh getter trước, MapStruct đọc sau
 annotationProcessor 'org.projectlombok:lombok'
 annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
 annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 ```
 
-> **Meo:** Trong thuc te, `lombok-mapstruct-binding` giup Gradle hieu dung thu tu xu ly. Nhung de an toan, luon khai bao Lombok truoc MapStruct.
+> **Mẹo:** Trong thực tế, `lombok-mapstruct-binding` giúp Gradle hiểu đúng thứ tự xử lý. Nhưng để an toàn, luôn khai báo Lombok trước MapStruct.
 
 ---
 
-## 4. Cau hinh application.yml
+## 4. Cấu hình application.yml
 
-### 4.1. Tai sao dung .yml thay vi .properties?
+### 4.1. Tại sao dùng .yml thay vì .properties?
 
-Spring Boot ho tro 2 dinh dang cau hinh:
+Spring Boot hỗ trợ 2 định dạng cấu hình:
 
 ```properties
-# application.properties — phang, lap lai prefix
+# application.properties — phẳng, lặp lại prefix
 spring.datasource.url=jdbc:sqlserver://localhost:1433
 spring.datasource.username=sa
 spring.datasource.password=CineX@2026
@@ -436,7 +436,7 @@ spring.jpa.show-sql=true
 ```
 
 ```yaml
-# application.yml — co phan cap, de doc hon
+# application.yml — có phân cấp, dễ đọc hơn
 spring:
   datasource:
     url: jdbc:sqlserver://localhost:1433
@@ -448,82 +448,82 @@ spring:
     show-sql: true
 ```
 
-**Ket luan:** `.yml` de doc hon khi co nhieu cap long nhau. Hau het du an thuc te dung `.yml`.
+**Kết luận:** `.yml` dễ đọc hơn khi có nhiều cấp lồng nhau. Hầu hết dự án thực tế dùng `.yml`.
 
-**Cach chuyen:** Xoa file `application.properties`, tao file `application.yml` cung thu muc (`src/main/resources/`).
+**Cách chuyển:** Xóa file `application.properties`, tạo file `application.yml` cùng thư mục (`src/main/resources/`).
 
-### 4.2. Profiles la gi?
+### 4.2. Profiles là gì?
 
-**Van de:** Khi code o may ca nhan (dev), database la `localhost`. Khi deploy len server (prod), database la `db.production.com`. Lam sao de khong phai sua code moi lan deploy?
+**Vấn đề:** Khi code ở máy cá nhân (dev), database là `localhost`. Khi deploy lên server (prod), database là `db.production.com`. Làm sao để không phải sửa code mỗi lần deploy?
 
-**Giai phap: Spring Profiles**
+**Giải pháp: Spring Profiles**
 
-Spring cho phep tao nhieu file cau hinh cho tung moi truong:
+Spring cho phép tạo nhiều file cấu hình cho từng môi trường:
 
 ```
 src/main/resources/
-├── application.yml          ← Cau hinh CHUNG (dung cho tat ca moi truong)
-├── application-dev.yml      ← Cau hinh rieng cho DEV (ghi de len cau hinh chung)
-└── application-prod.yml     ← Cau hinh rieng cho PRODUCTION
+├── application.yml          ← Cấu hình CHUNG (dùng cho tất cả môi trường)
+├── application-dev.yml      ← Cấu hình riêng cho DEV (ghi đè lên cấu hình chung)
+└── application-prod.yml     ← Cấu hình riêng cho PRODUCTION
 ```
 
-**Cach hoat dong:**
-1. Spring doc `application.yml` truoc (cau hinh chung)
-2. Dua vao profile dang active (`spring.profiles.active`), doc them file tuong ung
-3. Cau hinh trong file profile **ghi de** len cau hinh chung
+**Cách hoạt động:**
+1. Spring đọc `application.yml` trước (cấu hình chung)
+2. Dựa vào profile đang active (`spring.profiles.active`), đọc thêm file tương ứng
+3. Cấu hình trong file profile **ghi đè** lên cấu hình chung
 
-**Vi du doi thuong:** Giong nhu ban co 1 bo quan ao co ban (application.yml). Khi di lam → mac them ao vest (dev.yml). Khi di tiec → mac them ao khoac (prod.yml). Bo co ban van giu nguyen.
+**Ví dụ đời thường:** Giống như bạn có 1 bộ quần áo cơ bản (application.yml). Khi đi làm → mặc thêm áo vest (dev.yml). Khi đi tiệc → mặc thêm áo khoác (prod.yml). Bộ cơ bản vẫn giữ nguyên.
 
-### 4.3. Cu phap ${ENV_VAR:default}
+### 4.3. Cú pháp ${ENV_VAR:default}
 
 ```yaml
 url: jdbc:sqlserver://${DB_HOST:localhost}:${DB_PORT:1433}
 ```
 
-Dich: "Lay gia tri tu bien moi truong `DB_HOST`. Neu khong tim thay → dung `localhost`."
+Dịch: "Lấy giá trị từ biến môi trường `DB_HOST`. Nếu không tìm thấy → dùng `localhost`."
 
-**Tai sao can?**
-- Khi chay tren may ca nhan: khong set bien moi truong → tu dong dung `localhost`
-- Khi chay tren server/Docker: set `DB_HOST=db.production.com` → dung gia tri do
-- **Khong bao gio hardcode** password, secret key vao code → lo khi push len Git
+**Tại sao cần?**
+- Khi chạy trên máy cá nhân: không set biến môi trường → tự động dùng `localhost`
+- Khi chạy trên server/Docker: set `DB_HOST=db.production.com` → dùng giá trị đó
+- **Không bao giờ hardcode** password, secret key vào code → lộ khi push lên Git
 
-### 4.4. File application.yml (cau hinh chung)
+### 4.4. File application.yml (cấu hình chung)
 
 ```yaml
-# === CAU HINH CHUNG — DUNG CHO TAT CA MOI TRUONG ===
+# === CẤU HÌNH CHUNG — DÙNG CHO TẤT CẢ MÔI TRƯỜNG ===
 
 spring:
   profiles:
-    active: dev                    # Mac dinh dung profile "dev"
+    active: dev                    # Mặc định dùng profile "dev"
   servlet:
     multipart:
-      max-file-size: 5MB          # Kich thuoc file upload toi da
-      max-request-size: 5MB       # Kich thuoc request toi da
+      max-file-size: 5MB          # Kích thước file upload tối đa
+      max-request-size: 5MB       # Kích thước request tối đa
 
 server:
-  port: 8088                       # Port cua backend (mac dinh Spring la 8080)
+  port: 8088                       # Port của backend (mặc định Spring là 8080)
 
-# === CAU HINH TUY CHINH CUA DU AN ===
+# === CẤU HÌNH TÙY CHỈNH CỦA DỰ ÁN ===
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}   # URL frontend (cho CORS)
   jwt:
-    # Secret key de ky JWT — PHAI la chuoi Base64, du dai >= 256 bit
+    # Secret key để ký JWT — PHẢI là chuỗi Base64, độ dài >= 256 bit
     secret: ${JWT_SECRET:dGhpcyBpcyBhIHZlcnkgbG9uZyBzZWNyZXQga2V5IGZvciBkZXZlbG9wbWVudCBvbmx5IDEyMzQ1Njc4OTA=}
-    expiration-ms: ${JWT_EXPIRATION:900000}             # 15 phut (access token)
-    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}  # 7 ngay (refresh token)
+    expiration-ms: ${JWT_EXPIRATION:900000}             # 15 phút (access token)
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}  # 7 ngày (refresh token)
 
-# === CLOUDINARY — UPLOAD ANH ===
+# === CLOUDINARY — UPLOAD ẢNH ===
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:your-cloud-name}
   api-key: ${CLOUDINARY_API_KEY:your-api-key}
   api-secret: ${CLOUDINARY_API_SECRET:your-api-secret}
 ```
 
-### 4.5. File application-dev.yml (cau hinh rieng cho dev)
+### 4.5. File application-dev.yml (cấu hình riêng cho dev)
 
 ```yaml
-# === CAU HINH CHI DUNG KHI CHAY O MAY CA NHAN (DEV) ===
+# === CẤU HÌNH CHỈ DÙNG KHI CHẠY Ở MÁY CÁ NHÂN (DEV) ===
 
 spring:
   # --- DATABASE ---
@@ -537,20 +537,20 @@ spring:
   # --- JPA / HIBERNATE ---
   jpa:
     hibernate:
-      # ddl-auto co 5 che do:
-      # - none:     KHONG lam gi (production dung cai nay)
-      # - validate: CHI KIEM TRA entity khop voi DB, khong sua DB
-      # - update:   Tu dong ALTER TABLE khi entity thay doi (NGUY HIEM cho production!)
-      # - create:   Xoa het + tao lai bang moi lan start (mat du lieu!)
-      # - create-drop: Giong create + xoa het khi tat app
+      # ddl-auto có 5 chế độ:
+      # - none:     KHÔNG làm gì (production dùng cái này)
+      # - validate: CHỈ KIỂM TRA entity khớp với DB, không sửa DB
+      # - update:   Tự động ALTER TABLE khi entity thay đổi (NGUY HIỂM cho production!)
+      # - create:   Xóa hết + tạo lại bảng mỗi lần start (mất dữ liệu!)
+      # - create-drop: Giống create + xóa hết khi tắt app
       #
-      # Ta dung "validate" + Liquibase de quan ly DB an toan.
+      # Ta dùng "validate" + Liquibase để quản lý DB an toàn.
       ddl-auto: validate
-    show-sql: true                     # In SQL ra console (chi bat o dev)
+    show-sql: true                     # In SQL ra console (chỉ bật ở dev)
     properties:
       hibernate:
         dialect: org.hibernate.dialect.SQLServerDialect
-        format_sql: true               # Format SQL cho de doc
+        format_sql: true               # Format SQL cho dễ đọc
 
   # --- LIQUIBASE ---
   liquibase:
@@ -564,7 +564,7 @@ spring:
 
   # --- EMAIL ---
   mail:
-    host: ${MAIL_HOST:sandbox.smtp.mailtrap.io}     # Mailtrap = "hop thu gia" cho dev
+    host: ${MAIL_HOST:sandbox.smtp.mailtrap.io}     # Mailtrap = "hộp thư giả" cho dev
     port: ${MAIL_PORT:2525}
     username: ${MAIL_USERNAME:your-mailtrap-username}
     password: ${MAIL_PASSWORD:your-mailtrap-password}
@@ -575,28 +575,28 @@ spring:
 # --- LOGGING ---
 logging:
   level:
-    com.cinex: DEBUG                    # Log chi tiet cho code cua minh
-    org.springframework.security: DEBUG # Log chi tiet cho security (debug loi phan quyen)
+    com.cinex: DEBUG                    # Log chi tiết cho code của mình
+    org.springframework.security: DEBUG # Log chi tiết cho security (debug lỗi phân quyền)
 ```
 
-### 4.6. Giai thich cac cau hinh quan trong
+### 4.6. Giải thích các cấu hình quan trọng
 
-| Cau hinh | Tac dung | Vi du doi thuong |
+| Cấu hình | Tác dụng | Ví dụ đời thường |
 |---|---|---|
-| `ddl-auto: validate` | Chi kiem tra entity co khop DB khong, KHONG tu dong sua DB | Kiem tra khoa co vua o khong, nhung khong tu y lam them chia khoa |
-| `show-sql: true` | In SQL ma Hibernate sinh ra | Bat camera giam sat de xem ai lam gi |
-| `format_sql: true` | SQL duoc format dep (xuong dong, thut dau dong) | Giong nhu viet van co dan y thay vi viet lien tu |
-| Liquibase `change-log` | Diem bat dau doc cac file thay doi DB | Giong nhu muc luc cua cuon sach |
+| `ddl-auto: validate` | Chỉ kiểm tra entity có khớp DB không, KHÔNG tự động sửa DB | Kiểm tra khóa có vừa ổ không, nhưng không tự ý làm thêm chìa khóa |
+| `show-sql: true` | In SQL mà Hibernate sinh ra | Bật camera giám sát để xem ai làm gì |
+| `format_sql: true` | SQL được format đẹp (xuống dòng, thụt đầu dòng) | Giống như viết văn có dàn ý thay vì viết liền tù tì |
+| Liquibase `change-log` | Điểm bắt đầu đọc các file thay đổi DB | Giống như mục lục của cuốn sách |
 
 ---
 
-## 5. Tao cau truc package
+## 5. Tạo cấu trúc package
 
 ### 5.1. Package by Feature vs Package by Layer
 
-Co 2 cach to chuc code:
+Có 2 cách tổ chức code:
 
-**Package by Layer (KHONG DUNG):**
+**Package by Layer (KHÔNG DÙNG):**
 ```
 com.cinex/
 ├── controller/
@@ -617,33 +617,33 @@ com.cinex/
     └── Booking.java
 ```
 
-**Van de:** Khi sua module Booking, ban phai nhay qua 4 folder khac nhau. Khi du an lon (20+ entity), moi folder co 20+ file → kho tim.
+**Vấn đề:** Khi sửa module Booking, bạn phải nhảy qua 4 folder khác nhau. Khi dự án lớn (20+ entity), mỗi folder có 20+ file → khó tìm.
 
-**Package by Feature (DUNG CAI NAY):**
+**Package by Feature (DÙNG CÁI NÀY):**
 ```
 com.cinex/
-├── common/                          ← Code dung chung cho tat ca module
+├── common/                          ← Code dùng chung cho tất cả module
 │   ├── entity/
-│   │   ├── BaseEntity.java         ← Class cha cua moi entity
+│   │   ├── BaseEntity.java         ← Class cha của mọi entity
 │   │   └── StorageState.java       ← Enum: ACTIVE, ARCHIVED
-│   ├── config/                      ← Cau hinh: Security, CORS, Redis, OpenAPI
-│   ├── exception/                   ← Xu ly loi tap trung
-│   │   ├── ErrorCode.java          ← Ma loi: USER_NOT_FOUND, INVALID_CREDENTIALS, ...
-│   │   ├── BusinessException.java  ← Exception cho loi nghiep vu
-│   │   └── GlobalExceptionHandler.java  ← Bat loi tu tat ca controller
-│   ├── response/                    ← Format response thong nhat
+│   ├── config/                      ← Cấu hình: Security, CORS, Redis, OpenAPI
+│   ├── exception/                   ← Xử lý lỗi tập trung
+│   │   ├── ErrorCode.java          ← Mã lỗi: USER_NOT_FOUND, INVALID_CREDENTIALS, ...
+│   │   ├── BusinessException.java  ← Exception cho lỗi nghiệp vụ
+│   │   └── GlobalExceptionHandler.java  ← Bắt lỗi từ tất cả controller
+│   ├── response/                    ← Format response thống nhất
 │   │   ├── ApiResponse.java        ← { success, message, data, timestamp }
 │   │   └── PageResponse.java       ← { content, page, size, totalElements, ... }
-│   ├── service/                     ← Service dung chung (email, upload, ...)
-│   └── util/                        ← Ham tien ich (SecurityUtil, DateTimeUtil, ...)
+│   ├── service/                     ← Service dùng chung (email, upload, ...)
+│   └── util/                        ← Hàm tiện ích (SecurityUtil, DateTimeUtil, ...)
 │
-├── security/                        ← Xac thuc + Phan quyen
-│   ├── JwtUtil.java                ← Tao/doc/validate JWT token
-│   ├── JwtAuthFilter.java          ← Filter bat moi request, kiem tra JWT
+├── security/                        ← Xác thực + Phân quyền
+│   ├── JwtUtil.java                ← Tạo/đọc/validate JWT token
+│   ├── JwtAuthFilter.java          ← Filter bắt mọi request, kiểm tra JWT
 │   └── CustomUserDetailsService.java
 │
-└── module/                          ← TAT CA MODULE NGHIEP VU
-    ├── auth/                        ← Dang ky, Dang nhap, Refresh, Reset password
+└── module/                          ← TẤT CẢ MODULE NGHIỆP VỤ
+    ├── auth/                        ← Đăng ký, Đăng nhập, Refresh, Reset password
     │   ├── entity/
     │   │   ├── User.java
     │   │   ├── Role.java           ← Enum: USER, ADMIN
@@ -660,14 +660,14 @@ com.cinex/
     │   └── controller/
     │       └── AuthController.java
     │
-    ├── user/                        ← Quan ly profile, admin quan ly user
+    ├── user/                        ← Quản lý profile, admin quản lý user
     │   ├── dto/
     │   ├── service/
     │   ├── controller/
     │   ├── mapper/
     │   └── specification/
     │
-    ├── movie/                       ← Quan ly phim, the loai, suat chieu
+    ├── movie/                       ← Quản lý phim, thể loại, suất chiếu
     │   ├── entity/
     │   ├── dto/
     │   ├── repository/
@@ -675,7 +675,7 @@ com.cinex/
     │   ├── controller/
     │   └── mapper/
     │
-    └── booking/                     ← Dat ve, thanh toan
+    └── booking/                     ← Đặt vé, thanh toán
         ├── entity/
         ├── dto/
         ├── repository/
@@ -683,15 +683,15 @@ com.cinex/
         └── controller/
 ```
 
-**Tai sao Package by Feature?**
-1. **Lien quan o gan nhau:** Tat ca code cua module Booking nam cung 1 cho → de tim, de hieu
-2. **De xoa:** Muon bo module nao → xoa 1 folder la xong
-3. **De phan cong:** Nguoi A lam module auth, nguoi B lam module movie → khong xung dot
-4. **Thuc te:** Hau het cong ty lon (Netflix, Uber, Grab) dung package by feature
+**Tại sao Package by Feature?**
+1. **Liên quan ở gần nhau:** Tất cả code của module Booking nằm cùng 1 chỗ → dễ tìm, dễ hiểu
+2. **Dễ xóa:** Muốn bỏ module nào → xóa 1 folder là xong
+3. **Dễ phân công:** Người A làm module auth, người B làm module movie → không xung đột
+4. **Thực tế:** Hầu hết công ty lớn (Netflix, Uber, Grab) dùng package by feature
 
-### 5.2. Tao cac package
+### 5.2. Tạo các package
 
-Trong IDE, click chuot phai vao `src/main/java/com/cinex/` → New → Package:
+Trong IDE, click chuột phải vào `src/main/java/com/cinex/` → New → Package:
 
 ```
 com.cinex.common.entity
@@ -708,30 +708,30 @@ com.cinex.module.auth.service
 com.cinex.module.auth.controller
 ```
 
-> **Luu y:** Java yeu cau moi package PHAI co it nhat 1 file. Package rong se bi IDE xoa tu dong. Nen tao package khi can, khong tao truoc tat ca.
+> **Lưu ý:** Java yêu cầu mỗi package PHẢI có ít nhất 1 file. Package rỗng sẽ bị IDE xóa tự động. Nên tạo package khi cần, không tạo trước tất cả.
 
 ---
 
-## 6. Tao BaseEntity
+## 6. Tạo BaseEntity
 
-### 6.1. Tai sao can BaseEntity?
+### 6.1. Tại sao cần BaseEntity?
 
-**Van de:** Moi entity trong du an deu can cac truong giong nhau:
-- `id` — khoa chinh
-- `version` — kiem tra xung dot khi 2 nguoi sua cung luc
-- `storageState` — xoa mem (ACTIVE/ARCHIVED)
-- `createdAt`, `updatedAt` — thoi gian tao/sua
-- `createdBy`, `updatedBy` — ai tao/sua
+**Vấn đề:** Mọi entity trong dự án đều cần các trường giống nhau:
+- `id` — khóa chính
+- `version` — kiểm tra xung đột khi 2 người sửa cùng lúc
+- `storageState` — xóa mềm (ACTIVE/ARCHIVED)
+- `createdAt`, `updatedAt` — thời gian tạo/sửa
+- `createdBy`, `updatedBy` — ai tạo/sửa
 
-Neu viet lai cac truong nay trong **MOI** entity (User, Movie, Booking, ...) → lap code, de quen, kho bao tri.
+Nếu viết lại các trường này trong **MỌI** entity (User, Movie, Booking, ...) → lặp code, dễ quên, khó bảo trì.
 
-**Giai phap:** Tao 1 class cha `BaseEntity`, tat ca entity ke thua tu no.
+**Giải pháp:** Tạo 1 class cha `BaseEntity`, tất cả entity kế thừa từ nó.
 
-**Vi du doi thuong:** Giong nhu mau don xin viec da co san "Ho ten", "Ngay sinh", "So dien thoai" — ban chi can dien them phan "Kinh nghiem lam viec" (cac truong rieng cua tung entity).
+**Ví dụ đời thường:** Giống như mẫu đơn xin việc đã có sẵn "Họ tên", "Ngày sinh", "Số điện thoại" — bạn chỉ cần điền thêm phần "Kinh nghiệm làm việc" (các trường riêng của từng entity).
 
 ### 6.2. Code BaseEntity
 
-Tao file `src/main/java/com/cinex/common/entity/BaseEntity.java`:
+Tạo file `src/main/java/com/cinex/common/entity/BaseEntity.java`:
 
 ```java
 package com.cinex.common.entity;
@@ -788,16 +788,16 @@ public abstract class BaseEntity {
 }
 ```
 
-Tao file `src/main/java/com/cinex/common/entity/StorageState.java`:
+Tạo file `src/main/java/com/cinex/common/entity/StorageState.java`:
 
 ```java
 package com.cinex.common.entity;
 
 /**
- * Trang thai luu tru — dung cho soft delete toan bo du an.
+ * Trạng thái lưu trữ — dùng cho soft delete toàn bộ dự án.
  *
- * ACTIVE: dang hoat dong (mac dinh khi tao moi)
- * ARCHIVED: da xoa mem (khong hien cho user, admin co the khoi phuc)
+ * ACTIVE: đang hoạt động (mặc định khi tạo mới)
+ * ARCHIVED: đã xóa mềm (không hiện cho user, admin có thể khôi phục)
  */
 public enum StorageState {
     ACTIVE,
@@ -805,90 +805,90 @@ public enum StorageState {
 }
 ```
 
-### 6.3. Giai thich tung annotation
+### 6.3. Giải thích từng annotation
 
-| Annotation | Tac dung | Vi du doi thuong |
+| Annotation | Tác dụng | Ví dụ đời thường |
 |---|---|---|
-| `@MappedSuperclass` | Bao JPA: "Day la class cha, KHONG tao bang rieng, chi truyen field xuong class con" | Giong nhu ban ve thiet ke co ban — nha nao cung co nen mong, nhung nen mong khong phai la 1 can nha rieng |
-| `@EntityListeners(AuditingEntityListener.class)` | Tu dong dien `createdAt`, `updatedAt`, `createdBy`, `updatedBy` | Giong nhu camera giam sat tu dong ghi lai: ai vao luc nao, ai sua luc nao |
-| `@Id` | Danh dau truong nay la khoa chinh | So CMND cua moi ban ghi |
-| `@GeneratedValue(strategy = IDENTITY)` | Database tu tang id (1, 2, 3, ...) | Giong nhu so thu tu khi xep hang — may tinh tu dong cap |
-| `@Version` | Optimistic Locking — ngan 2 nguoi sua cung luc bi ghi de | Giong nhu Google Docs: neu 2 nguoi sua cung 1 dong → bao xung dot |
-| `@Enumerated(EnumType.STRING)` | Luu enum duoi dang chu (ACTIVE, ARCHIVED) thay vi so (0, 1) | Doc DB thay "ACTIVE" de hieu hon thay "0" |
-| `@Column(updatable = false)` | Truong nay chi duoc set 1 lan khi INSERT, khong duoc UPDATE | Giong nhu ngay sinh — khong ai doi duoc |
-| `@CreatedDate` | Spring tu dong dien ngay tao | Khong can viet `entity.setCreatedAt(LocalDateTime.now())` |
-| `@CreatedBy` | Spring tu dong dien nguoi tao (lay tu SecurityContext) | Khong can viet `entity.setCreatedBy(currentUser)` |
+| `@MappedSuperclass` | Báo JPA: "Đây là class cha, KHÔNG tạo bảng riêng, chỉ truyền field xuống class con" | Giống như bản vẽ thiết kế cơ bản — nhà nào cũng có nền móng, nhưng nền móng không phải là 1 căn nhà riêng |
+| `@EntityListeners(AuditingEntityListener.class)` | Tự động điền `createdAt`, `updatedAt`, `createdBy`, `updatedBy` | Giống như camera giám sát tự động ghi lại: ai vào lúc nào, ai sửa lúc nào |
+| `@Id` | Đánh dấu trường này là khóa chính | Số CMND của mỗi bản ghi |
+| `@GeneratedValue(strategy = IDENTITY)` | Database tự tăng id (1, 2, 3, ...) | Giống như số thứ tự khi xếp hàng — máy tính tự động cấp |
+| `@Version` | Optimistic Locking — ngăn 2 người sửa cùng lúc bị ghi đè | Giống như Google Docs: nếu 2 người sửa cùng 1 dòng → báo xung đột |
+| `@Enumerated(EnumType.STRING)` | Lưu enum dưới dạng chữ (ACTIVE, ARCHIVED) thay vì số (0, 1) | Đọc DB thấy "ACTIVE" dễ hiểu hơn thấy "0" |
+| `@Column(updatable = false)` | Trường này chỉ được set 1 lần khi INSERT, không được UPDATE | Giống như ngày sinh — không ai đổi được |
+| `@CreatedDate` | Spring tự động điền ngày tạo | Không cần viết `entity.setCreatedAt(LocalDateTime.now())` |
+| `@CreatedBy` | Spring tự động điền người tạo (lấy từ SecurityContext) | Không cần viết `entity.setCreatedBy(currentUser)` |
 
-### 6.4. Ve @Version — Optimistic Locking
+### 6.4. Về @Version — Optimistic Locking
 
-**Tinh huong:** Admin A va admin B cung mo trang sua phim "Avengers". A sua gia ve 100k, B sua ten phim "Avengers 5". Ca 2 nhan Save cung luc.
+**Tình huống:** Admin A và admin B cùng mở trang sửa phim "Avengers". A sửa giá vé 100k, B sửa tên phim "Avengers 5". Cả 2 nhấn Save cùng lúc.
 
-**Khong co @Version:**
-- A save truoc: gia = 100k, ten = "Avengers" (chua doi)
-- B save sau: gia = ? (bi ghi de ve gia cu!), ten = "Avengers 5"
-→ Thay doi cua A bi mat!
+**Không có @Version:**
+- A save trước: giá = 100k, tên = "Avengers" (chưa đổi)
+- B save sau: giá = ? (bị ghi đè về giá cũ!), tên = "Avengers 5"
+→ Thay đổi của A bị mất!
 
-**Co @Version:**
+**Có @Version:**
 - Khi A load phim: version = 1
 - Khi B load phim: version = 1
-- A save: `UPDATE movies SET ... WHERE id = 1 AND version = 1` → Thanh cong, version tang len 2
-- B save: `UPDATE movies SET ... WHERE id = 1 AND version = 1` → THAT BAI (vi version da la 2)
-- B nhan thong bao: "Du lieu da bi nguoi khac cap nhat, vui long tai lai"
+- A save: `UPDATE movies SET ... WHERE id = 1 AND version = 1` → Thành công, version tăng lên 2
+- B save: `UPDATE movies SET ... WHERE id = 1 AND version = 1` → THẤT BẠI (vì version đã là 2)
+- B nhận thông báo: "Dữ liệu đã bị người khác cập nhật, vui lòng tải lại"
 
 ---
 
-## 7. Tao ApiResponse wrapper
+## 7. Tạo ApiResponse wrapper
 
-### 7.1. Tai sao can response thong nhat?
+### 7.1. Tại sao cần response thống nhất?
 
-**Khong co wrapper — moi API tra kieu khac nhau:**
+**Không có wrapper — mỗi API trả kiểu khác nhau:**
 
 ```json
-// GET /api/users/1 → tra User truc tiep
+// GET /api/users/1 → trả User trực tiếp
 { "id": 1, "username": "vanan" }
 
-// POST /api/auth/login → tra token
+// POST /api/auth/login → trả token
 { "accessToken": "xxx", "refreshToken": "yyy" }
 
-// DELETE /api/users/1 → tra gi? String? null? void?
+// DELETE /api/users/1 → trả gì? String? null? void?
 "Deleted successfully"
 ```
 
-**Frontend rat kho xu ly:** Moi API phai viet logic khac nhau de doc response.
+**Frontend rất khó xử lý:** Mỗi API phải viết logic khác nhau để đọc response.
 
-**Co wrapper — TAT CA API cung format:**
+**Có wrapper — TẤT CẢ API cùng format:**
 
 ```json
-// Thanh cong
+// Thành công
 {
     "success": true,
     "message": "OK",
-    "data": { ... },            // Du lieu thuc te (bat ky kieu gi)
+    "data": { ... },            // Dữ liệu thực tế (bất kỳ kiểu gì)
     "timestamp": "2026-05-27T..."
 }
 
-// Loi
+// Lỗi
 {
     "success": false,
-    "message": "Email da duoc su dung",
+    "message": "Email đã được sử dụng",
     "data": null,
     "timestamp": "2026-05-27T..."
 }
 ```
 
-**Frontend chi can:**
+**Frontend chỉ cần:**
 ```javascript
 const res = await api.post('/auth/login', data);
 if (res.data.success) {
-    // Dung: doc res.data.data
+    // Đúng: đọc res.data.data
 } else {
-    // Loi: hien res.data.message
+    // Lỗi: hiện res.data.message
 }
 ```
 
 ### 7.2. Code ApiResponse
 
-Tao file `src/main/java/com/cinex/common/response/ApiResponse.java`:
+Tạo file `src/main/java/com/cinex/common/response/ApiResponse.java`:
 
 ```java
 package com.cinex.common.response;
@@ -903,16 +903,16 @@ import java.time.Instant;
 @Getter
 @Builder
 @AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_NULL)  // Khong tra field null trong JSON
+@JsonInclude(JsonInclude.Include.NON_NULL)  // Không trả field null trong JSON
 public class ApiResponse<T> {
 
-    private boolean success;     // true = thanh cong, false = loi
-    private String message;      // Thong bao ("Login successful", "User not found")
-    private T data;              // Du lieu thuc te (Generic — bat ky kieu gi)
+    private boolean success;     // true = thành công, false = lỗi
+    private String message;      // Thông báo ("Login successful", "User not found")
+    private T data;              // Dữ liệu thực tế (Generic — bất kỳ kiểu gì)
     @Builder.Default
-    private Instant timestamp = Instant.now();  // Thoi diem response
+    private Instant timestamp = Instant.now();  // Thời điểm response
 
-    // --- Factory method cho truong hop thanh cong ---
+    // --- Factory method cho trường hợp thành công ---
 
     public static <T> ApiResponse<T> ok(T data) {
         return ApiResponse.<T>builder()
@@ -930,7 +930,7 @@ public class ApiResponse<T> {
                 .build();
     }
 
-    // --- Factory method cho truong hop loi ---
+    // --- Factory method cho trường hợp lỗi ---
 
     public static <T> ApiResponse<T> error(String message) {
         return ApiResponse.<T>builder()
@@ -941,9 +941,9 @@ public class ApiResponse<T> {
 }
 ```
 
-### 7.3. Code PageResponse (cho phan trang)
+### 7.3. Code PageResponse (cho phân trang)
 
-Tao file `src/main/java/com/cinex/common/response/PageResponse.java`:
+Tạo file `src/main/java/com/cinex/common/response/PageResponse.java`:
 
 ```java
 package com.cinex.common.response;
@@ -960,16 +960,16 @@ import java.util.List;
 @AllArgsConstructor
 public class PageResponse<T> {
 
-    private List<T> content;         // Danh sach item trang hien tai
-    private int page;                // Trang hien tai (bat dau tu 0)
-    private int size;                // So item moi trang
-    private long totalElements;      // Tong so item
-    private int totalPages;          // Tong so trang
-    private boolean last;            // Co phai trang cuoi khong
+    private List<T> content;         // Danh sách item trang hiện tại
+    private int page;                // Trang hiện tại (bắt đầu từ 0)
+    private int size;                // Số item mỗi trang
+    private long totalElements;      // Tổng số item
+    private int totalPages;          // Tổng số trang
+    private boolean last;            // Có phải trang cuối không
 
     /**
-     * Chuyen tu Spring Page<T> sang PageResponse<T>.
-     * Giup controller khong phu thuoc vao class Page cua Spring.
+     * Chuyển từ Spring Page<T> sang PageResponse<T>.
+     * Giúp controller không phụ thuộc vào class Page của Spring.
      */
     public static <T> PageResponse<T> from(Page<T> page) {
         return PageResponse.<T>builder()
@@ -984,30 +984,30 @@ public class PageResponse<T> {
 }
 ```
 
-### 7.4. Giai thich Generic `<T>`
+### 7.4. Giải thích Generic `<T>`
 
-`ApiResponse<T>` nghia la: "Response nay chua du lieu kieu T — T co the la BAT KY kieu gi."
+`ApiResponse<T>` nghĩa là: "Response này chứa dữ liệu kiểu T — T có thể là BẤT KỲ kiểu gì."
 
 ```java
-ApiResponse<User>                   // T = User → data la 1 User object
-ApiResponse<List<Movie>>            // T = List<Movie> → data la danh sach phim
-ApiResponse<String>                 // T = String → data la 1 chuoi
-ApiResponse<Void>                   // T = Void → khong co data (delete, logout)
+ApiResponse<User>                   // T = User → data là 1 User object
+ApiResponse<List<Movie>>            // T = List<Movie> → data là danh sách phim
+ApiResponse<String>                 // T = String → data là 1 chuỗi
+ApiResponse<Void>                   // T = Void → không có data (delete, logout)
 ```
 
-**Vi du doi thuong:** `ApiResponse<T>` giong nhu hop qua — cai hop luon giong nhau (success, message, timestamp), nhung ben trong co the la banh (User), hoa (Movie), hoac rong (Void).
+**Ví dụ đời thường:** `ApiResponse<T>` giống như hộp quà — cái hộp luôn giống nhau (success, message, timestamp), nhưng bên trong có thể là bánh (User), hoa (Movie), hoặc rỗng (Void).
 
 ---
 
-## 8. Tao module dau tien (User)
+## 8. Tạo module đầu tiên (User)
 
-Ta se tao tung file theo thu tu: **Entity → DTO → Repository → Service → Controller → Mapper**.
+Ta sẽ tạo từng file theo thứ tự: **Entity → DTO → Repository → Service → Controller → Mapper**.
 
-Thu tu nay quan trong vi: Repository can Entity, Service can Repository, Controller can Service.
+Thứ tự này quan trọng vì: Repository cần Entity, Service cần Repository, Controller cần Service.
 
 ### 8.1. Entity — User.java
 
-**Entity la gi?** La class Java dai dien cho 1 bang trong database. Moi field = 1 cot. Moi instance = 1 dong.
+**Entity là gì?** Là class Java đại diện cho 1 bảng trong database. Mỗi field = 1 cột. Mỗi instance = 1 dòng.
 
 ```java
 package com.cinex.module.auth.entity;
@@ -1024,30 +1024,30 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Entity                          // Bao JPA: "Day la 1 entity, map voi 1 bang trong DB"
-@Table(name = "users")           // Ten bang trong DB (so nhieu)
-@Getter @Setter                  // Lombok: tu sinh getter/setter
-@NoArgsConstructor               // Lombok: constructor khong tham so (JPA yeu cau)
-@AllArgsConstructor              // Lombok: constructor day du tham so
-@Builder                         // Lombok: tao object bang Builder pattern
+@Entity                          // Báo JPA: "Đây là 1 entity, map với 1 bảng trong DB"
+@Table(name = "users")           // Tên bảng trong DB (số nhiều)
+@Getter @Setter                  // Lombok: tự sinh getter/setter
+@NoArgsConstructor               // Lombok: constructor không tham số (JPA yêu cầu)
+@AllArgsConstructor              // Lombok: constructor đầy đủ tham số
+@Builder                         // Lombok: tạo object bằng Builder pattern
 public class User extends BaseEntity {
     //             ^^^^^^^^^^^^^^^^
-    //  Ke thua BaseEntity → tu dong co id, version, storageState, audit fields
+    //  Kế thừa BaseEntity → tự động có id, version, storageState, audit fields
 
     @Column(nullable = false, unique = true, length = 50)
     private String username;
-    //  → Cot "username" trong DB, KHONG duoc null, KHONG duoc trung, toi da 50 ky tu
+    //  → Cột "username" trong DB, KHÔNG được null, KHÔNG được trùng, tối đa 50 ký tự
 
     @Column(nullable = false, unique = true, length = 100)
     private String email;
 
     @Column(nullable = false)
-    private String password;     // Luu dang MA HOA (bcrypt), KHONG BAO GIO luu plain text
+    private String password;     // Lưu dạng MÃ HÓA (bcrypt), KHÔNG BAO GIỜ lưu plain text
 
     @Column(name = "full_name", length = 100)
     private String fullName;
-    //  name = "full_name" → ten cot trong DB la "full_name" (snake_case)
-    //  Con Java dung "fullName" (camelCase)
+    //  name = "full_name" → tên cột trong DB là "full_name" (snake_case)
+    //  Còn Java dùng "fullName" (camelCase)
 
     @Column(length = 20)
     private String phone;
@@ -1055,9 +1055,9 @@ public class User extends BaseEntity {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
-    @Enumerated(EnumType.STRING)  // Luu "USER" thay vi 0, "ADMIN" thay vi 1
+    @Enumerated(EnumType.STRING)  // Lưu "USER" thay vì 0, "ADMIN" thay vì 1
     @Column(nullable = false, length = 20)
-    @Builder.Default              // Khi dung Builder, mac dinh la USER
+    @Builder.Default              // Khi dùng Builder, mặc định là USER
     private Role role = Role.USER;
 
     @Column(nullable = false)
@@ -1072,23 +1072,23 @@ public class User extends BaseEntity {
 package com.cinex.module.auth.entity;
 
 public enum Role {
-    USER,    // Nguoi dung thuong
-    ADMIN    // Quan tri vien
+    USER,    // Người dùng thường
+    ADMIN    // Quản trị viên
 }
 ```
 
-### 8.2. DTO — Request va Response
+### 8.2. DTO — Request và Response
 
-**DTO la gi?** Data Transfer Object — doi tuong chuyen du lieu giua cac tang (frontend ↔ backend).
+**DTO là gì?** Data Transfer Object — đối tượng chuyển dữ liệu giữa các tầng (frontend ↔ backend).
 
-**Tai sao khong tra entity thang?**
-1. **Bao mat:** Entity co truong `password` — tra thang = lo mat khau
-2. **Linh hoat:** API list chi can `id, username, email`. API detail can nhieu hon. 1 entity → nhieu DTO
-3. **Kiem soat:** DTO chi cho phep client gui dung cac truong can thiet
+**Tại sao không trả entity thẳng?**
+1. **Bảo mật:** Entity có trường `password` — trả thẳng = lộ mật khẩu
+2. **Linh hoạt:** API list chỉ cần `id, username, email`. API detail cần nhiều hơn. 1 entity → nhiều DTO
+3. **Kiểm soát:** DTO chỉ cho phép client gửi đúng các trường cần thiết
 
-**Vi du doi thuong:** Entity giong nhu ho so y te day du (ten, benh su, xet nghiem, ...). DTO giong nhu phieu kham — chi hien thong tin can thiet cho tung truong hop.
+**Ví dụ đời thường:** Entity giống như hồ sơ y tế đầy đủ (tên, bệnh sử, xét nghiệm, ...). DTO giống như phiếu khám — chỉ hiện thông tin cần thiết cho từng trường hợp.
 
-#### RegisterRequest (client gui len khi dang ky)
+#### RegisterRequest (client gửi lên khi đăng ký)
 
 ```java
 package com.cinex.module.auth.dto;
@@ -1103,33 +1103,33 @@ import lombok.Setter;
 @Setter
 public class RegisterRequest {
 
-    @NotBlank(message = "Ten dang nhap la bat buoc")
-    @Size(min = 3, max = 50, message = "Ten dang nhap tu 3-50 ky tu")
+    @NotBlank(message = "Tên đăng nhập là bắt buộc")
+    @Size(min = 3, max = 50, message = "Tên đăng nhập từ 3-50 ký tự")
     private String username;
 
-    @NotBlank(message = "Email la bat buoc")
-    @Email(message = "Email khong hop le")
+    @NotBlank(message = "Email là bắt buộc")
+    @Email(message = "Email không hợp lệ")
     private String email;
 
-    @NotBlank(message = "Mat khau la bat buoc")
-    @Size(min = 6, max = 100, message = "Mat khau tu 6-100 ky tu")
+    @NotBlank(message = "Mật khẩu là bắt buộc")
+    @Size(min = 6, max = 100, message = "Mật khẩu từ 6-100 ký tự")
     private String password;
 
-    private String fullName;   // Khong bat buoc → khong co @NotBlank
+    private String fullName;   // Không bắt buộc → không có @NotBlank
 }
 ```
 
-**Giai thich Validation annotations:**
+**Giải thích Validation annotations:**
 
-| Annotation | Tac dung |
+| Annotation | Tác dụng |
 |---|---|
-| `@NotBlank` | Khong duoc null, khong duoc rong, khong duoc chi co khoang trang |
-| `@Email` | Phai co dang email hop le (co @, co domain) |
-| `@Size(min, max)` | Do dai chuoi phai trong khoang min-max |
+| `@NotBlank` | Không được null, không được rỗng, không được chỉ có khoảng trắng |
+| `@Email` | Phải có dạng email hợp lệ (có @, có domain) |
+| `@Size(min, max)` | Độ dài chuỗi phải trong khoảng min-max |
 
-Khi client gui du lieu KHONG hop le, Spring tu dong tra loi 400 Bad Request + thong bao loi.
+Khi client gửi dữ liệu KHÔNG hợp lệ, Spring tự động trả lời 400 Bad Request + thông báo lỗi.
 
-#### AuthResponse (server tra ve sau khi login/register)
+#### AuthResponse (server trả về sau khi login/register)
 
 ```java
 package com.cinex.module.auth.dto;
@@ -1143,17 +1143,17 @@ import lombok.Getter;
 @AllArgsConstructor
 public class AuthResponse {
 
-    private String accessToken;      // JWT token de xac thuc cac request sau
-    private String refreshToken;     // Token de lay access token moi khi het han
+    private String accessToken;      // JWT token để xác thực các request sau
+    private String refreshToken;     // Token để lấy access token mới khi hết hạn
 
     @Builder.Default
-    private String tokenType = "Bearer";   // Loai token (luon la "Bearer")
+    private String tokenType = "Bearer";   // Loại token (luôn là "Bearer")
 
-    private long expiresIn;          // Thoi gian het han (giay)
+    private long expiresIn;          // Thời gian hết hạn (giây)
 }
 ```
 
-#### UserProfileResponse (server tra ve khi xem profile)
+#### UserProfileResponse (server trả về khi xem profile)
 
 ```java
 package com.cinex.module.user.dto;
@@ -1179,13 +1179,13 @@ public class UserProfileResponse {
     private boolean enabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    // Chu y: KHONG co truong "password" → KHONG BAO GIO tra password cho client
+    // Chú ý: KHÔNG có trường "password" → KHÔNG BAO GIỜ trả password cho client
 }
 ```
 
 ### 8.3. Repository — UserRepository.java
 
-**Repository la gi?** La interface tuong tac voi database. Spring Data JPA tu dong sinh code SQL — ban chi can khai bao method.
+**Repository là gì?** Là interface tương tác với database. Spring Data JPA tự động sinh code SQL — bạn chỉ cần khai báo method.
 
 ```java
 package com.cinex.module.auth.repository;
@@ -1198,22 +1198,22 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.Optional;
 
 public interface UserRepository
-        extends JpaRepository<User, Long>,          // CRUD co ban + phan trang
-                JpaSpecificationExecutor<User> {     // Query dong (search, filter)
+        extends JpaRepository<User, Long>,          // CRUD cơ bản + phân trang
+                JpaSpecificationExecutor<User> {     // Query động (search, filter)
     //            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    //  JpaRepository<Entity, KieuID>
+    //  JpaRepository<Entity, KiểuID>
     //  - Entity: class entity (User)
-    //  - KieuID: kieu cua truong @Id (Long)
+    //  - KiểuID: kiểu của trường @Id (Long)
     //
-    //  Tu dong co san cac method:
-    //  - save(entity)        → INSERT hoac UPDATE
+    //  Tự động có sẵn các method:
+    //  - save(entity)        → INSERT hoặc UPDATE
     //  - findById(id)        → SELECT * WHERE id = ?
     //  - findAll()           → SELECT *
     //  - findAll(pageable)   → SELECT * LIMIT ? OFFSET ?
     //  - deleteById(id)      → DELETE WHERE id = ?
     //  - count()             → SELECT COUNT(*)
 
-    // Query method — Spring doc ten method va tu sinh SQL
+    // Query method — Spring đọc tên method và tự sinh SQL
     // findActiveByUsername → SELECT * FROM users WHERE username = ? AND storage_state != 'DELETED'
     @Query("SELECT u FROM User u WHERE u.username = :username AND (u.storageState IS NULL OR u.storageState <> 'DELETED')")
     Optional<User> findActiveByUsername(String username);
@@ -1232,12 +1232,12 @@ public interface UserRepository
 }
 ```
 
-**Tai sao la interface ma khong phai class?**
-Spring Data JPA dung **Proxy Pattern** — luc runtime, no tu dong tao 1 class implement interface nay. Ban chi can khai bao "can gi", Spring lo "lam the nao".
+**Tại sao là interface mà không phải class?**
+Spring Data JPA dùng **Proxy Pattern** — lúc runtime, nó tự động tạo 1 class implement interface này. Bạn chỉ cần khai báo "cần gì", Spring lo "làm thế nào".
 
-**Quy tac dat ten method:**
+**Quy tắc đặt tên method:**
 
-| Ten method | SQL duoc sinh |
+| Tên method | SQL được sinh |
 |---|---|
 | `findByUsername(String)` | `WHERE username = ?` |
 | `findByEmailAndEnabled(String, boolean)` | `WHERE email = ? AND enabled = ?` |
@@ -1247,7 +1247,7 @@ Spring Data JPA dung **Proxy Pattern** — luc runtime, no tu dong tao 1 class i
 
 ### 8.4. Mapper — UserMapper.java
 
-**Mapper la gi?** La lop chuyen doi giua Entity va DTO. MapStruct tu dong sinh code luc compile.
+**Mapper là gì?** Là lớp chuyển đổi giữa Entity và DTO. MapStruct tự động sinh code lúc compile.
 
 ```java
 package com.cinex.module.user.mapper;
@@ -1258,30 +1258,30 @@ import org.mapstruct.Mapper;
 
 /**
  * [Mapper Pattern - MapStruct]
- * componentModel = "spring" → Dang ky nhu 1 Spring Bean
- * → co the inject bang constructor injection.
+ * componentModel = "spring" → Đăng ký như 1 Spring Bean
+ * → có thể inject bằng constructor injection.
  */
 @Mapper(componentModel = "spring")
 public interface UserMapper {
 
     /**
-     * MapStruct tu dong match field theo TEN:
+     * MapStruct tự động match field theo TÊN:
      * user.getUsername()  → response.username
      * user.getEmail()     → response.email
      * user.getFullName()  → response.fullName
      * ...
      *
-     * Neu ten khac nhau, dung @Mapping:
+     * Nếu tên khác nhau, dùng @Mapping:
      * @Mapping(source = "avatarUrl", target = "profileImage")
      */
     UserProfileResponse toProfileResponse(User user);
 }
 ```
 
-**Tai sao dung MapStruct ma khong viet tay?**
+**Tại sao dùng MapStruct mà không viết tay?**
 
 ```java
-// KHONG dung MapStruct — viet TAY (5 truong = 5 dong, 20 truong = 20 dong)
+// KHÔNG dùng MapStruct — viết TAY (5 trường = 5 dòng, 20 trường = 20 dòng)
 public UserProfileResponse toResponse(User user) {
     return UserProfileResponse.builder()
             .id(user.getId())
@@ -1295,17 +1295,17 @@ public UserProfileResponse toResponse(User user) {
             .createdAt(user.getCreatedAt())
             .updatedAt(user.getUpdatedAt())
             .build();
-    // Them 1 field moi → phai nho sua o day. De QUEN!
+    // Thêm 1 field mới → phải nhớ sửa ở đây. Dễ QUÊN!
 }
 
-// DUNG MapStruct — chi 1 dong, tu dong match tat ca field cung ten
+// DÙNG MapStruct — chỉ 1 dòng, tự động match tất cả field cùng tên
 UserProfileResponse toProfileResponse(User user);
-// Them field moi co cung ten → tu dong map. KHONG CAN SUA GI!
+// Thêm field mới có cùng tên → tự động map. KHÔNG CẦN SỬA GÌ!
 ```
 
 ### 8.5. Service — AuthService.java
 
-**Service la gi?** La noi chua **TOAN BO business logic** (luan nghiep vu). Controller chi nhan request roi chuyen cho Service xu ly.
+**Service là gì?** Là nơi chứa **TOÀN BỘ business logic** (luận nghiệp vụ). Controller chỉ nhận request rồi chuyển cho Service xử lý.
 
 ```java
 package com.cinex.module.auth.service;
@@ -1326,49 +1326,49 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
-@Service                  // Danh dau day la Service Bean — Spring quan ly lifecycle
-@RequiredArgsConstructor  // Lombok: tu sinh constructor cho tat ca truong final
-@Slf4j                    // Lombok: tu sinh logger (log.info(), log.warn(), log.error())
+@Service                  // Đánh dấu đây là Service Bean — Spring quản lý lifecycle
+@RequiredArgsConstructor  // Lombok: tự sinh constructor cho tất cả trường final
+@Slf4j                    // Lombok: tự sinh logger (log.info(), log.warn(), log.error())
 public class AuthService {
 
     // Dependency Injection qua constructor (RequiredArgsConstructor sinh constructor)
-    // Tai sao dung "final"? → Dam bao dependency KHONG bi thay doi sau khi tao
+    // Tại sao dùng "final"? → Đảm bảo dependency KHÔNG bị thay đổi sau khi tạo
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
     /**
-     * Dang ky tai khoan moi.
+     * Đăng ký tài khoản mới.
      *
-     * @Transactional: Tat ca thao tac DB trong method nay nam trong 1 transaction.
-     * Neu loi xay ra giua chung → ROLLBACK tat ca (khong luu gi ca).
+     * @Transactional: Tất cả thao tác DB trong method này nằm trong 1 transaction.
+     * Nếu lỗi xảy ra giữa chừng → ROLLBACK tất cả (không lưu gì cả).
      *
-     * Vi du: Nhu ky hop dong — hoac ky HET hoac HUY het, khong ky nua chung.
+     * Ví dụ: Như ký hợp đồng — hoặc ký HẾT hoặc HỦY hết, không ký nửa chừng.
      */
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        // Kiem tra trung username
+        // Kiểm tra trùng username
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new BusinessException(ErrorCode.USER_EXISTED, "Ten dang nhap da duoc su dung");
+            throw new BusinessException(ErrorCode.USER_EXISTED, "Tên đăng nhập đã được sử dụng");
         }
-        // Kiem tra trung email
+        // Kiểm tra trùng email
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new BusinessException(ErrorCode.USER_EXISTED, "Email da duoc su dung");
+            throw new BusinessException(ErrorCode.USER_EXISTED, "Email đã được sử dụng");
         }
 
-        // Tao User entity bang Builder pattern
+        // Tạo User entity bằng Builder pattern
         User user = User.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 //         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                //  MA HOA mat khau truoc khi luu. KHONG BAO GIO luu plain text!
+                //  MÃ HÓA mật khẩu trước khi lưu. KHÔNG BAO GIỜ lưu plain text!
                 //  bcrypt: "123456" → "$2a$10$N9qo8uLOickgx2ZMRZoMye..."
                 .fullName(request.getFullName())
                 .build();
 
         userRepository.save(user);
-        // JPA tu dong: INSERT INTO users (username, email, password, ...) VALUES (?, ?, ?, ...)
+        // JPA tự động: INSERT INTO users (username, email, password, ...) VALUES (?, ?, ?, ...)
 
         log.info("User {} registered", user.getUsername());
 
@@ -1376,28 +1376,28 @@ public class AuthService {
     }
 
     /**
-     * Dang nhap.
+     * Đăng nhập.
      */
     @Transactional(readOnly = true)
     //              ^^^^^^^^^^^
-    //  readOnly = true: bao Hibernate rang method nay CHI DOC, khong ghi
-    //  → Hibernate toi uu: khong can track thay doi, khong can flush
-    //  → Nhanh hon!
+    //  readOnly = true: báo Hibernate rằng method này CHỈ ĐỌC, không ghi
+    //  → Hibernate tối ưu: không cần track thay đổi, không cần flush
+    //  → Nhanh hơn!
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findActiveByUsername(request.getUsername())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
                 //  ^^^^^^^^^^^^
-                //  Optional.orElseThrow: Neu khong tim thay → nem exception
-                //  KHONG dung .get() vi se NullPointerException neu rong
+                //  Optional.orElseThrow: Nếu không tìm thấy → ném exception
+                //  KHÔNG dùng .get() vì sẽ NullPointerException nếu rỗng
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
-            //  Chu y: KHONG noi "sai mat khau" hay "sai username" cu the
-            //  → Tranh ke tan cong biet username nao ton tai (security best practice)
+            //  Chú ý: KHÔNG nói "sai mật khẩu" hay "sai username" cụ thể
+            //  → Tránh kẻ tấn công biết username nào tồn tại (security best practice)
         }
 
         if (!user.isEnabled()) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "Tai khoan da bi vo hieu hoa");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Tài khoản đã bị vô hiệu hóa");
         }
 
         return buildAuthResponse(user);
@@ -1417,15 +1417,15 @@ public class AuthService {
 }
 ```
 
-**Cac quy tac Service:**
-1. **Moi method cong khai** phai co `@Transactional` (ghi) hoac `@Transactional(readOnly = true)` (doc)
-2. **Khi co loi** → throw `BusinessException`, KHONG return null
-3. **Ten method ro rang:** `createBooking()` thay vi `process()`, `handleUser()` thay vi `doStuff()`
-4. **KHONG goi Controller**, khong tra HttpResponse, khong doc HttpRequest
+**Các quy tắc Service:**
+1. **Mỗi method công khai** phải có `@Transactional` (ghi) hoặc `@Transactional(readOnly = true)` (đọc)
+2. **Khi có lỗi** → throw `BusinessException`, KHÔNG return null
+3. **Tên method rõ ràng:** `createBooking()` thay vì `process()`, `handleUser()` thay vì `doStuff()`
+4. **KHÔNG gọi Controller**, không trả HttpResponse, không đọc HttpRequest
 
 ### 8.6. Controller — AuthController.java
 
-**Controller la gi?** La "le tan" — nhan request tu client, chuyen cho Service xu ly, roi tra response ve client. Controller chi lam 3 viec: NHAN → GOI → TRA.
+**Controller là gì?** Là "lễ tân" — nhận request từ client, chuyển cho Service xử lý, rồi trả response về client. Controller chỉ làm 3 việc: NHẬN → GỌI → TRẢ.
 
 ```java
 package com.cinex.module.auth.controller;
@@ -1445,24 +1445,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController            // = @Controller + @ResponseBody
-                           // Moi method tu dong tra JSON (khong can ghi @ResponseBody)
-@RequestMapping("/api/auth")  // Tat ca endpoint bat dau bang /api/auth
+                           // Mọi method tự động trả JSON (không cần ghi @ResponseBody)
+@RequestMapping("/api/auth")  // Tất cả endpoint bắt đầu bằng /api/auth
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "Register, Login, Logout")  // Swagger: nhom cac API
+@Tag(name = "Auth", description = "Register, Login, Logout")  // Swagger: nhóm các API
 public class AuthController {
 
     private final AuthService authService;
-    //  Chi inject Service, KHONG inject Repository.
-    //  Controller → Service → Repository (khong nhay cap)
+    //  Chỉ inject Service, KHÔNG inject Repository.
+    //  Controller → Service → Repository (không nhảy cấp)
 
     @PostMapping("/register")                        // POST /api/auth/register
-    @Operation(summary = "Register a new account")   // Swagger: mo ta API
+    @Operation(summary = "Register a new account")   // Swagger: mô tả API
     public ApiResponse<AuthResponse> register(
             @Valid @RequestBody RegisterRequest request) {
-        //  @Valid: bat Spring kiem tra @NotBlank, @Email, @Size trong DTO
-        //  Neu khong hop le → tu dong tra 400 Bad Request
+        //  @Valid: bắt Spring kiểm tra @NotBlank, @Email, @Size trong DTO
+        //  Nếu không hợp lệ → tự động trả 400 Bad Request
         //
-        //  @RequestBody: doc JSON tu body request va chuyen thanh Java object
+        //  @RequestBody: đọc JSON từ body request và chuyển thành Java object
         //  { "username": "vanan", "email": "..." } → RegisterRequest object
         return ApiResponse.ok("Registration successful", authService.register(request));
     }
@@ -1475,20 +1475,20 @@ public class AuthController {
 }
 ```
 
-**Giai thich annotation:**
+**Giải thích annotation:**
 
-| Annotation | Tac dung |
+| Annotation | Tác dụng |
 |---|---|
-| `@RestController` | Danh dau class nay la controller, tu dong tra JSON |
-| `@RequestMapping("/api/auth")` | Prefix URL cho tat ca method trong class |
-| `@PostMapping("/register")` | Method nay xu ly POST /api/auth/register |
-| `@GetMapping`, `@PutMapping`, `@DeleteMapping` | Tuong tu cho GET, PUT, DELETE |
-| `@Valid` | Kich hoat validation tren DTO |
-| `@RequestBody` | Parse JSON body thanh Java object |
-| `@PathVariable` | Doc gia tri tu URL: `/users/{id}` → `@PathVariable Long id` |
-| `@RequestParam` | Doc query param: `/users?role=ADMIN` → `@RequestParam Role role` |
+| `@RestController` | Đánh dấu class này là controller, tự động trả JSON |
+| `@RequestMapping("/api/auth")` | Prefix URL cho tất cả method trong class |
+| `@PostMapping("/register")` | Method này xử lý POST /api/auth/register |
+| `@GetMapping`, `@PutMapping`, `@DeleteMapping` | Tương tự cho GET, PUT, DELETE |
+| `@Valid` | Kích hoạt validation trên DTO |
+| `@RequestBody` | Parse JSON body thành Java object |
+| `@PathVariable` | Đọc giá trị từ URL: `/users/{id}` → `@PathVariable Long id` |
+| `@RequestParam` | Đọc query param: `/users?role=ADMIN` → `@RequestParam Role role` |
 
-### 8.7. Luong xu ly tong hop
+### 8.7. Luồng xử lý tổng hợp
 
 ```
 Client (Frontend/Postman/curl)
@@ -1499,16 +1499,16 @@ Client (Frontend/Postman/curl)
     ▼
 ┌─────────────────────────────────────────────────┐
 │  JwtAuthFilter (Security Filter)                │
-│  → Kiem tra JWT token trong header              │
-│  → Endpoint /api/auth/** khong can token → PASS │
+│  → Kiểm tra JWT token trong header              │
+│  → Endpoint /api/auth/** không cần token → PASS │
 └─────────────────────────────────────────────────┘
     │
     ▼
 ┌─────────────────────────────────────────────────┐
 │  AuthController.register()                      │
-│  1. @Valid kiem tra: username khong blank? ✓     │
-│     email hop le? ✓, password >= 6 ky tu? ✓     │
-│  2. Goi authService.register(request)           │
+│  1. @Valid kiểm tra: username không blank? ✓     │
+│     email hợp lệ? ✓, password >= 6 ký tự? ✓     │
+│  2. Gọi authService.register(request)           │
 └─────────────────────────────────────────────────┘
     │
     ▼
@@ -1516,22 +1516,22 @@ Client (Frontend/Postman/curl)
 │  AuthService.register()                         │
 │  1. existsByUsername("vanan") → false ✓          │
 │  2. existsByEmail("vanan@mail.com") → false ✓   │
-│  3. User.builder()...build() → tao User object  │
+│  3. User.builder()...build() → tạo User object  │
 │  4. passwordEncoder.encode("123456") → bcrypt   │
-│  5. userRepository.save(user) → INSERT vao DB   │
-│  6. jwtUtil.generateToken() → tao JWT           │
+│  5. userRepository.save(user) → INSERT vào DB   │
+│  6. jwtUtil.generateToken() → tạo JWT           │
 │  7. return AuthResponse                         │
 └─────────────────────────────────────────────────┘
     │
     ▼
 ┌─────────────────────────────────────────────────┐
 │  AuthController                                 │
-│  → Boc vao ApiResponse.ok(message, data)        │
-│  → Spring tu dong chuyen thanh JSON             │
+│  → Bọc vào ApiResponse.ok(message, data)        │
+│  → Spring tự động chuyển thành JSON             │
 └─────────────────────────────────────────────────┘
     │
     ▼
-Client nhan response:
+Client nhận response:
 {
     "success": true,
     "message": "Registration successful",
@@ -1547,80 +1547,80 @@ Client nhan response:
 
 ---
 
-## 9. Chay va test
+## 9. Chạy và test
 
-### 9.1. Khoi dong database bang Docker
+### 9.1. Khởi động database bằng Docker
 
-Tao file `docker-compose.yml` o thu muc goc du an:
+Tạo file `docker-compose.yml` ở thư mục gốc dự án:
 
 ```yaml
 services:
-  # SQL Server — co so du lieu chinh
+  # SQL Server — cơ sở dữ liệu chính
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
-      ACCEPT_EULA: "Y"                    # Chap nhan dieu khoan su dung
-      MSSQL_SA_PASSWORD: "CineX@2026"     # Mat khau user "sa" (system admin)
+      ACCEPT_EULA: "Y"                    # Chấp nhận điều khoản sử dụng
+      MSSQL_SA_PASSWORD: "CineX@2026"     # Mật khẩu user "sa" (system admin)
     ports:
-      - "1433:1433"                        # Map port 1433 cua container ra may host
+      - "1433:1433"                        # Map port 1433 của container ra máy host
     volumes:
-      - sqlserver-data:/var/opt/mssql      # Luu du lieu vao volume (khong mat khi restart)
+      - sqlserver-data:/var/opt/mssql      # Lưu dữ liệu vào volume (không mất khi restart)
 
-  # Redis — cache du lieu, session
+  # Redis — cache dữ liệu, session
   redis:
-    image: redis:7-alpine                  # Alpine = ban nhe, chi 5MB
+    image: redis:7-alpine                  # Alpine = bản nhẹ, chỉ 5MB
     ports:
       - "6379:6379"
 
 volumes:
-  sqlserver-data:                          # Khai bao volume de luu du lieu
+  sqlserver-data:                          # Khai báo volume để lưu dữ liệu
 ```
 
-Chay:
+Chạy:
 
 ```bash
-# Khoi dong SQL Server va Redis
+# Khởi động SQL Server và Redis
 cd /Users/vutuongan/cinex
 docker compose up sqlserver redis -d
-#                                 ^^ -d = detached (chay ngam, khong chiem terminal)
+#                                 ^^ -d = detached (chạy ngầm, không chiếm terminal)
 
-# Kiem tra container dang chay
+# Kiểm tra container đang chạy
 docker ps
 # CONTAINER ID   IMAGE                            STATUS        PORTS
 # abc123         mcr.microsoft.com/mssql/server   Up 5 seconds  0.0.0.0:1433->1433/tcp
 # def456         redis:7-alpine                   Up 5 seconds  0.0.0.0:6379->6379/tcp
 
-# Tao database (chi can lan dau)
+# Tạo database (chỉ cần lần đầu)
 docker exec cinex-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd \
     -S localhost -U sa -P 'CineX@2026' -C \
     -Q "CREATE DATABASE cinex"
 ```
 
-### 9.2. Chay backend
+### 9.2. Chạy backend
 
 ```bash
 cd /Users/vutuongan/cinex/backend
 
-# Build (compile + kiem tra loi)
+# Build (compile + kiểm tra lỗi)
 ./gradlew clean build -x test
-#         ^^^^^               xoa build cu
-#               ^^^^^         compile + dong goi
-#                     ^^^^^^^  bo qua test (chay nhanh hon)
+#         ^^^^^               xóa build cũ
+#               ^^^^^         compile + đóng gói
+#                     ^^^^^^^  bỏ qua test (chạy nhanh hơn)
 
-# Chay server
+# Chạy server
 ./gradlew bootRun
 ```
 
-Khi thay dong nay → server da san sang:
+Khi thấy dòng này → server đã sẵn sàng:
 
 ```
 Started BackendApplication in 5.123 seconds (process running for 5.678)
 ```
 
-### 9.3. Test bang curl
+### 9.3. Test bằng curl
 
 ```bash
-# === DANG KY ===
+# === ĐĂNG KÝ ===
 curl -X POST http://localhost:8088/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
@@ -1630,7 +1630,7 @@ curl -X POST http://localhost:8088/api/auth/register \
     "fullName": "Vu Tuong An"
   }'
 
-# Response mong doi:
+# Response mong đợi:
 # {
 #     "success": true,
 #     "message": "Registration successful",
@@ -1643,7 +1643,7 @@ curl -X POST http://localhost:8088/api/auth/register \
 #     "timestamp": "2026-05-27T10:30:00Z"
 # }
 
-# === DANG NHAP ===
+# === ĐĂNG NHẬP ===
 curl -X POST http://localhost:8088/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
@@ -1651,69 +1651,69 @@ curl -X POST http://localhost:8088/api/auth/login \
     "password": "123456"
   }'
 
-# === GOI API CAN XAC THUC ===
-# Copy accessToken tu response login
+# === GỌI API CẦN XÁC THỰC ===
+# Copy accessToken từ response login
 TOKEN="eyJhbGciOiJIUzI1NiJ9..."
 
 curl http://localhost:8088/api/users/me \
   -H "Authorization: Bearer $TOKEN"
 
-# Response: thong tin profile cua user dang dang nhap
+# Response: thông tin profile của user đang đăng nhập
 ```
 
-### 9.4. Test bang Swagger UI
+### 9.4. Test bằng Swagger UI
 
-Mo trinh duyet, truy cap: **http://localhost:8088/swagger-ui.html**
+Mở trình duyệt, truy cập: **http://localhost:8088/swagger-ui.html**
 
-Swagger tu dong sinh trang tai lieu API tuong tac:
-- Xem tat ca endpoint
-- Thu nghiem truc tiep (nhan "Try it out")
-- Xem request/response mau
+Swagger tự động sinh trang tài liệu API tương tác:
+- Xem tất cả endpoint
+- Thử nghiệm trực tiếp (nhấn "Try it out")
+- Xem request/response mẫu
 
-### 9.5. Cac loi thuong gap
+### 9.5. Các lỗi thường gặp
 
-| Loi | Nguyen nhan | Cach sua |
+| Lỗi | Nguyên nhân | Cách sửa |
 |---|---|---|
-| `Connection refused: localhost:1433` | SQL Server chua chay | `docker compose up sqlserver -d` |
-| `Login failed for user 'sa'` | Sai mat khau | Kiem tra `MSSQL_SA_PASSWORD` trong docker-compose.yml |
-| `Database 'cinex' does not exist` | Chua tao database | Chay lenh `CREATE DATABASE cinex` |
-| `Connection refused: localhost:6379` | Redis chua chay | `docker compose up redis -d` |
-| `Table 'users' doesn't exist` | Liquibase chua chay hoac loi | Kiem tra file changelog + log khi bootRun |
-| `Compilation failed` | Code bi loi | Doc log loi, sua roi `./gradlew clean build -x test` |
-| `Port 8088 already in use` | Co process khac dang dung port | `lsof -i :8088` roi `kill <PID>` |
-| `MapStruct: Unknown property` | Lombok chua sinh getter | Kiem tra thu tu annotationProcessor trong build.gradle |
+| `Connection refused: localhost:1433` | SQL Server chưa chạy | `docker compose up sqlserver -d` |
+| `Login failed for user 'sa'` | Sai mật khẩu | Kiểm tra `MSSQL_SA_PASSWORD` trong docker-compose.yml |
+| `Database 'cinex' does not exist` | Chưa tạo database | Chạy lệnh `CREATE DATABASE cinex` |
+| `Connection refused: localhost:6379` | Redis chưa chạy | `docker compose up redis -d` |
+| `Table 'users' doesn't exist` | Liquibase chưa chạy hoặc lỗi | Kiểm tra file changelog + log khi bootRun |
+| `Compilation failed` | Code bị lỗi | Đọc log lỗi, sửa rồi `./gradlew clean build -x test` |
+| `Port 8088 already in use` | Có process khác đang dùng port | `lsof -i :8088` rồi `kill <PID>` |
+| `MapStruct: Unknown property` | Lombok chưa sinh getter | Kiểm tra thứ tự annotationProcessor trong build.gradle |
 
 ---
 
-## Tong ket — Luu do tong quan
+## Tổng kết — Lưu đồ tổng quan
 
 ```
-[1] Cai JDK 21 + IDE + Docker
+[1] Cài JDK 21 + IDE + Docker
          │
          ▼
-[2] start.spring.io → Tao du an → Giai nen
+[2] start.spring.io → Tạo dự án → Giải nén
          │
          ▼
-[3] Cau hinh build.gradle → Them dependencies
+[3] Cấu hình build.gradle → Thêm dependencies
          │
          ▼
-[4] Cau hinh application.yml → DB, Redis, JWT, Mail
+[4] Cấu hình application.yml → DB, Redis, JWT, Mail
          │
          ▼
-[5] Tao package structure → Package by Feature
+[5] Tạo package structure → Package by Feature
          │
          ▼
-[6] Tao BaseEntity → Class cha cho tat ca entity
+[6] Tạo BaseEntity → Class cha cho tất cả entity
          │
          ▼
-[7] Tao ApiResponse → Format response thong nhat
+[7] Tạo ApiResponse → Format response thống nhất
          │
          ▼
-[8] Tao module dau tien:
+[8] Tạo module đầu tiên:
     Entity → DTO → Repository → Mapper → Service → Controller
          │
          ▼
 [9] docker compose up → ./gradlew bootRun → curl/Swagger test
 ```
 
-> **Buoc tiep theo:** Doc file `docs/module-guides/auth-explained.md` de hieu chi tiet module Auth (JWT, Security Filter, Refresh Token, ...).
+> **Bước tiếp theo:** Đọc file `docs/module-guides/auth-explained.md` để hiểu chi tiết module Auth (JWT, Security Filter, Refresh Token, ...).
