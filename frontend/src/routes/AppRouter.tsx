@@ -5,6 +5,8 @@ import MainLayout from '@/components/layout/MainLayout'
 const HomePage = lazy(() => import('@/features/home/HomePage'))
 const LoginPage = lazy(() => import('@/features/auth/LoginPage'))
 const RegisterPage = lazy(() => import('@/features/auth/RegisterPage'))
+const ForgotPasswordPage = lazy(() => import('@/features/auth/ForgotPasswordPage'))
+const ResetPasswordPage = lazy(() => import('@/features/auth/ResetPasswordPage'))
 const AdminLayout = lazy(() => import('@/components/admin/AdminLayout'))
 const AdminMoviePage = lazy(() => import('@/features/admin/AdminMoviePage'))
 const AdminGenrePage = lazy(() => import('@/features/admin/AdminGenrePage'))
@@ -21,6 +23,8 @@ export default function AppRouter() {
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
           </Route>
           <Route element={<AdminLayout />}>
             <Route path="/admin/movies" element={<AdminMoviePage />} />
