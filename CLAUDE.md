@@ -1,233 +1,137 @@
-# CineX Team — Hướng dẫn đẩy code theo giai đoạn
+# CineX Team — Dự án cho team demo với thầy
 
-## Cách dùng
+## QUAN TRỌNG — ĐỌC TRƯỚC
 
-Gõ: `đẩy giai đoạn X` (X = 2-10)
-
-Claude sẽ tự động:
-1. Checkout từng branch (long, dat, hai, duc)
-2. Copy đúng file từ `/Users/vutuongan/cinex/` (repo gốc)
-3. Commit với message phù hợp
-4. Push lên GitHub
-
-## Repo gốc (source code đầy đủ)
-`/Users/vutuongan/cinex/`
-
-## Repo team (đẩy theo giai đoạn)
-`/Users/vutuongan/cinex-team/`
-
-## Branches
-- `main` — skeleton + docs
-- `long` — Hoàng Long
-- `dat` — Đạt
-- `hai` — Hải
-- `duc` — Đức
+- Đây là repo **cinex-team** — dùng để team demo với thầy
+- **KHÔNG PHẢI** repo gốc cinex (repo gốc ở `/Users/vutuongan/cinex/`)
+- **KHÔNG SỬA** repo gốc cinex khi làm việc ở đây
+- Code gốc đầy đủ copy từ cinex sang, chỉ **ẩn/hiện chức năng** bằng comment
 
 ---
 
-## KẾ HOẠCH 10 GIAI ĐOẠN
+## Cách hoạt động
 
-### Giai đoạn 1 ✅ (Đã đẩy)
-**Tất cả**: Setup project, DB schema, config, layout skeleton
+- **Backend**: full code, chạy đầy đủ tất cả API
+- **Frontend**: full code, nhưng **ẩn tab chưa demo** bằng comment trong 2 file:
+  1. `frontend/src/components/admin/AdminLayout.tsx` — sidebar quản trị
+  2. `frontend/src/components/layout/Header.tsx` — header user
+  3. `frontend/src/routes/AppRouter.tsx` — routes
 
-### Giai đoạn 2
-**Long**: Đăng ký + Đăng nhập
-- `frontend/src/features/auth/LoginPage.tsx`
-- `frontend/src/features/auth/RegisterPage.tsx`
-- `frontend/src/hooks/useAuth.ts`
-- `frontend/src/utils/jwt.ts`
-- Cập nhật `AppRouter.tsx` thêm route /login, /register
+## Cách bật/tắt chức năng
 
-**Đạt**: Quản lý phim + Thể loại
-- `frontend/src/features/admin/AdminMoviePage.tsx`
-- `frontend/src/features/admin/AdminGenrePage.tsx`
-- `frontend/src/hooks/useAdminMovies.ts`
-- `frontend/src/hooks/useAdminGenres.ts`
-- `frontend/src/hooks/useAdmin.ts` (barrel)
-- `frontend/src/components/common/ConfirmDialog.tsx`
-- `frontend/src/components/common/StatusDropdown.tsx`
-- `frontend/src/components/admin/AdminLayout.tsx`
-- `frontend/src/utils/labels.ts`
-- `frontend/src/utils/colors.ts`
-- Cập nhật `AppRouter.tsx` thêm route /admin/movies, /admin/genres
+Khi thầy yêu cầu thêm chức năng → **bỏ comment** dòng tương ứng. Không cần code gì thêm.
 
-**Hải**: Quản lý phòng chiếu
-- `frontend/src/features/admin/AdminRoomPage.tsx`
-- `frontend/src/hooks/useAdminRooms.ts`
-- `frontend/src/components/common/ConfirmDialog.tsx`
-- `frontend/src/components/common/StatusDropdown.tsx`
-- `frontend/src/components/admin/AdminLayout.tsx`
-- `frontend/src/utils/labels.ts`
-- Cập nhật `AppRouter.tsx` thêm route /admin/rooms
+### Sidebar quản trị (AdminLayout.tsx dòng ~15-28)
 
-**Đức**: Quản lý phòng chiếu (giống Hải)
-- Giống Hải — cùng module
+```tsx
+// BẬT (đang hiện):
+{ to: '/admin/genres', label: 'Thể loại', icon: Tags },
+{ to: '/admin/movies', label: 'Phim', icon: Film },
+{ to: '/admin/rooms', label: 'Phòng chiếu', icon: DoorOpen },
+{ to: '/admin/showtimes', label: 'Suất chiếu', icon: Clock },
+{ to: '/admin/users', label: 'Người dùng', icon: Users },
 
-### Giai đoạn 3
-**Long**: Quên mật khẩu + Reset password
-- `frontend/src/features/auth/ForgotPasswordPage.tsx`
-- `frontend/src/features/auth/ResetPasswordPage.tsx`
-- Cập nhật `AppRouter.tsx` thêm route /forgot-password, /reset-password
+// TẮT (comment, bỏ comment khi cần):
+// { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard },         // Dashboard — Đức
+// { to: '/admin/bookings', label: 'Đặt vé', icon: Ticket },            // QL booking — Long
+// { to: '/admin/snacks', label: 'Đồ ăn', icon: Coffee },               // QL đồ ăn — Long
+// { to: '/admin/vouchers', label: 'Khuyến mãi', icon: TicketPercent },  // Voucher — Hải
+// { to: '/admin/pos', label: 'POS Đồ ăn', icon: Receipt },             // POS đồ ăn — Đạt
+// { to: '/admin/ticket-pos', label: 'POS Bán vé', icon: Clapperboard },// POS vé — Hải
+// { to: '/admin/check-in', label: 'Quét vé', icon: ScanLine },          // Check-in — Long
+// { to: '/admin/configs', label: 'Cấu hình', icon: Settings },          // Config — Hải
+```
 
-**Đạt**: Quản lý suất chiếu
-- `frontend/src/features/admin/AdminShowtimePage.tsx`
-- `frontend/src/hooks/useAdminShowtimes.ts`
-- `frontend/src/components/common/PriceInput.tsx`
-- Cập nhật `AppRouter.tsx` thêm route /admin/showtimes
+### Avatar dropdown (AdminLayout.tsx dòng ~277-296)
 
-**Hải**: Sơ đồ ghế (Seat Map Editor)
-- `frontend/src/features/admin/SeatMapEditorPage.tsx`
-- `frontend/src/hooks/useAdminSeatMap.ts`
-- Cập nhật `AppRouter.tsx` thêm route /admin/rooms/:id/seats
+```tsx
+// BẬT:
+Hồ sơ, Đăng xuất
 
-**Đức**: Sơ đồ ghế (giống Hải)
-- Giống Hải
+// TẮT:
+// Trang chủ
+// Vé của tôi — Long
+// Phim yêu thích — Đạt
+```
 
-### Giai đoạn 4
-**Long**: Quản lý người dùng
-- `frontend/src/features/admin/AdminUserPage.tsx`
-- `frontend/src/hooks/useAdminUsers.ts`
-- Cập nhật `AppRouter.tsx` thêm route /admin/users
+### Header user (Header.tsx dòng ~38-44)
 
-**Đạt**: Phim yêu thích
-- `frontend/src/features/movie/MovieDetailPage.tsx`
-- `frontend/src/features/movie/MovieListPage.tsx`
-- `frontend/src/components/movie/MovieCard.tsx`
-- `frontend/src/components/movie/MovieGrid.tsx`
-- `frontend/src/components/movie/SearchBar.tsx`
-- `frontend/src/components/movie/GenreFilter.tsx`
-- `frontend/src/hooks/useMovies.ts`
-- `frontend/src/hooks/useFavorites.ts`
-- `frontend/src/types/movie.ts`
-- Cập nhật `AppRouter.tsx` thêm route /movies, /movies/:id, /favorites
+```tsx
+// TẮT:
+// Trang chủ
+// Phim — Đạt
+```
 
-**Hải**: Luồng đặt vé (chọn ghế + hold)
-- `frontend/src/features/booking/SeatSelectionPage.tsx`
-- `frontend/src/hooks/useBooking.ts`
-- `frontend/src/hooks/useWebSocket.ts`
-- `frontend/src/types/booking.ts`
-- Cập nhật `AppRouter.tsx` thêm route /booking/seats/:showtimeId
+### Route /admin mặc định (AppRouter.tsx dòng ~76)
 
-**Đức**: Luồng đặt vé (giống Hải)
-- Giống Hải
-
-### Giai đoạn 5
-**Long**: Quản lý đồ ăn (Snack)
-- `frontend/src/features/admin/AdminSnackPage.tsx`
-- `frontend/src/hooks/useAdminSnacks.ts`
-- Cập nhật `AppRouter.tsx` thêm route /admin/snacks
-
-**Đạt**: Đánh giá phim
-- `frontend/src/components/movie/ReviewSection.tsx`
-- `frontend/src/hooks/useReviews.ts`
-- Cập nhật MovieDetailPage thêm ReviewSection
-
-**Hải**: Thanh toán MoMo
-- `frontend/src/features/booking/PaymentPage.tsx`
-- `frontend/src/features/booking/PaymentResultPage.tsx`
-- Cập nhật `AppRouter.tsx` thêm route /payment/:bookingId, /payment/result
-
-**Đức**: Thanh toán MoMo (giống Hải)
-- Giống Hải
-
-### Giai đoạn 6
-**Long**: Quản lý đặt vé (Admin)
-- `frontend/src/features/admin/AdminBookingPage.tsx`
-- `frontend/src/hooks/useAdminBookings.ts`
-- Cập nhật `AppRouter.tsx` thêm route /admin/bookings
-
-**Đạt**: Thông báo (WebSocket real-time)
-- `frontend/src/hooks/useNotifications.ts`
-- `frontend/src/hooks/useNotificationWebSocket.ts`
-- Cập nhật Header.tsx thêm bell icon + notification dropdown
-
-**Hải**: POS bán vé tại quầy
-- `frontend/src/features/admin/TicketPOSPage.tsx`
-- Cập nhật `AppRouter.tsx` thêm route /admin/ticket-pos
-
-**Đức**: Thống kê Dashboard
-- `frontend/src/features/admin/DashboardPage.tsx`
-- `frontend/src/hooks/useStatistics.ts`
-- Cập nhật `AppRouter.tsx` thêm route /admin (dashboard)
-
-### Giai đoạn 7
-**Long**: Check-in QR
-- `frontend/src/features/admin/CheckInPage.tsx`
-- Cập nhật `AppRouter.tsx` thêm route /admin/check-in
-
-**Đạt**: POS đồ ăn
-- `frontend/src/features/admin/POSPage.tsx`
-- Cập nhật `AppRouter.tsx` thêm route /admin/pos
-
-**Hải**: Voucher
-- `frontend/src/features/admin/AdminVoucherPage.tsx`
-- `frontend/src/hooks/useAdminVouchers.ts`
-- Cập nhật `AppRouter.tsx` thêm route /admin/vouchers
-
-**Đức**: Xuất PDF/Excel
-- `frontend/src/utils/export.ts`
-- `frontend/src/utils/roboto-font.ts`
-- `frontend/public/fonts/Roboto-Regular.ttf`
-- `frontend/public/fonts/Roboto-Bold.ttf`
-- Cập nhật DashboardPage thêm nút xuất
-
-### Giai đoạn 8
-**Long**: Email vé + hủy vé
-- `frontend/src/features/booking/TicketDetailPage.tsx`
-- `frontend/src/features/booking/MyTicketsPage.tsx`
-- Cập nhật `AppRouter.tsx` thêm route /my-tickets, /my-tickets/:id
-
-**Đạt**: Trang chủ + danh sách phim
-- `frontend/src/features/home/HomePage.tsx` (full version)
-- Cập nhật HomePage hiện phim đang chiếu + sắp chiếu
-
-**Hải**: Cấu hình hệ thống
-- `frontend/src/features/admin/AdminConfigPage.tsx`
-- Cập nhật `AppRouter.tsx` thêm route /admin/configs
-
-**Đức**: Biểu đồ doanh thu (Recharts)
-- Cập nhật DashboardPage thêm AreaChart + filter ngày
-
-### Giai đoạn 9
-**Tất cả**: Clean code + profile page
-- `frontend/src/features/profile/ProfilePage.tsx`
-- Clean imports, fix types
-- Cập nhật `AppRouter.tsx` thêm route /profile
-
-### Giai đoạn 10
-**Tất cả**: Demo hoàn chỉnh
-- Merge tất cả vào 1 codebase hoàn chỉnh
-- Test end-to-end
-- Fix bug cuối
+```tsx
+// Hiện tại: /admin → AdminMoviePage (QL phim)
+// Khi bật Dashboard: uncomment DashboardPage, comment AdminMoviePage
+```
 
 ---
 
-## QUY TẮC KHI ĐẨY CODE
+## Phân công team
 
-1. **Mỗi giai đoạn phải BUILD + CHẠY được** — không được lỗi
-2. **Copy file từ repo gốc** `/Users/vutuongan/cinex/` — không viết lại
-3. **AppRouter.tsx phải cập nhật** mỗi khi thêm route mới
-4. **Commit message** ghi rõ: "Tuần X: tên chức năng"
-5. **Push từng branch** sau khi commit
-6. **Không push branch `main`** chứa full code — main chỉ có skeleton + docs
-7. **Kiểm tra build** trước khi push: `cd frontend && npx tsc --noEmit`
+| Người | Branch | Chức năng |
+|---|---|---|
+| **Long** | `long` | Auth (đăng ký, đăng nhập, quên MK), QL người dùng, QL đặt vé, QL đồ ăn, Check-in QR, Email vé |
+| **Đạt** | `dat` | QL phim, QL thể loại, QL suất chiếu, Yêu thích, Đánh giá, Thông báo, POS đồ ăn, Trang chủ |
+| **Hải** | `hai` | QL phòng, Sơ đồ ghế, Luồng đặt vé, Thanh toán MoMo, POS bán vé, Voucher, Cấu hình |
+| **Đức** | `duc` | QL phòng, Sơ đồ ghế, Luồng đặt vé, Thanh toán MoMo, Thống kê, Dashboard, Export PDF/Excel |
 
-## CẤU TRÚC COMMIT MESSAGE
+---
 
-```
-Tuần X: Tên chức năng chính
+## Lệnh khi user yêu cầu
 
-- Chi tiết 1
-- Chi tiết 2
-- Chi tiết 3
-```
+### "bật chức năng XYZ"
+→ Tìm dòng comment tương ứng trong AdminLayout.tsx / Header.tsx / AppRouter.tsx → bỏ comment → commit → push
 
-## LỆNH PUSH
+### "tắt chức năng XYZ"
+→ Comment lại dòng đó → commit → push
+
+### "đẩy lên git"
+→ `git add -A && git commit -m "..." && git push origin main`
+
+### "đẩy cho branch X"
+→ `git checkout X && ...copy file... && git commit && git push origin X`
+
+---
+
+## Chạy dự án
 
 ```bash
-cd /Users/vutuongan/cinex-team
-git checkout <branch>
-git add -A
-git commit -m "Tuần X: ..."
-git push origin <branch>
+# 1. Docker
+docker-compose up sqlserver redis -d
+
+# 2. Tạo DB (lần đầu)
+docker exec cinex-team-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'CineX@2026' -C -Q "CREATE DATABASE cinex"
+
+# 3. Backend
+cd backend && ./gradlew bootRun
+
+# 4. Frontend (terminal khác)
+cd frontend && npm install && npm run dev
 ```
+
+**Login**: `admin` / `Admin@123`
+**URL**: http://localhost:5173 → trang login → đăng nhập → quản trị
+
+---
+
+## Trạng thái hiện tại
+
+### Đang BẬT (demo được):
+- Đăng ký, Đăng nhập, Quên mật khẩu
+- QL Phim, QL Thể loại, QL Suất chiếu
+- QL Phòng chiếu + Sơ đồ ghế
+- QL Người dùng
+- Hồ sơ cá nhân
+
+### Đang TẮT (comment, chờ thầy yêu cầu):
+- Dashboard thống kê
+- QL Đặt vé, QL Đồ ăn
+- Voucher, POS, Check-in
+- Trang chủ user, Danh sách phim
+- Yêu thích, Đánh giá, Thông báo
+- Thanh toán MoMo, Export PDF/Excel
