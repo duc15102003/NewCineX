@@ -274,26 +274,26 @@ export default function AdminLayout() {
                   <p className="text-xs text-gray-500 mt-0.5">Quản trị viên</p>
                 </div>
                 <div className="py-1">
-                  <Link to="/"
+                  {/* <Link to="/"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                     onClick={() => setHeaderDropdown(false)}>
                     <Home size={16} className="text-gray-400" /> Trang chủ
-                  </Link>
+                  </Link> */}{/* Trang chủ user */}
                   <Link to="/profile"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                     onClick={() => setHeaderDropdown(false)}>
                     <User size={16} className="text-gray-400" /> Hồ sơ
                   </Link>
-                  <Link to="/my-tickets"
+                  {/* <Link to="/my-tickets"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                     onClick={() => setHeaderDropdown(false)}>
                     <Ticket size={16} className="text-gray-400" /> Vé của tôi
-                  </Link>
-                  <Link to="/favorites"
+                  </Link> */}{/* Vé của tôi — Long */}
+                  {/* <Link to="/favorites"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                     onClick={() => setHeaderDropdown(false)}>
                     <Heart size={16} className="text-gray-400" /> Phim yêu thích
-                  </Link>
+                  </Link> */}{/* Yêu thích — Đạt */}
                 </div>
                 <hr className="border-white/5 my-1" />
                 <button

@@ -28,7 +28,7 @@ export function useLogin() {
         if (avatarUrl) useAuthStore.getState().updateUser({ avatarUrl })
       } catch { /* ignore */ }
       toast.success('Đăng nhập thành công')
-      navigate('/')
+      navigate('/admin')
     },
     onError: (e) => {
       toast.error(getErrorMessage(e, 'Đăng nhập thất bại'))
@@ -52,7 +52,7 @@ export function useRegister() {
         role: decoded.role,
       })
       toast.success('Đăng ký thành công')
-      navigate('/')
+      navigate('/admin')
     },
     onError: (e) => {
       toast.error(getErrorMessage(e, 'Đăng ký thất bại'))
