@@ -13,7 +13,7 @@ import { useLogout } from '@/hooks/useAuth'
 // Khi thầy yêu cầu thêm chức năng → bỏ comment dòng tương ứng
 // ============================================================
 const NAV_ITEMS = [
-  // { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard, exact: true },       // Dashboard thống kê — Đức
+  // { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard },                    // Dashboard thống kê — Đức
   { to: '/admin/genres', label: 'Thể loại', icon: Tags },                            // CRUD thể loại — Đạt
   { to: '/admin/movies', label: 'Phim', icon: Film },                                // CRUD phim — Đạt
   { to: '/admin/rooms', label: 'Phòng chiếu', icon: DoorOpen },                      // CRUD phòng + sơ đồ ghế — Hải, Đức
