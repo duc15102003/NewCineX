@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Menu, X, User, LogOut, Ticket, Heart, LayoutDashboard, Film } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useLogout } from '@/hooks/useAuth'
-import NotificationBell from '@/components/common/NotificationBell'
+// import NotificationBell from '@/components/common/NotificationBell' // Thông báo — Đạt
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -45,7 +45,7 @@ export default function Header() {
 
             {isLoggedIn() ? (
               <>
-              <NotificationBell />
+              {/* <NotificationBell /> */}{/* Thông báo — Đạt */}
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -77,20 +77,20 @@ export default function Header() {
                       >
                         <User size={16} className="text-gray-400" /> Hồ sơ
                       </Link>
-                      <Link
+                      {/* <Link
                         to="/my-tickets"
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                         onClick={() => setDropdownOpen(false)}
                       >
                         <Ticket size={16} className="text-gray-400" /> Vé của tôi
-                      </Link>
-                      <Link
+                      </Link> */}{/* Vé của tôi — Long */}
+                      {/* <Link
                         to="/favorites"
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                         onClick={() => setDropdownOpen(false)}
                       >
                         <Heart size={16} className="text-gray-400" /> Phim yêu thích
-                      </Link>
+                      </Link> */}{/* Yêu thích — Đạt */}
                     </div>
 
                     {isAdmin() && (
@@ -174,12 +174,12 @@ export default function Header() {
               <Link to="/profile" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
                 <User size={16} className="text-gray-400" /> Hồ sơ
               </Link>
-              <Link to="/my-tickets" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
+              {/* <Link to="/my-tickets" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
                 <Ticket size={16} className="text-gray-400" /> Vé của tôi
-              </Link>
-              <Link to="/favorites" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
+              </Link> */}{/* Vé của tôi — Long */}
+              {/* <Link to="/favorites" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
                 <Heart size={16} className="text-gray-400" /> Phim yêu thích
-              </Link>
+              </Link> */}{/* Yêu thích — Đạt */}
               {isAdmin() && (
                 <Link to="/admin" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#eab308] hover:bg-[#eab308]/5" onClick={() => setMenuOpen(false)}>
                   <LayoutDashboard size={16} /> Quản trị
