@@ -6,6 +6,7 @@ const HomePage = lazy(() => import('@/features/home/HomePage'))
 const LoginPage = lazy(() => import('@/features/auth/LoginPage'))
 const AdminLayout = lazy(() => import('@/components/admin/AdminLayout'))
 const AdminRoomPage = lazy(() => import('@/features/admin/AdminRoomPage'))
+const SeatMapEditorPage = lazy(() => import('@/features/admin/SeatMapEditorPage'))
 
 export default function AppRouter() {
   return (
@@ -18,6 +19,7 @@ export default function AppRouter() {
           </Route>
           <Route element={<AdminLayout />}>
             <Route path="/admin/rooms" element={<AdminRoomPage />} />
+            <Route path="/admin/rooms/:id/seats" element={<SeatMapEditorPage />} />
           </Route>
         </Routes>
       </Suspense>
