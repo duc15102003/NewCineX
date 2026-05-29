@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, ImagePlus } from 'lucide-react'
 import { toast } from 'sonner'
-import api, { getErrorMessage } from '@/api/axios'
+import api from '@/api/axios'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
 import MultiSelect from '@/components/common/MultiSelect'
