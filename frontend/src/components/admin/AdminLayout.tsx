@@ -32,7 +32,7 @@ function getBreadcrumbs(pathname: string): { label: string; to?: string }[] {
   const crumbs: { label: string; to?: string }[] = [{ label: 'Bảng điều khiển', to: '/admin' }]
 
   const parent = NAV_ITEMS.find((n) =>
-    n.exact ? pathname === n.to : pathname.startsWith(n.to)
+    pathname.startsWith(n.to)
   )
   if (!parent) return crumbs
 
@@ -123,11 +123,11 @@ export default function AdminLayout() {
 
       {/* Nav items */}
       <nav className="flex-1 py-2 space-y-0.5 px-3 overflow-y-auto">
-        {NAV_ITEMS.map(({ to, label, icon: Icon, exact }) => (
+        {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
-            end={exact}
+            end={false}
             onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative group ${collapsed && !isMobile ? 'justify-center' : ''
