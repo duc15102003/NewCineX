@@ -1,17 +1,21 @@
-import '@fontsource/inter/400.css'
-import '@fontsource/inter/500.css'
-import '@fontsource/inter/600.css'
-import '@fontsource/inter/700.css'
-import { Toaster } from 'sonner'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Toaster } from '@/components/ui/sonner'
 import AppRouter from './routes/AppRouter'
 
-function App() {
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
+
+export default function App() {
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <AppRouter />
-      <Toaster position="top-right" richColors />
-    </>
+      <Toaster />
+    </QueryClientProvider>
   )
 }
-
-export default App

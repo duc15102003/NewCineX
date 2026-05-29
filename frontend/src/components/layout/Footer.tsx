@@ -1,7 +1,9 @@
 export default function Footer() {
   return (
-    <footer className="bg-[#0a1929] border-t border-white/5 py-6 text-center text-gray-500 text-sm">
-      CineX © 2026 — Hệ thống đặt vé xem phim online
+    <footer className="bg-[#051424] border-t border-white/5 py-8">
+      <div className="max-w-7xl mx-auto px-4 text-center text-gray-500 text-sm">
+        <p>&copy; 2026 CineX — Hệ thống đặt vé xem phim online</p>
+      </div>
     </footer>
   )
 }

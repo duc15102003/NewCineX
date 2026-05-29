@@ -14,6 +14,7 @@ interface AuthState {
   updateUser: (partial: Partial<User>) => void
   logout: () => void
   isLoggedIn: () => boolean
+  isAdmin: () => boolean
 }
 
 function parseUser(): User | null {
@@ -53,4 +54,5 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   isLoggedIn: () => !!get().token,
+  isAdmin: () => get().user?.role === 'ADMIN',
 }))
