@@ -36,12 +36,12 @@ export default function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-6 text-sm">
-            <Link to="/" className="text-gray-300 hover:text-[#eab308] transition-colors">
+            {/* <Link to="/" className="text-gray-300 hover:text-[#eab308] transition-colors">
               Trang chủ
-            </Link>
-            <Link to="/movies" className="text-gray-300 hover:text-[#eab308] transition-colors">
+            </Link> */}{/* Trang chủ user */}
+            {/* <Link to="/movies" className="text-gray-300 hover:text-[#eab308] transition-colors">
               Phim
-            </Link>
+            </Link> */}{/* Danh sách phim user — Đạt */}
 
             {isLoggedIn() ? (
               <>
@@ -148,12 +148,12 @@ export default function Header() {
       {/* Mobile menu */}
       {menuOpen && (
         <div className="md:hidden bg-[#0a1929] border-t border-white/5 px-4 py-4 space-y-1">
-          <Link to="/" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#eab308]" onClick={() => setMenuOpen(false)}>
+          {/* <Link to="/" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#eab308]" onClick={() => setMenuOpen(false)}>
             Trang chủ
-          </Link>
-          <Link to="/movies" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#eab308]" onClick={() => setMenuOpen(false)}>
+          </Link> */}{/* Trang chủ user */}
+          {/* <Link to="/movies" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#eab308]" onClick={() => setMenuOpen(false)}>
             Phim
-          </Link>
+          </Link> */}{/* Danh sách phim user — Đạt */}
 
           {isLoggedIn() ? (
             <>
