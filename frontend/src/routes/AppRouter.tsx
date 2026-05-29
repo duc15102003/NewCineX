@@ -73,7 +73,8 @@ export default function AppRouter() {
           {/* Admin routes — outside MainLayout, use AdminLayout */}
           <Route element={<AdminRoute />}>
             <Route element={<AdminLayout />}>
-              <Route path="/admin" element={<DashboardPage />} />
+              {/* <Route path="/admin" element={<DashboardPage />} /> */}{/* Dashboard — Đức */}
+              <Route path="/admin" element={<AdminMoviePage />} />{/* Mặc định vào quản lý phim */}
               <Route path="/admin/genres" element={<AdminGenrePage />} />
               <Route path="/admin/movies" element={<AdminMoviePage />} />
               <Route path="/admin/rooms" element={<AdminRoomPage />} />
