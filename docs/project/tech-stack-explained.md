@@ -19,15 +19,16 @@
 10. [API Docs — Swagger/OpenAPI](#10-api-docs--swaggeropenapi)
 11. [Database Migration — Liquibase](#11-database-migration--liquibase)
 12. [Code Generation — Lombok + MapStruct](#12-code-generation--lombok--mapstruct)
-13. [Build Tool — Gradle](#13-build-tool--gradle)
-14. [Frontend — React + TypeScript + Vite](#14-frontend--react--typescript--vite)
-15. [State Management — TanStack Query + Zustand](#15-state-management--tanstack-query--zustand)
-16. [UI — Tailwind CSS + shadcn/ui](#16-ui--tailwind-css--shadcnui)
-17. [Form — React Hook Form + Zod](#17-form--react-hook-form--zod)
-18. [HTTP Client — Axios](#18-http-client--axios)
-19. [Biểu đồ — Recharts](#19-biểu-đồ--recharts)
-20. [Xuất báo cáo — jsPDF + SheetJS](#20-xuất-báo-cáo--jspdf--sheetjs)
-21. [POS — Bán hàng tại quầy (SnackOrder)](#21-pos--bán-hàng-tại-quầy-snackorder)
+13. [JPA Auditing — Tự động ghi nhật ký thay đổi](#13-jpa-auditing--tự-động-ghi-nhật-ký-thay-đổi)
+14. [Build Tool — Gradle](#14-build-tool--gradle)
+15. [Frontend — React + TypeScript + Vite](#15-frontend--react--typescript--vite)
+16. [State Management — TanStack Query + Zustand](#16-state-management--tanstack-query--zustand)
+17. [UI — Tailwind CSS + shadcn/ui](#17-ui--tailwind-css--shadcnui)
+18. [Form — React Hook Form + Zod](#18-form--react-hook-form--zod)
+19. [HTTP Client — Axios](#19-http-client--axios)
+20. [Biểu đồ — Recharts](#20-biểu-đồ--recharts)
+21. [Xuất báo cáo — jsPDF + SheetJS](#21-xuất-báo-cáo--jspdf--sheetjs)
+22. [POS — Bán hàng tại quầy (SnackOrder)](#22-pos--bán-hàng-tại-quầy-snackorder)
 27. [Thanh toán MoMo Sandbox](#27-thanh-toán-momo-sandbox)
 28. [POS Bán vé tại quầy](#28-pos-bán-vé-tại-quầy)
 29. [Ghế hỏng (BROKEN)](#29-ghế-hỏng-broken)
@@ -966,7 +967,216 @@ annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
 
 ---
 
-## 13. Build Tool — Gradle
+## 13. JPA Auditing — Tự động ghi nhật ký thay đổi
+
+### JPA Auditing là gì?
+
+Khi lưu một entity vào database, bạn thường muốn biết:
+- **Ai** tạo bản ghi này? (`createdBy`)
+- **Khi nào** tạo? (`createdAt`)
+- **Ai** sửa lần cuối? (`updatedBy`)
+- **Khi nào** sửa? (`updatedAt`)
+
+**JPA Auditing** là tính năng của Spring Data JPA, giúp **tự động điền** 4 trường trên mỗi khi `save()` entity — bạn không cần viết code set thủ công.
+
+> **Ví dụ đời thường:** Giống như camera an ninh ở cửa hàng. Mỗi khi có ai vào kho lấy hàng hoặc thêm hàng, camera tự động ghi lại "ai làm, lúc mấy giờ" — nhân viên không cần tự viết sổ nhật ký. JPA Auditing chính là "camera" đó cho database.
+
+### Cách hoạt động — 3 thành phần kết nối
+
+JPA Auditing cần 3 thành phần phối hợp với nhau:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    KHI GỌI repository.save(entity)              │
+│                                                                  │
+│  ① @EnableJpaAuditing          → Bật tính năng auditing         │
+│  ② @EntityListeners(...)       → Lắng nghe sự kiện save/update  │
+│  ③ AuditorAware<String>        → Trả lời "ai đang thao tác?"   │
+│                                                                  │
+│  Kết quả: createdBy, updatedBy, createdAt, updatedAt            │
+│           được TỰ ĐỘNG điền vào entity trước khi INSERT/UPDATE  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+#### Thành phần 1: `@EnableJpaAuditing` — Bật công tắc
+
+```java
+// File: common/config/JpaAuditingConfig.java
+@Configuration
+@EnableJpaAuditing  // ← Bật tính năng JPA Auditing cho toàn bộ ứng dụng
+public class JpaAuditingConfig {
+    // Chỉ cần annotation, không cần code gì thêm
+}
+```
+
+Nếu thiếu annotation này, tất cả `@CreatedBy`, `@CreatedDate`... sẽ **bị bỏ qua** — các trường audit sẽ luôn là `null`.
+
+#### Thành phần 2: `@EntityListeners` — Lắng nghe sự kiện
+
+```java
+// File: common/entity/BaseEntity.java
+@MappedSuperclass
+@EntityListeners(AuditingEntityListener.class)  // ← "Canh chừng" entity này
+public abstract class BaseEntity {
+
+    @CreatedBy                          // Spring tự điền khi INSERT
+    @Column(updatable = false)          // Không cho sửa sau khi tạo
+    private String createdBy;
+
+    @LastModifiedBy                     // Spring tự điền khi UPDATE
+    private String updatedBy;
+
+    @CreatedDate                        // Spring tự điền thời gian INSERT
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate                   // Spring tự điền thời gian UPDATE
+    private LocalDateTime updatedAt;
+}
+```
+
+**`AuditingEntityListener`** là class có sẵn của Spring. Nó hoạt động như một "người canh gác":
+- Trước khi **INSERT** → gọi `@PrePersist` → điền `createdBy`, `createdAt`, `updatedBy`, `updatedAt`
+- Trước khi **UPDATE** → gọi `@PreUpdate` → chỉ điền `updatedBy`, `updatedAt` (không đè `created*`)
+
+#### Thành phần 3: `AuditorAware` — Hỏi "ai đang thao tác?"
+
+```java
+// File: common/config/AuditorAwareImpl.java
+@Component
+public class AuditorAwareImpl implements AuditorAware<String> {
+
+    @Override
+    public Optional<String> getCurrentAuditor() {
+        // Đọc JWT từ SecurityContext → lấy username
+        return Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
+                .filter(Authentication::isAuthenticated)
+                .map(Authentication::getName);
+        // Trả về "admin@cinex.vn" hoặc username của người đang đăng nhập
+    }
+}
+```
+
+Khi `AuditingEntityListener` cần điền `createdBy` / `updatedBy`, nó gọi `getCurrentAuditor()` để hỏi "ai đang thao tác?". Method này đọc **JWT token** từ `SecurityContext` (đã được `JwtAuthFilter` parse trước đó) và trả về username.
+
+### 4 annotation audit trong BaseEntity
+
+| Annotation | Điền khi | Giá trị | Ví dụ |
+|---|---|---|---|
+| `@CreatedBy` | INSERT (lần đầu save) | Username từ `AuditorAware` | `"admin@cinex.vn"` |
+| `@LastModifiedBy` | INSERT + UPDATE | Username từ `AuditorAware` | `"staff@cinex.vn"` |
+| `@CreatedDate` | INSERT (lần đầu save) | `LocalDateTime.now()` | `2026-05-31T10:30:00` |
+| `@LastModifiedDate` | INSERT + UPDATE | `LocalDateTime.now()` | `2026-05-31T14:45:00` |
+
+> **Lưu ý:** `@CreatedBy` và `@CreatedDate` có `@Column(updatable = false)` — nghĩa là khi UPDATE, Hibernate sẽ **không** ghi đè 2 trường này. Ai tạo thì mãi mãi là người đó.
+
+### Flow chi tiết: Admin tạo phim mới
+
+```
+Admin đăng nhập (JWT token chứa username = "admin@cinex.vn")
+    │
+    ▼
+POST /api/movies  (Controller nhận request)
+    │
+    ▼
+movieService.createMovie(request)
+    │
+    ▼
+movieRepository.save(movie)          ← Gọi save()
+    │
+    ▼
+AuditingEntityListener               ← Listener bắt sự kiện @PrePersist
+    │
+    ├─→ Gọi AuditorAware.getCurrentAuditor()
+    │       └─→ Đọc SecurityContext → "admin@cinex.vn"
+    │
+    ├─→ movie.setCreatedBy("admin@cinex.vn")
+    ├─→ movie.setUpdatedBy("admin@cinex.vn")
+    ├─→ movie.setCreatedAt(LocalDateTime.now())    // 2026-05-31T10:30:00
+    └─→ movie.setUpdatedAt(LocalDateTime.now())    // 2026-05-31T10:30:00
+    │
+    ▼
+Hibernate sinh SQL:
+INSERT INTO movies (title, ..., created_by, updated_by, created_at, updated_at)
+VALUES ('Avengers', ..., 'admin@cinex.vn', 'admin@cinex.vn', '2026-05-31 10:30:00', '2026-05-31 10:30:00')
+```
+
+Khi staff sửa phim đó sau:
+```
+Staff đăng nhập (JWT = "staff@cinex.vn")
+    │
+    ▼
+PUT /api/movies/1
+    │
+    ▼
+movieRepository.save(movie)          ← save() entity đã tồn tại = UPDATE
+    │
+    ▼
+AuditingEntityListener               ← Listener bắt sự kiện @PreUpdate
+    │
+    ├─→ movie.setUpdatedBy("staff@cinex.vn")       // ← Đổi thành staff
+    └─→ movie.setUpdatedAt(LocalDateTime.now())     // ← Cập nhật thời gian
+    │   (createdBy và createdAt KHÔNG bị đổi nhờ @Column(updatable = false))
+    │
+    ▼
+Hibernate sinh SQL:
+UPDATE movies SET title = '...', updated_by = 'staff@cinex.vn',
+       updated_at = '2026-05-31 14:45:00'
+WHERE id = 1
+-- created_by và created_at KHÔNG xuất hiện trong SET clause
+```
+
+### Tại sao không thấy code set?
+
+Đây là câu hỏi rất phổ biến khi đọc code CineX:
+
+```java
+// Trong MovieService.createMovie()
+public MovieResponse createMovie(MovieRequest request) {
+    Movie movie = movieMapper.toEntity(request);
+    // ❓ Không thấy movie.setCreatedBy("admin") ở đâu cả?
+    // ❓ Không thấy movie.setCreatedAt(LocalDateTime.now()) ở đâu cả?
+    movieRepository.save(movie);  // ← Spring làm tự động tại đây!
+    return movieMapper.toResponse(movie);
+}
+```
+
+**Trả lời:** Bạn không cần set thủ công. `AuditingEntityListener` **can thiệp** vào thời điểm giữa lúc gọi `save()` và lúc Hibernate thực sự chạy SQL. Nó tự gọi setter cho 4 trường audit.
+
+Đây chính là sức mạnh của **AOP (Aspect-Oriented Programming)** — code xử lý "cắt ngang" (cross-cutting concern) được tách riêng, không làm bẩn business logic.
+
+### So sánh: Không dùng vs Có dùng JPA Auditing
+
+**Không dùng (code xấu, lặp lại khắp nơi):**
+```java
+// Phải viết ở MỌI service, MỌI method tạo/sửa
+public MovieResponse createMovie(MovieRequest request) {
+    Movie movie = movieMapper.toEntity(request);
+    movie.setCreatedBy(getCurrentUsername());     // ← Lặp lại
+    movie.setCreatedAt(LocalDateTime.now());      // ← Lặp lại
+    movie.setUpdatedBy(getCurrentUsername());      // ← Lặp lại
+    movie.setUpdatedAt(LocalDateTime.now());       // ← Lặp lại
+    movieRepository.save(movie);
+    return movieMapper.toResponse(movie);
+}
+
+// Copy-paste y hệt cho BookingService, UserService, ShowtimeService...
+// Quên 1 chỗ → audit bị null → không biết ai tạo bản ghi
+```
+
+**Có dùng (code sạch, không lặp):**
+```java
+public MovieResponse createMovie(MovieRequest request) {
+    Movie movie = movieMapper.toEntity(request);
+    movieRepository.save(movie);  // ← Spring tự xử lý audit, sạch sẽ!
+    return movieMapper.toResponse(movie);
+}
+// Áp dụng cho TẤT CẢ entity kế thừa BaseEntity — không cần thêm dòng nào
+```
+
+---
+
+## 14. Build Tool — Gradle
 
 ### Gradle là gì?
 
@@ -1014,7 +1224,7 @@ dependencies {
 
 ---
 
-## 14. Frontend — React + TypeScript + Vite
+## 15. Frontend — React + TypeScript + Vite
 
 ### React 19
 
@@ -1068,7 +1278,7 @@ npm run build  # Build production (tsc + vite build)
 
 ---
 
-## 15. State Management — TanStack Query + Zustand
+## 16. State Management — TanStack Query + Zustand
 
 ### TanStack Query (React Query) 5
 
@@ -1148,7 +1358,7 @@ const { user, logout } = useAuthStore()
 
 ---
 
-## 16. UI — Tailwind CSS + shadcn/ui
+## 17. UI — Tailwind CSS + shadcn/ui
 
 ### Tailwind CSS 4.2
 
@@ -1182,7 +1392,7 @@ Bộ component React đẹp, dựa trên Radix UI (accessible). KHÔNG phải li
 
 ---
 
-## 17. Form — React Hook Form + Zod
+## 18. Form — React Hook Form + Zod
 
 ### React Hook Form 7.75
 
@@ -1219,7 +1429,7 @@ type MovieRequest = z.infer<typeof movieSchema>
 
 ---
 
-## 18. HTTP Client — Axios
+## 19. HTTP Client — Axios
 
 ### Axios 1.16
 
@@ -1261,7 +1471,7 @@ api.interceptors.response.use(
 
 ---
 
-## 19. Biểu đồ — Recharts
+## 20. Biểu đồ — Recharts
 
 ### Recharts 3.8
 
@@ -1287,7 +1497,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 
 ---
 
-## 20. Xuất báo cáo — jsPDF + SheetJS
+## 21. Xuất báo cáo — jsPDF + SheetJS
 
 ### Tổng quan
 
@@ -1462,7 +1672,7 @@ Thư viện trigger download file từ trình duyệt. Hàm `saveAs(blob, filena
 
 ---
 
-## 21. POS — Bán hàng tại quầy (SnackOrder)
+## 22. POS — Bán hàng tại quầy (SnackOrder)
 
 ### POS là gì?
 

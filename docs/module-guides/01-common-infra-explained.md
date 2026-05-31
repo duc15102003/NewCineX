@@ -759,7 +759,354 @@ VALUES ('bookings', 1, 'UPDATE', 'status', 'HOLDING', 'CONFIRMED', 'admin', ...)
 
 ---
 
-## 8. Câu hỏi tự kiểm tra
+## 8. JPA Auditing — Tự động ghi ai tạo, ai sửa, lúc nào
+
+### 8.1 Vấn đề đặt ra
+
+Mỗi khi tạo hoặc sửa một record trong DB, ta cần biết:
+- **Ai** tạo record này? (admin? user nào?)
+- **Khi nào** tạo?
+- **Ai** sửa lần cuối?
+- **Khi nào** sửa lần cuối?
+
+Nếu làm thủ công, mỗi Service phải tự set:
+
+```java
+// ❌ THỦ CÔNG — phải viết ở MỌI service, MỌI method
+public Movie createMovie(MovieRequest request) {
+    Movie movie = new Movie();
+    movie.setTitle(request.getTitle());
+
+    // Phải tự lấy user hiện tại
+    String currentUser = SecurityContextHolder.getContext().getAuthentication().getName();
+    movie.setCreatedBy(currentUser);
+    movie.setCreatedAt(LocalDateTime.now());
+    movie.setUpdatedBy(currentUser);
+    movie.setUpdatedAt(LocalDateTime.now());
+
+    return movieRepository.save(movie);
+}
+
+public Movie updateMovie(Long id, MovieRequest request) {
+    Movie movie = findById(id);
+    movie.setTitle(request.getTitle());
+
+    // Lại phải set lần nữa...
+    String currentUser = SecurityContextHolder.getContext().getAuthentication().getName();
+    movie.setUpdatedBy(currentUser);
+    movie.setUpdatedAt(LocalDateTime.now());
+
+    return movieRepository.save(movie);
+}
+```
+
+**Vấn đề:**
+- Lặp code ở **mọi** service, **mọi** method create/update
+- Dễ quên (tạo mới mà quên set `createdBy` → DB lưu null)
+- Vi phạm **DRY** (Don't Repeat Yourself)
+
+### 8.2 Ví dụ đời thường — Camera an ninh
+
+Nghĩ như **camera an ninh** trong tòa nhà văn phòng:
+- Nhân viên chỉ cần bước vào/ra → camera **tự động** ghi lại ai, lúc nào
+- Nhân viên **KHÔNG cần** tự chụp ảnh mình rồi ghi vào sổ
+- Camera hoạt động **âm thầm** — nhân viên không cần biết nó tồn tại
+- Nếu tắt camera, văn phòng vẫn hoạt động bình thường (loose coupling)
+
+JPA Auditing cũng vậy:
+- Service chỉ cần gọi `save(entity)` → Spring **tự động** ghi `createdBy`, `createdAt`, `updatedBy`, `updatedAt`
+- Service **KHÔNG cần** tự set các field này
+- Auditing hoạt động **âm thầm** qua listener
+
+### 8.3 Bốn field audit trong BaseEntity
+
+```java
+// File: common/entity/BaseEntity.java
+
+@MappedSuperclass
+@EntityListeners(AuditingEntityListener.class)  // ← "camera an ninh" lắng nghe mọi save/update
+@Getter
+@Setter
+public abstract class BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Version
+    private Long version;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "storage_state", length = 20)
+    private StorageState storageState = StorageState.ACTIVE;
+
+    // ===== 4 FIELD AUDIT =====
+
+    @CreatedBy                 // Spring tự set khi INSERT (lần đầu save)
+    @Column(updatable = false) // KHÔNG cho UPDATE → giữ nguyên người tạo ban đầu
+    private String createdBy;
+
+    @LastModifiedBy            // Spring tự set khi INSERT + mỗi lần UPDATE
+    private String updatedBy;
+
+    @CreatedDate               // Spring tự set thời gian khi INSERT
+    @Column(updatable = false) // KHÔNG cho UPDATE → giữ nguyên thời gian tạo
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate          // Spring tự set thời gian mỗi lần UPDATE
+    private LocalDateTime updatedAt;
+}
+```
+
+**Giải thích từng annotation:**
+
+| Annotation | Set khi nào | Ghi đè khi UPDATE? | Ý nghĩa |
+|---|---|---|---|
+| `@CreatedBy` | INSERT (lần đầu save) | **KHÔNG** (`updatable = false`) | Ai tạo record này |
+| `@LastModifiedBy` | INSERT + mỗi lần UPDATE | **CÓ** (ghi đè mỗi lần) | Ai sửa lần cuối |
+| `@CreatedDate` | INSERT (lần đầu save) | **KHÔNG** (`updatable = false`) | Tạo lúc nào |
+| `@LastModifiedDate` | INSERT + mỗi lần UPDATE | **CÓ** (ghi đè mỗi lần) | Sửa lần cuối lúc nào |
+
+**Tại sao `@CreatedBy` có `@Column(updatable = false)`?**
+- Khi Hibernate sinh SQL UPDATE, nó sẽ **bỏ qua** cột `created_by` và `created_at`
+- Dù code có set `entity.setCreatedBy("hacker")` → Hibernate vẫn **KHÔNG** update cột đó
+- Đảm bảo: ai tạo thì mãi mãi là người đó, không ai sửa được
+
+### 8.4 @EntityListeners(AuditingEntityListener.class) — "Camera an ninh"
+
+```
+@EntityListeners(AuditingEntityListener.class)
+```
+
+Đây là cơ chế **JPA Lifecycle Callback** — Spring đăng ký một "listener" (người lắng nghe) vào entity. Mỗi khi entity được save hoặc update, listener tự động chạy.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  JPA Entity Lifecycle Events                                  │
+│                                                               │
+│  ┌─────────┐                                                  │
+│  │ @PrePersist  │  ← Trước khi INSERT (entity mới)           │
+│  │              │    AuditingEntityListener:                   │
+│  │              │    → set @CreatedBy, @CreatedDate            │
+│  │              │    → set @LastModifiedBy, @LastModifiedDate  │
+│  └─────────┘                                                  │
+│       │                                                       │
+│       ▼                                                       │
+│  INSERT INTO movies (title, created_by, created_at, ...)      │
+│                                                               │
+│  ┌─────────┐                                                  │
+│  │ @PreUpdate   │  ← Trước khi UPDATE (entity đã tồn tại)   │
+│  │              │    AuditingEntityListener:                   │
+│  │              │    → set @LastModifiedBy, @LastModifiedDate  │
+│  │              │    (KHÔNG set @CreatedBy, @CreatedDate)      │
+│  └─────────┘                                                  │
+│       │                                                       │
+│       ▼                                                       │
+│  UPDATE movies SET title = '...', updated_by = '...', ...     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Lưu ý quan trọng:**
+- `@PrePersist` chạy TRƯỚC INSERT → set cả 4 field (created + updated)
+- `@PreUpdate` chạy TRƯỚC UPDATE → chỉ set 2 field (updated)
+- `@CreatedBy` và `@CreatedDate` chỉ set **1 lần duy nhất** khi INSERT
+
+### 8.5 JpaAuditingConfig — Cấu hình "ai đang login?"
+
+Annotation `@CreatedBy` và `@LastModifiedBy` cần biết **ai** đang thao tác. Spring hỏi thông tin này qua interface `AuditorAware<T>`.
+
+```java
+// File: common/config/JpaAuditingConfig.java
+
+@Configuration
+@EnableJpaAuditing(auditorAwareRef = "auditorProvider")
+// ↑ Bật tính năng JPA Auditing
+// ↑ auditorAwareRef = tên Bean cung cấp thông tin "ai đang login"
+public class JpaAuditingConfig {
+
+    @Bean
+    public AuditorAware<String> auditorProvider() {
+        // AuditorAware<String> → trả về String = username
+        // (có thể dùng AuditorAware<Long> nếu muốn lưu user ID thay vì username)
+        return () -> {
+            // Lấy thông tin Authentication từ SecurityContext
+            // SecurityContext = nơi Spring Security lưu user đã login (từ JWT)
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+            // Trường hợp KHÔNG có ai login:
+            // 1. auth == null → chưa qua filter (startup, scheduler)
+            // 2. !auth.isAuthenticated() → token hết hạn hoặc sai
+            // 3. "anonymousUser" → request không có JWT (public endpoint)
+            if (auth == null || !auth.isAuthenticated()
+                    || "anonymousUser".equals(auth.getPrincipal())) {
+                return Optional.of("system");
+                // → Ghi "system" làm người thao tác
+                // VD: Scheduler tự dọn booking hết hạn → createdBy = "system"
+                //     Liquibase seed data → createdBy = "system"
+            }
+
+            return Optional.of(auth.getName());
+            // auth.getName() = username từ JWT token
+            // VD: admin đăng nhập → createdBy = "admin"
+            //     user "vanan" đặt vé → createdBy = "vanan"
+        };
+    }
+}
+```
+
+**Giải thích `@EnableJpaAuditing`:**
+- Không có annotation này → `@CreatedBy`, `@LastModifiedBy`, `@CreatedDate`, `@LastModifiedDate` **KHÔNG hoạt động**
+- Spring cần được "bật công tắc" rõ ràng → đây chính là công tắc đó
+- `auditorAwareRef = "auditorProvider"` → chỉ cho Spring biết Bean nào cung cấp username
+
+### 8.6 Luồng hoạt động chi tiết
+
+```
+Admin gọi: POST /api/movies  (JWT token chứa username = "admin")
+│
+▼
+JwtAuthFilter: parse JWT → set Authentication("admin") vào SecurityContext
+│
+▼
+MovieController.createMovie(request)
+│
+▼
+MovieService.createMovie(request)
+│
+├── Movie movie = new Movie();
+├── movie.setTitle("Avengers");
+├── movieRepository.save(movie);    ← GỌI SAVE
+│       │
+│       ▼
+│   Hibernate phát hiện: entity MỚI (id == null) → chuẩn bị INSERT
+│       │
+│       ▼
+│   @PrePersist event fired → AuditingEntityListener bắt sự kiện
+│       │
+│       ├── Hỏi AuditorAware: "Ai đang login?"
+│       │       └── SecurityContext → Authentication → getName() → "admin"
+│       │
+│       ├── Set @CreatedBy    = "admin"
+│       ├── Set @LastModifiedBy = "admin"
+│       ├── Set @CreatedDate    = 2026-05-31T10:30:00
+│       └── Set @LastModifiedDate = 2026-05-31T10:30:00
+│       │
+│       ▼
+│   INSERT INTO movies (title, created_by, updated_by, created_at, updated_at, ...)
+│   VALUES ('Avengers', 'admin', 'admin', '2026-05-31 10:30:00', '2026-05-31 10:30:00', ...)
+│
+└── return movie;  ← entity đã có đầy đủ 4 field audit
+```
+
+```
+Admin gọi: PUT /api/movies/1  (sửa tiêu đề phim)
+│
+▼
+MovieService.updateMovie(1, request)
+│
+├── Movie movie = findById(1);        ← entity CŨ (id = 1, đã tồn tại)
+├── movie.setTitle("Avengers: Endgame");
+├── movieRepository.save(movie);       ← GỌI SAVE
+│       │
+│       ▼
+│   Hibernate phát hiện: entity CŨ (id != null) → chuẩn bị UPDATE
+│       │
+│       ▼
+│   @PreUpdate event fired → AuditingEntityListener bắt sự kiện
+│       │
+│       ├── Hỏi AuditorAware: "Ai đang login?" → "admin"
+│       │
+│       ├── Set @LastModifiedBy = "admin"        ← CẬP NHẬT
+│       └── Set @LastModifiedDate = 2026-05-31T14:00:00  ← CẬP NHẬT
+│       │
+│       │   @CreatedBy = "admin"          ← GIỮ NGUYÊN (updatable = false)
+│       │   @CreatedDate = 2026-05-31T10:30:00  ← GIỮ NGUYÊN (updatable = false)
+│       │
+│       ▼
+│   UPDATE movies SET title = 'Avengers: Endgame',
+│                     updated_by = 'admin',
+│                     updated_at = '2026-05-31 14:00:00'
+│                 WHERE id = 1
+│   -- Không có created_by, created_at trong SET clause (updatable = false)
+```
+
+### 8.7 Tại sao "system" khi không có ai login?
+
+Có những trường hợp code chạy **không có user login**:
+
+| Trường hợp | Ai gọi? | SecurityContext | AuditorAware trả về |
+|---|---|---|---|
+| Scheduler dọn booking hết hạn | `@Scheduled` (Spring tự chạy) | **null** (không có HTTP request) | `"system"` |
+| Liquibase seed data | Spring Boot startup | **null** | `"system"` |
+| API public (không cần login) | Anonymous user | `"anonymousUser"` | `"system"` |
+| API cần login | User đã login | `Authentication("vanan")` | `"vanan"` |
+
+```java
+// Ví dụ: BookingCleanupScheduler chạy mỗi phút
+@Scheduled(fixedRate = 60000)
+public void cleanExpiredBookings() {
+    // Không có HTTP request → SecurityContext = null
+    // → AuditorAware trả "system"
+
+    List<Booking> expired = bookingRepository.findExpired();
+    expired.forEach(b -> {
+        b.setStatus(BookingStatus.EXPIRED);
+        bookingRepository.save(b);
+        // → updatedBy = "system", updatedAt = now()
+    });
+}
+```
+
+**Tại sao trả `"system"` thay vì `null`?**
+- Nếu trả `Optional.empty()` → Hibernate set `created_by = null` → query WHERE created_by IS NOT NULL sẽ thiếu record
+- Trả `"system"` → luôn có giá trị → biết đây là thao tác tự động, không phải user thật
+- Dễ debug: thấy `created_by = "system"` → biết ngay đây là scheduler hoặc seed data
+
+### 8.8 So sánh: Thủ công vs JPA Auditing
+
+```java
+// ❌ KHÔNG dùng JPA Auditing — phải tự set thủ công
+public Movie createMovie(MovieRequest request) {
+    Movie movie = new Movie();
+    movie.setTitle(request.getTitle());
+
+    // 4 dòng boilerplate — lặp lại ở MỌI service
+    String user = SecurityContextHolder.getContext().getAuthentication().getName();
+    movie.setCreatedBy(user);
+    movie.setCreatedAt(LocalDateTime.now());
+    movie.setUpdatedBy(user);
+    movie.setUpdatedAt(LocalDateTime.now());
+
+    return movieRepository.save(movie);
+}
+
+// Vấn đề:
+// 1. Quên set → DB lưu null → bug
+// 2. 20 service × 3 method = 60 chỗ phải copy-paste
+// 3. Đổi logic (VD: thêm timezone) → sửa 60 chỗ
+```
+
+```java
+// ✅ CÓ JPA Auditing — Spring tự set, service không cần biết
+public Movie createMovie(MovieRequest request) {
+    Movie movie = new Movie();
+    movie.setTitle(request.getTitle());
+    return movieRepository.save(movie);
+    // → Spring tự set createdBy, createdAt, updatedBy, updatedAt
+    // → KHÔNG THỂ quên
+    // → Đổi logic → sửa 1 chỗ (JpaAuditingConfig)
+}
+```
+
+### 8.9 Khi nào KHÔNG nên dùng JPA Auditing?
+
+- **Import dữ liệu cũ:** Muốn giữ `createdAt` gốc từ hệ thống cũ → JPA Auditing sẽ ghi đè thành `now()`. Giải pháp: tạm tắt auditing hoặc dùng native SQL INSERT.
+- **Batch processing:** Insert hàng triệu record → AuditingEntityListener chạy cho **mỗi** entity → chậm. Giải pháp: dùng JDBC batch insert với giá trị audit set sẵn.
+- **Entity không cần audit:** Bảng tạm, bảng log → không cần kế thừa `BaseEntity`, tự quản lý.
+
+---
+
+## 9. Câu hỏi tự kiểm tra
 
 1. **Cache-aside có 2 kiểu: Lazy Load vs Pre-Load All. Mình dùng kiểu nào và tại sao?**
    → Pre-Load All vì config ít record (5-20 rows), load hết vào RAM cho nhanh. Lazy Load phù hợp khi data lớn (hàng nghìn record), chỉ load cái cần.
@@ -781,3 +1128,12 @@ VALUES ('bookings', 1, 'UPDATE', 'status', 'HOLDING', 'CONFIRMED', 'admin', ...)
 
 7. **`@RequestParam("file")` khác `@RequestBody` thế nào?**
    → `@RequestBody` parse JSON body. `@RequestParam` lấy giá trị từ form field. File upload dùng `multipart/form-data` (không phải JSON) → phải dùng `@RequestParam`.
+
+8. **Nếu bỏ `@EnableJpaAuditing` thì 4 field audit (`createdBy`, `createdAt`, `updatedBy`, `updatedAt`) sẽ ra sao?**
+   → Tất cả sẽ là `null`. Annotation `@CreatedBy`, `@CreatedDate`,... chỉ là đánh dấu — nếu không bật `@EnableJpaAuditing`, Spring không đăng ký listener nào cả → không ai set giá trị.
+
+9. **Tại sao `@CreatedBy` có `@Column(updatable = false)` mà `@LastModifiedBy` thì không?**
+   → `@CreatedBy` chỉ ghi 1 lần khi INSERT — ai tạo thì mãi là người đó. `@LastModifiedBy` cần ghi đè mỗi lần UPDATE để biết ai sửa lần cuối.
+
+10. **Scheduler chạy `@Scheduled` thì `createdBy` ghi gì? Tại sao không ghi `null`?**
+    → Ghi `"system"` vì: (1) tránh `null` gây lỗi query, (2) biết đây là thao tác tự động, không phải user thật, (3) dễ debug và truy vết.
