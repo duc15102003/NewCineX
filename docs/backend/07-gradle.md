@@ -460,43 +460,28 @@ backend/build/
 
 **Câu 1:** Sự khác nhau giữa `implementation` và `runtimeOnly` là gì? Tại sao JDBC driver (`mssql-jdbc`) dùng `runtimeOnly` thay vì `implementation`?
 
-<details>
-<summary>Đáp án</summary>
-
-- `implementation`: dùng được lúc viết code (import) VÀ lúc chạy (đóng gói vào JAR)
-- `runtimeOnly`: CHỈ dùng lúc chạy (đóng gói vào JAR), KHÔNG import được trong code
+→ `implementation` dùng được lúc viết code (import) VÀ lúc chạy (đóng gói vào JAR). `runtimeOnly` CHỈ dùng lúc chạy (đóng gói vào JAR), KHÔNG import được trong code.
 
 JDBC driver dùng `runtimeOnly` vì code không bao giờ viết `import com.microsoft.sqlserver...`. Spring Boot tự phát hiện driver trong classpath và kết nối. Khai báo `runtimeOnly` giúp Gradle compile nhanh hơn (ít thư viện cần scan).
 
-</details>
+---
 
 **Câu 2:** Nếu đảo thứ tự annotationProcessor, đặt MapStruct trước Lombok, điều gì xảy ra?
 
-<details>
-<summary>Đáp án</summary>
+→ Build sẽ FAIL. MapStruct processor chạy trước, cần gọi `getName()`, `setName()` để sinh code mapper. Nhưng Lombok chưa chạy nên getter/setter chưa được sinh → MapStruct không tìm thấy → lỗi "No property named 'xxx' exists". Phải đặt Lombok trước để sinh getter/setter, sau đó MapStruct mới đọc được.
 
-Build sẽ FAIL. MapStruct processor chạy trước, cần gọi `getName()`, `setName()` để sinh code mapper. Nhưng Lombok chưa chạy nên getter/setter chưa được sinh → MapStruct không tìm thấy → lỗi "No property named 'xxx' exists". Phải đặt Lombok trước để sinh getter/setter, sau đó MapStruct mới đọc được.
-
-</details>
+---
 
 **Câu 3:** `compileOnly` khác `implementation` ở điểm nào? Tại sao Lombok dùng `compileOnly`?
 
-<details>
-<summary>Đáp án</summary>
-
-- `compileOnly`: chỉ có lúc compile, KHÔNG đóng gói vào JAR cuối cùng
-- `implementation`: có cả lúc compile VÀ đóng gói vào JAR
+→ `compileOnly` chỉ có lúc compile, KHÔNG đóng gói vào JAR cuối cùng. `implementation` có cả lúc compile VÀ đóng gói vào JAR.
 
 Lombok dùng `compileOnly` vì nó chỉ cần lúc compile để sinh getter/setter/builder vào file `.class`. Sau khi compile xong, file `.class` đã có sẵn code getter/setter → không cần Lombok nữa → không đóng gói vào JAR → file JAR nhỏ hơn.
 
-</details>
+---
 
 **Câu 4:** `./gradlew build` khác `./gradlew bootRun` ở điểm nào?
 
-<details>
-<summary>Đáp án</summary>
+→ `./gradlew build`: Compile code + chạy test + đóng gói thành file JAR trong `build/libs/`. KHÔNG khởi động server. Dùng để kiểm tra code có compile được không và chuẩn bị deploy.
 
-- `./gradlew build`: Compile code + chạy test + đóng gói thành file JAR trong `build/libs/`. KHÔNG khởi động server. Dùng để kiểm tra code có compile được không và chuẩn bị deploy.
-- `./gradlew bootRun`: Compile code + khởi động Spring Boot server ngay (embedded Tomcat). Dùng trong quá trình phát triển (development). Server chạy cho đến khi bạn nhấn Ctrl+C.
-
-</details>
+`./gradlew bootRun`: Compile code + khởi động Spring Boot server ngay (embedded Tomcat). Dùng trong quá trình phát triển (development). Server chạy cho đến khi bạn nhấn Ctrl+C.

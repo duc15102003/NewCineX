@@ -151,3 +151,222 @@ TanStack Query cache
     ▼
 Component re-render → UI update
 ```
+
+---
+
+## Naming Convention chi tiết
+
+| Đối tượng | Convention | Ví dụ |
+|---|---|---|
+| Component | PascalCase | `MovieCard.tsx`, `BookingDialog.tsx` |
+| Hook | camelCase, prefix `use` | `useMovies.ts`, `useAdminMovies.ts` |
+| Utility function | camelCase | `formatDate.ts`, `validateEmail.ts` |
+| Constant | UPPER_SNAKE_CASE | `MAX_SEATS = 8`, `API_BASE_URL` |
+| Type/Interface | PascalCase | `Movie`, `BookingRequest` |
+| Enum | PascalCase + member UPPER | `BookingStatus.HOLDING` |
+| File chứa component | PascalCase | `MovieCard.tsx` |
+| File khác | camelCase | `axios.ts`, `labels.ts` |
+| Folder feature | kebab-case | `admin-movies/`, `seat-selection/` |
+
+---
+
+## Barrel Files Pattern
+
+### Vấn đề
+```ts
+// Page phải import từ nhiều file
+import { useMovies } from "@/hooks/useAdminMovies";
+import { useGenres } from "@/hooks/useAdminGenres";
+import { useRooms } from "@/hooks/useAdminRooms";
+```
+
+### Giải pháp: barrel file
+```ts
+// hooks/useAdmin.ts (barrel)
+export * from "./useAdminMovies";
+export * from "./useAdminGenres";
+export * from "./useAdminRooms";
+
+// Page:
+import { useMovies, useGenres, useRooms } from "@/hooks/useAdmin";
+```
+
+CineX dùng `useAdmin.ts` re-export từ domain file riêng.
+
+### Trade-off
+- ✅ Import gọn
+- ❌ Tree-shaking có thể bị ảnh hưởng nếu barrel không sạch
+- ❌ Circular dependency dễ xảy ra
+
+---
+
+## Khi nào tách Component
+
+### Rule of three
+Code lặp lại 3 lần → tách component.
+
+### Size threshold
+- < 100 dòng: 1 file OK
+- 100-300 dòng: cân nhắc tách sub-component cùng file
+- > 300 dòng: BẮT BUỘC tách
+
+### Single Responsibility
+Component làm 2 việc trở lên → tách:
+```tsx
+// SAI — 1 component vừa list vừa filter vừa CRUD
+function AdminMovies() {
+  // 500 dòng filter logic + list + dialog tạo + dialog sửa + dialog xóa
+}
+
+// ĐÚNG — tách
+function AdminMoviesPage() {
+  return <>
+    <MovieFilter />
+    <MovieTable />
+    <CreateMovieDialog />
+    <EditMovieDialog />
+    <DeleteConfirmDialog />
+  </>;
+}
+```
+
+---
+
+## Import Order
+
+Quy ước (top → bottom):
+```ts
+// 1. External libraries
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+// 2. Internal absolute imports (@)
+import { api } from "@/api/axios";
+import { useAuthStore } from "@/store/authStore";
+import type { Movie } from "@/types/movie";
+
+// 3. Relative imports
+import { MovieCard } from "./MovieCard";
+import { fmtDate } from "../utils/labels";
+
+// 4. Type-only imports cuối
+import type { FC } from "react";
+```
+
+Tool ESLint plugin `eslint-plugin-import` auto-sort.
+
+---
+
+## Cross-feature Import
+
+### Rule: feature KHÔNG import feature khác trực tiếp
+
+```ts
+// SAI
+// features/booking/BookingPage.tsx
+import { MovieCard } from "@/features/movies/MovieCard";  // ❌
+
+// ĐÚNG: tách MovieCard ra components/ chung
+import { MovieCard } from "@/components/MovieCard";  // ✅
+```
+
+Component dùng chung 2+ feature → đặt ở `components/`.
+
+---
+
+## Shared Types vs Feature Types
+
+```
+src/
+├── types/                      ← chung, import được mọi nơi
+│   ├── api.ts                  (ApiResponse<T>, PageResponse<T>)
+│   ├── user.ts                 (User, Role)
+│   └── movie.ts                (Movie, Genre)
+└── features/booking/
+    └── types.ts                ← riêng cho booking feature
+        (BookingFilterState, SeatSelectionMode)
+```
+
+Types thuộc domain chính → `types/`. Types chỉ feature dùng → `features/X/types.ts`.
+
+---
+
+## Cấu trúc 1 Feature folder
+
+Ví dụ `features/admin-movies/`:
+```
+admin-movies/
+├── AdminMoviesPage.tsx          ← entry point
+├── components/
+│   ├── MovieFilter.tsx
+│   ├── MovieTable.tsx
+│   ├── MovieRowActions.tsx
+│   ├── CreateMovieDialog.tsx
+│   ├── EditMovieDialog.tsx
+│   └── PosterUploadButton.tsx
+├── hooks/                       ← hooks chỉ dùng trong feature này
+│   └── useMovieFilters.ts
+├── types.ts                     ← types feature
+└── constants.ts                 ← const feature
+```
+
+Hook query/mutation API → ở `hooks/useAdminMovies.ts` (chung), không nằm trong feature folder.
+
+---
+
+## Circular Dependency
+
+### Xảy ra khi
+```
+hooks/useAuth.ts → store/authStore.ts → api/axios.ts → hooks/useAuth.ts (cycle!)
+```
+
+### Triệu chứng
+- Build warning "Circular dependency detected"
+- Runtime: 1 module được load partial → undefined import
+- Hard to debug
+
+### Fix
+- Tách chung ra module thứ 3 không depend ngược
+- Lazy import: `import("...")` dynamic
+- Tránh helper function gọi qua nhiều layer
+
+### Detect
+Tool `madge`:
+```bash
+npx madge --circular src/
+```
+
+---
+
+## Constants Folder
+
+```
+src/utils/
+├── labels.ts                    ← status labels, format dates
+├── colors.ts                    ← status colors, theme tokens
+└── constants.ts                 ← MAX_SEATS, HOLD_MINUTES
+```
+
+Quy ước CineX: `labels.ts` và `colors.ts` tập trung, KHÔNG khai báo local trong page.
+
+---
+
+## Public assets
+
+```
+public/                          ← Vite serve nguyên xi
+├── favicon.svg
+├── og-image.png
+└── robots.txt
+```
+
+Truy cập qua `/favicon.svg`, không qua import.
+
+```
+src/assets/                      ← import qua bundler, hash filename
+├── logo.svg
+└── hero-bg.jpg
+```
+
+Import: `import logo from "@/assets/logo.svg"`.

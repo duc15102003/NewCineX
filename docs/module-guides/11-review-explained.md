@@ -441,3 +441,66 @@ Mỗi lần review thay đổi đều cập nhật ngay. Nếu cache AVG, phải
 3. **Admin xóa review người khác được không?** → Được, service check `SecurityUtil.hasRole("ADMIN")` — admin có quyền xóa tất cả.
 4. **Nếu tất cả review bị xóa, movie.rating về bao nhiêu?** → AVG trả NULL → code xử lý null-safe → rating = 0.0. Quan trọng phải handle null!
 5. **Tại sao updateReview chỉ owner sửa được, còn deleteReview admin cũng xóa được?** → Nghiệp vụ: admin có quyền kiểm duyệt và xóa nội dung vi phạm, nhưng không nên sửa nội dung của người khác (ảnh hưởng tính toàn vẹn review).
+
+---
+
+## 10. Bổ sung — Validate "đã xem phim mới được review"
+
+Business rule: user PHẢI đã CHECKED_IN ít nhất 1 booking của phim đó mới được viết review.
+
+### Repository
+```java
+@Query("""
+    SELECT COUNT(b) > 0 FROM Booking b
+    JOIN b.showtime st
+    WHERE b.user.id = :userId
+      AND st.movie.id = :movieId
+      AND b.status = 'CHECKED_IN'
+""")
+boolean hasUserWatchedMovie(@Param("userId") Long userId, @Param("movieId") Long movieId);
+```
+
+### Service
+```java
+@Transactional
+public Review createReview(Long userId, CreateReviewRequest req) {
+    Movie movie = movieRepository.findById(req.movieId())
+        .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
+
+    if (!bookingRepository.hasUserWatchedMovie(userId, movie.getId())) {
+        throw new BusinessException(ErrorCode.NOT_WATCHED_MOVIE);
+    }
+
+    if (reviewRepository.existsByUserIdAndMovieId(userId, movie.getId())) {
+        throw new BusinessException(ErrorCode.ALREADY_REVIEWED);
+    }
+
+    Review review = Review.builder()
+        .user(userRepository.getReferenceById(userId))
+        .movie(movie)
+        .rating(req.rating())
+        .comment(req.comment())
+        .build();
+    return reviewRepository.save(review);
+}
+```
+
+### Endpoint hỗ trợ FE check trước khi hiển thị form
+```java
+@GetMapping("/{id}/can-review")
+public ApiResponse<CanReviewResponse> canReview(@PathVariable Long id, Authentication auth) {
+    Long userId = ((CustomUserDetails) auth.getPrincipal()).getId();
+
+    if (reviewRepository.existsByUserIdAndMovieId(userId, id)) {
+        return ApiResponse.success(new CanReviewResponse(false, "Bạn đã đánh giá phim này"));
+    }
+    if (!bookingRepository.hasUserWatchedMovie(userId, id)) {
+        return ApiResponse.success(new CanReviewResponse(false, "Bạn chưa xem phim này"));
+    }
+    return ApiResponse.success(new CanReviewResponse(true, null));
+}
+```
+
+### Error codes mới
+- `NOT_WATCHED_MOVIE` — "Bạn chưa xem phim này"
+- `ALREADY_REVIEWED` — "Bạn đã đánh giá phim này rồi"

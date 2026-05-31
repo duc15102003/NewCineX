@@ -575,38 +575,26 @@ FLUSHALL                   # Xóa hết tất cả key (NGUY HIỂM)
 
 **Câu 1:** Nếu admin sửa `max_seats` từ 8 thành 10 trực tiếp trong SQL Server (không qua API), user đặt 9 ghế sẽ bị từ chối hay thành công? Tại sao?
 
-<details>
-<summary>Đáp án</summary>
+→ Bị từ chối. Vì cache (`ConcurrentHashMap`) vẫn giữ giá trị cũ `"8"`. Code đọc từ cache, không đọc DB. Phải gọi `reload()` hoặc restart server để cache cập nhật.
 
-Bị từ chối. Vì cache (`ConcurrentHashMap`) vẫn giữ giá trị cũ `"8"`. Code đọc từ cache, không đọc DB. Phải gọi `reload()` hoặc restart server để cache cập nhật.
-
-</details>
+---
 
 **Câu 2:** Tại sao `SystemConfigService` dùng `ConcurrentHashMap` thay vì `HashMap` thường? Nếu dùng `HashMap` thì điều gì có thể xảy ra?
 
-<details>
-<summary>Đáp án</summary>
+→ Vì nhiều thread (nhiều user request) có thể đọc/ghi cache đồng thời. `HashMap` không thread-safe → khi 2 thread cùng ghi vào HashMap, có thể gây ra: infinite loop (vòng lặp vô hạn), data corruption (dữ liệu bị hỏng), hoặc `ConcurrentModificationException`. `ConcurrentHashMap` cho phép đọc/ghi đồng thời an toàn.
 
-Vì nhiều thread (nhiều user request) có thể đọc/ghi cache đồng thời. `HashMap` không thread-safe → khi 2 thread cùng ghi vào HashMap, có thể gây ra: infinite loop (vòng lặp vô hạn), data corruption (dữ liệu bị hỏng), hoặc ConcurrentModificationException. `ConcurrentHashMap` cho phép đọc/ghi đồng thời an toàn.
-
-</details>
+---
 
 **Câu 3:** Nếu server CineX chạy trên 3 máy khác nhau (load balancing), cách cache bằng `ConcurrentHashMap` có vấn đề gì? Giải pháp là gì?
 
-<details>
-<summary>Đáp án</summary>
+→ Mỗi server có `ConcurrentHashMap` riêng → 3 cache riêng biệt. Khi admin sửa config trên server A, cache server B và C vẫn giữ giá trị cũ → dữ liệu không đồng nhất. Giải pháp: chuyển sang dùng Redis làm cache chung. Cả 3 server đều đọc/ghi vào cùng 1 Redis instance → dữ liệu luôn đồng nhất.
 
-Mỗi server có `ConcurrentHashMap` riêng → 3 cache riêng biệt. Khi admin sửa config trên server A, cache server B và C vẫn giữ giá trị cũ → dữ liệu không đồng nhất. Giải pháp: chuyển sang dùng Redis làm cache chung. Cả 3 server đều đọc/ghi vào cùng 1 Redis instance → dữ liệu luôn đồng nhất.
-
-</details>
+---
 
 **Câu 4:** TTL = 5 phút nghĩa là gì? Nếu set TTL = 0 thì sao? Nếu không set TTL thì sao?
 
-<details>
-<summary>Đáp án</summary>
+→ TTL = 5 phút: cache tự động bị xóa sau 5 phút kể từ lúc lưu. Lần đọc tiếp sẽ cache MISS → đọc DB → lưu cache mới.
 
-- TTL = 5 phút: cache tự động bị xóa sau 5 phút kể từ lúc lưu. Lần đọc tiếp sẽ cache MISS → đọc DB → lưu cache mới.
-- TTL = 0: trong Redis, key bị xóa ngay lập tức (không có ý nghĩa cache).
-- Không set TTL: cache sống mãi mãi cho đến khi bị xóa thủ công (DEL) hoặc server restart. Rủi ro: nếu quên invalidate → dữ liệu cũ mãi.
+TTL = 0: trong Redis, key bị xóa ngay lập tức (không có ý nghĩa cache).
 
-</details>
+Không set TTL: cache sống mãi mãi cho đến khi bị xóa thủ công (DEL) hoặc server restart. Rủi ro: nếu quên invalidate → dữ liệu cũ mãi.

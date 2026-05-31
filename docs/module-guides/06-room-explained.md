@@ -1,81 +1,81 @@
-# Module Room & Seat -- Giai thich chi tiet
+# Module Room & Seat -- Giải thích chi tiết
 
-## 1. Tong quan
+## 1. Tổng quan
 
-Module Room & Seat quan ly **phong chieu** va **so do ghe ngoi** trong rap phim CineX.
+Module Room & Seat quản lý **phòng chiếu** và **sơ đồ ghế ngoi** trong rap phim CineX.
 
-### Bai toan thuc te
-Khi ban di xem phim tai CGV hay Lotte Cinema, ban thay:
-- Moi rap co nhieu **phong chieu** (Room 1, Room 2, ...), moi phong co loai khac nhau (2D, 3D, IMAX, 4DX)
-- Moi phong co mot **so do ghe** (seat map): hang A den J, cot 1 den 15
-- Ghe co nhieu loai: ghe thuong (STANDARD), ghe VIP (o giua, tam nhin tot), ghe doi (COUPLE, o hang cuoi)
-- Co ghe bi hong (BROKEN) -- hien mau do, nguoi dung khong chon duoc
-- Admin co the tao phong, sinh ghe tu dong, danh dau ghe hong, doi loai ghe
+### Bài toán thực tế
+Khi bạn đi xem phim tai CGV hay Lotte Cinema, bạn thấy:
+- Mới rap co nhieu **phòng chiếu** (Room 1, Room 2, ...), mới phòng co loại khác nhau (2D, 3D, IMAX, 4DX)
+- Mới phòng co một **sơ đồ ghế** (seat map): hàng A đến J, cột 1 đến 15
+- Ghế co nhieu loại: ghế thường (STANDARD), ghế VIP (o giua, tám nhin tốt), ghế đôi (COUPLE, o hàng cuối)
+- Co ghế bi hong (BROKEN) -- hien mau đó, người đúng không chon được
+- Admin co the tạo phòng, sinh ghế tu đồng, danh đầu ghế hỏng, đôi loại ghế
 
-### Module nay gom 2 phan:
-1. **Room** (phong chieu): CRUD phong, loc theo ten/loai/trang thai
-2. **Seat** (ghe ngoi): sinh ghe tu dong, xem so do ghe, cap nhat loai ghe/trang thai ghe
+### Module này gồm 2 phần:
+1. **Room** (phòng chiếu): CRUD phòng, loc theo tên/loại/trạng thái
+2. **Seat** (ghế ngoi): sinh ghế tu đồng, xem sơ đồ ghế, cấp nhất loại ghế/trạng thái ghế
 
-### Vi sao tach thanh 2 module rieng?
-- **Single Responsibility**: Room chi quan ly thong tin phong (ten, loai, trang thai). Seat chi quan ly ghe (vi tri, loai, hong/khong hong)
-- **Dependency Inversion**: Seat phu thuoc Room (ghe thuoc phong), nhung Room khong biet gi ve Seat
-- Ngoai doi thuc, team "quan ly phong" va team "quan ly ghe" co the lam doc lap
+### Vì sao tach thanh 2 module rieng?
+- **Single Responsibility**: Room chi quản lý thong tin phòng (tên, loại, trạng thái). Seat chi quản lý ghế (vị trí, loại, hong/không hong)
+- **Dependency Inversion**: Seat phu thuoc Room (ghế thuoc phòng), những Room không biết gì về Seat
+- Ngoai đời thực, team "quản lý phòng" và team "quản lý ghế" co the làm đọc lap
 
 ---
 
-## 2. Danh sach files va Design Pattern
+## 2. Danh sách files và Design Pattern
 
 ### Module Room
 
-| File | Tac dung | Design Pattern |
+| File | Tac đúng | Design Pattern |
 |---|---|---|
-| `module/room/entity/Room.java` | Entity map bang `rooms` | BaseEntity Inheritance |
-| `module/room/entity/RoomType.java` | Enum loai phong: TWO_D, THREE_D, IMAX, FOUR_DX | Enum (type-safe) |
-| `module/room/entity/RoomStatus.java` | Enum trang thai: ACTIVE, MAINTENANCE, INACTIVE | Enum |
-| `module/room/dto/RoomRequest.java` | DTO tao/sua phong (co validation) | DTO |
-| `module/room/dto/RoomResponse.java` | DTO tra thong tin phong | DTO + Builder |
+| `module/room/entity/Room.java` | Entity map bảng `rooms` | BaseEntity Inheritance |
+| `module/room/entity/RoomType.java` | Enum loại phòng: TWO_D, THREE_D, IMAX, FOUR_DX | Enum (type-safe) |
+| `module/room/entity/RoomStatus.java` | Enum trạng thái: ACTIVE, MAINTENANCE, INACTIVE | Enum |
+| `module/room/dto/RoomRequest.java` | DTO tạo/sửa phòng (co validation) | DTO |
+| `module/room/dto/RoomResponse.java` | DTO tra thong tin phòng | DTO + Builder |
 | `module/room/dto/RoomFilter.java` | DTO nhan tham so loc tu FE | Filter DTO |
-| `module/room/repository/RoomRepository.java` | Truy van bang rooms + ho tro Specification | Repository |
-| `module/room/specification/RoomSpecification.java` | Build cau WHERE dong (keyword, type, status) | Specification Pattern |
+| `module/room/repository/RoomRepository.java` | Truy vấn bảng rooms + ho tro Specification | Repository |
+| `module/room/specification/RoomSpecification.java` | Build cau WHERE đồng (keyword, type, status) | Specification Pattern |
 | `module/room/mapper/RoomMapper.java` | Room -> RoomResponse (MapStruct sinh code luc compile) | Mapper |
 | `module/room/service/RoomService.java` | Business logic: CRUD, soft delete, bulk delete/restore | Service Layer |
 | `module/room/controller/RoomController.java` | 8 REST endpoints (CRUD + bulk + restore) | Controller |
 
 ### Module Seat
 
-| File | Tac dung | Design Pattern |
+| File | Tac đúng | Design Pattern |
 |---|---|---|
-| `module/seat/entity/Seat.java` | Entity map bang `seats`, quan he N:1 voi Room | BaseEntity + ManyToOne |
-| `module/seat/entity/SeatType.java` | Enum loai ghe: STANDARD, VIP, COUPLE | Enum |
-| `module/seat/entity/SeatStatus.java` | Enum trang thai ghe: AVAILABLE, BROKEN | Enum |
-| `module/seat/dto/SeatGenerateRequest.java` | Cau hinh sinh ghe tu dong (so hang, so cot, hang VIP, hang couple) | DTO + Validation |
-| `module/seat/dto/SeatResponse.java` | DTO tra thong tin 1 ghe | DTO + Builder |
-| `module/seat/dto/SeatMapResponse.java` | DTO tra so do ghe nhom theo hang (Map<String, List>) | DTO + Builder |
-| `module/seat/dto/UpdateSeatRequest.java` | DTO cap nhat 1 ghe (loai hoac trang thai) | DTO |
-| `module/seat/dto/BulkUpdateSeatRequest.java` | DTO cap nhat nhieu ghe cung luc | DTO + Validation |
-| `module/seat/repository/SeatRepository.java` | Truy van ghe + soft delete hang loat bang JPQL | Repository |
+| `module/seat/entity/Seat.java` | Entity map bảng `seats`, quan he N:1 với Room | BaseEntity + ManyToOne |
+| `module/seat/entity/SeatType.java` | Enum loại ghế: STANDARD, VIP, COUPLE | Enum |
+| `module/seat/entity/SeatStatus.java` | Enum trạng thái ghế: AVAILABLE, BROKEN | Enum |
+| `module/seat/dto/SeatGenerateRequest.java` | Cau hinh sinh ghế tu đồng (so hàng, so cột, hàng VIP, hàng couple) | DTO + Validation |
+| `module/seat/dto/SeatResponse.java` | DTO tra thong tin 1 ghế | DTO + Builder |
+| `module/seat/dto/SeatMapResponse.java` | DTO tra sơ đồ ghế nhom theo hàng (Map<String, List>) | DTO + Builder |
+| `module/seat/dto/UpdateSeatRequest.java` | DTO cấp nhất 1 ghế (loại hoặc trạng thái) | DTO |
+| `module/seat/dto/BulkUpdateSeatRequest.java` | DTO cấp nhất nhieu ghế cùng luc | DTO + Validation |
+| `module/seat/repository/SeatRepository.java` | Truy vấn ghế + soft delete hàng loat bảng JPQL | Repository |
 | `module/seat/mapper/SeatMapper.java` | Seat -> SeatResponse (MapStruct) | Mapper |
-| `module/seat/service/SeatService.java` | Business logic: sinh ghe, cap nhat, bulk update | Service Layer |
-| `module/seat/controller/SeatController.java` | 6 REST endpoints duoi `/api/rooms/{roomId}/seats` | Nested Resource Controller |
+| `module/seat/service/SeatService.java` | Business logic: sinh ghế, cấp nhất, bulk update | Service Layer |
+| `module/seat/controller/SeatController.java` | 6 REST endpoints dưới `/api/rooms/{roomId}/seats` | Nested Resource Controller |
 
 ---
 
-## 3. Design Patterns chi tiet
+## 3. Design Patterns chi tiết
 
-### 3.1. Specification Pattern -- Xay cau truy van WHERE dong
+### 3.1. Specification Pattern -- Xay cau truy vấn WHERE đồng
 
-#### Pattern nay la gi?
-Specification thuoc nhom **Behavioral Pattern**. No cho phep **ghep nhieu dieu kien loc** thanh 1 cau truy van, ma khong phai viet nhieu method trong Repository.
+#### Pattern này là gì?
+Specification thuoc nhom **Behavioral Pattern**. No cho phep **ghép nhieu dieu kien loc** thanh 1 cau truy vấn, ma không phải viet nhieu method trong Repository.
 
-#### Vi du doi thuong
-Tuong tuong ban di mua ao tren Shopee:
-- Loc theo **mau**: do
-- Loc theo **gia**: 100k - 500k
+#### Ví dụ đời thường
+Tuong tuong bạn đi mua ao trên Shopee:
+- Loc theo **mau**: đó
+- Loc theo **giá**: 100k - 500k
 - Loc theo **thuong hieu**: Nike
 
-Moi bo loc la 1 "Specification". Ban co the bat/tat tung bo loc -- va chung tu dong ghep lai thanh 1 cau truy van. Khong co bo loc nao? Tra tat ca. Co 3 bo loc? Tra ket qua thoa man ca 3.
+Mới bộ loc là 1 "Specification". Bạn co the bật/tắt tung bộ loc -- và chúng tu đồng ghép lai thanh 1 cau truy vấn. Không co bộ loc nào? Tra tất cả. Co 3 bộ loc? Tra ket qua thoa man cả 3.
 
-#### Ap dung o dau trong code?
+#### Ap đúng ở đâu trong code?
 
 File: `module/room/specification/RoomSpecification.java`
 
@@ -103,7 +103,7 @@ public static Specification<Room> fromFilter(RoomFilter filter) {
 }
 ```
 
-Moi method tra ve 1 `Specification<Room>` -- ban chat la 1 lambda tao ra 1 `Predicate` (dieu kien WHERE trong SQL):
+Mới method trả về 1 `Specification<Room>` -- bạn chat là 1 lambda tạo ra 1 `Predicate` (dieu kien WHERE trong SQL):
 
 ```java
 public static Specification<Room> hasName(String keyword) {
@@ -115,9 +115,9 @@ public static Specification<Room> hasName(String keyword) {
 // cb     = CriteriaBuilder -- cong cu tao dieu kien (like, equal, greaterThan, ...)
 ```
 
-#### Tai sao dung Specification?
+#### Tại sao đúng Specification?
 
-**KHONG dung Specification** -- viet hang chuc method trong Repository:
+**KHONG đúng Specification** -- viet hàng chuc method trong Repository:
 
 ```java
 // Moi to hop filter = 1 method rieng -- SO LUONG TANG THEO CAP SO NHAN!
@@ -131,9 +131,9 @@ List<Room> findByNameContainingAndTypeAndStatus(String keyword, RoomType type, R
 // Con phan trang? x2 nua!
 ```
 
-3 truong loc = 2^3 = 8 method. 5 truong loc = 2^5 = 32 method. **Khong kha thi!**
+3 truong loc = 2^3 = 8 method. 5 truong loc = 2^5 = 32 method. **Không kha thì!**
 
-**CO Specification** -- chi 1 method duy nhat:
+**CO Specification** -- chi 1 method duy nhất:
 
 ```java
 // Repository chi can them JpaSpecificationExecutor
@@ -147,32 +147,32 @@ var spec = RoomSpecification.fromFilter(filter);
 roomRepository.findAll(spec, pageable);  // 1 dong duy nhat!
 ```
 
-#### Khi nao KHONG nen dung?
-- Entity chi co 1-2 filter co dinh (VD: `findByUsername`) -- dung Spring Data method la du
-- Query qua phuc tap voi nhieu JOIN -- dung `@Query` voi JPQL/native SQL ro rang hon
+#### Khi nào KHONG nên dùng?
+- Entity chi co 1-2 filter co dinh (VD: `findByUsername`) -- đúng Spring Data method là du
+- Query qua phức tạp với nhieu JOIN -- đúng `@Query` với JPQL/native SQL rõ ràng hon
 
 ---
 
 ### 3.2. Soft Delete Pattern -- Xoa mem
 
-#### Pattern nay la gi?
-Thay vi `DELETE FROM rooms WHERE id = 1` (xoa vinh vien, mat du lieu), ta **doi trang thai** cua ban ghi thanh "da xoa" (ARCHIVED). Du lieu van con trong DB, nhung cac cau truy van mac dinh se loc bo no.
+#### Pattern này là gì?
+Thay vì `DELETE FROM rooms WHERE id = 1` (xóa vinh vien, mat dữ liệu), ta **đôi trạng thái** của bạn ghi thanh "đã xóa" (ARCHIVED). Dữ liệu van con trong DB, những các cau truy vấn mac dinh sẽ loc bộ no.
 
-#### Vi du doi thuong
-Khi ban xoa email trong Gmail, email khong bien mat ngay -- no vao **Thung rac** (Trash). Sau 30 ngay moi xoa that. Trong thoi gian do, ban co the **khoi phuc** (Restore).
+#### Ví dụ đời thường
+Khi bạn xóa email trong Gmail, email không bien mat ngày -- no vào **Thung rac** (Trash). Sau 30 ngày mới xóa that. Trong thời gian đó, bạn co the **khoi phuc** (Restore).
 
-Soft Delete hoat dong y heu: ban ghi van nam trong DB (tuong duong thung rac), va admin co the khoi phuc bat ky luc nao.
+Soft Delete hoạt động y heu: bạn ghi van năm trong DB (tuong duong thung rac), và admin co the khoi phuc bất kỳ luc nào.
 
-#### Ap dung o dau trong code?
+#### Ap đúng ở đâu trong code?
 
-Moi entity trong CineX deu ke thua `BaseEntity`, trong do co truong `storageState`:
+Mới entity trong CineX deu ke thua `BaseEntity`, trong đó co truong `storageState`:
 
 ```
 StorageState.ACTIVE   = ban ghi binh thuong (hien thi cho user)
 StorageState.ARCHIVED = ban ghi da xoa (an khoi user, admin co the khoi phuc)
 ```
 
-**Room -- xoa mem:**
+**Room -- xóa mem:**
 ```java
 // RoomService.deleteRoom()
 public void deleteRoom(Long id) {
@@ -183,7 +183,7 @@ public void deleteRoom(Long id) {
 }
 ```
 
-**Seat -- xoa mem hang loat bang JPQL:**
+**Seat -- xóa mem hàng loat bảng JPQL:**
 ```java
 // SeatRepository -- soft delete tat ca ghe cua phong
 @Modifying
@@ -192,7 +192,7 @@ public void deleteRoom(Long id) {
 void softDeleteByRoomId(Long roomId);
 ```
 
-**Loc bo ban ghi da xoa (Specification):**
+**Loc bộ bạn ghi đã xóa (Specification):**
 ```java
 public static Specification<Room> notDeleted() {
     return (root, query, cb) ->
@@ -203,27 +203,27 @@ public static Specification<Room> notDeleted() {
 }
 ```
 
-#### Tai sao dung Soft Delete?
-1. **Audit trail**: biet ai da xoa gi, khi nao -- phuc vu dieu tra, bao cao
-2. **Khoi phuc**: admin click "Restore" la xong, khong can backup DB
-3. **Toan ven du lieu**: ghe da ban thuoc phong da xoa -- van con du lieu de doi chieu
-4. **Phap ly**: mot so nganh (tai chinh, y te) BAT BUOC luu du lieu N nam
+#### Tại sao đúng Soft Delete?
+1. **Audit trail**: biết ai đã xóa gì, khi nào -- phuc vu dieu tra, bao cao
+2. **Khoi phuc**: admin click "Restore" là xong, không cần backup DB
+3. **Toan ven dữ liệu**: ghế đã bạn thuoc phòng đã xóa -- van con dữ liệu de đôi chiếu
+4. **Phap ly**: một so nganh (tai chinh, y te) BAT BUOC lưu dữ liệu N năm
 
-#### Khi nao KHONG nen dung?
-- Du lieu tam (session, OTP, token) -- xoa that de giam tai DB
-- GDPR yeu cau "quyen bi lang quen" -- phai xoa that du lieu ca nhan
+#### Khi nào KHONG nên dùng?
+- Dữ liệu tám (session, OTP, token) -- xóa that de giam tai DB
+- GDPR yeu cau "quyen bi lang quen" -- phải xóa that dữ liệu cả nhan
 
 ---
 
-### 3.3. Quan he @ManyToOne -- Room va Seat
+### 3.3. Quan he @ManyToOne -- Room và Seat
 
-#### Bai toan
-- 1 phong co **nhieu ghe** (1 Room : N Seats)
-- 1 ghe chi thuoc **1 phong** (N Seats : 1 Room)
+#### Bài toán
+- 1 phòng co **nhieu ghế** (1 Room : N Seats)
+- 1 ghế chi thuoc **1 phòng** (N Seats : 1 Room)
 
-Day la quan he **Many-to-One** (nhieu-mot) -- loai quan he pho bien nhat trong database.
+Day là quan he **Many-to-One** (nhieu-một) -- loại quan he pho bien nhất trong database.
 
-#### Ap dung trong code
+#### Ap đúng trong code
 
 ```java
 // Seat.java
@@ -232,18 +232,18 @@ Day la quan he **Many-to-One** (nhieu-mot) -- loai quan he pho bien nhat trong d
 private Room room;
 ```
 
-Giai thich tung annotation:
+Giải thích tung annotation:
 
 **(1) `@ManyToOne(fetch = FetchType.LAZY)`**
 - `@ManyToOne`: nhieu Seat thuoc 1 Room
-- `fetch = LAZY`: khi truy van Seat, **KHONG** tu dong load Room entity. Chi load khi goi `seat.getRoom()`
-- Tai sao LAZY? Vi khi list 100 ghe, ban khong can load 100 lan Room entity (tat ca deu cung 1 phong). Neu de EAGER (mac dinh cua @ManyToOne), JPA se chay 100 cau SELECT Room => **N+1 problem**
+- `fetch = LAZY`: khi truy vấn Seat, **KHONG** tu đồng load Room entity. Chi load khi goi `seat.getRoom()`
+- Tại sao LAZY? Vì khi list 100 ghế, bạn không cần load 100 lan Room entity (tất cả deu cùng 1 phòng). Nếu de EAGER (mac dinh của @ManyToOne), JPA sẽ chay 100 cau SELECT Room => **N+1 problem**
 
 **(2) `@JoinColumn(name = "room_id", nullable = false)`**
-- `name = "room_id"`: cot khoa ngoai trong bang `seats` tro ve bang `rooms`
-- `nullable = false`: ghe PHAI thuoc 1 phong, khong duoc null
+- `name = "room_id"`: cột khoa ngoai trong bảng `seats` tro về bảng `rooms`
+- `nullable = false`: ghế PHAI thuoc 1 phòng, không được null
 
-#### N+1 Problem la gi?
+#### N+1 Problem là gì?
 
 ```
 Gia su ban list 100 ghe voi fetch = EAGER:
@@ -258,11 +258,11 @@ Query 101: SELECT * FROM rooms WHERE id = 1        -- cho ghe J12
 Tong: 1 + 100 = 101 cau query! (Mac du tat ca ghe cung phong id=1)
 ```
 
-Voi `LAZY`, chi co 1 cau query: `SELECT * FROM seats WHERE room_id = 1`. Room chi duoc load khi can.
+Voi `LAZY`, chi co 1 cau query: `SELECT * FROM seats WHERE room_id = 1`. Room chi được load khi cần.
 
-#### Tai sao module nay KHONG dung @OneToMany trong Room?
+#### Tại sao module này KHONG đúng @OneToMany trong Room?
 
-Ban co the tu hoi: "Tai sao Room.java khong co `List<Seat> seats`?"
+Bạn co the tu hỏi: "Tại sao Room.java không co `List<Seat> seats`?"
 
 ```java
 // Room.java -- KHONG co truong seats
@@ -275,39 +275,39 @@ public class Room extends BaseEntity {
 }
 ```
 
-Ly do:
-1. **Module tach biet**: Room va Seat la 2 module rieng. Room khong nen biet cau truc cua Seat
-2. **Performance**: Load room khong can load 200 ghe. Khi can ghe -> goi `SeatService.getSeatMap(roomId)`
-3. **Dependency Inversion**: Seat phu thuoc Room (co `room_id`), nhung Room KHONG phu thuoc Seat
+Lý đó:
+1. **Module tach biết**: Room và Seat là 2 module rieng. Room không nên biết cau trực của Seat
+2. **Performance**: Load room không cần load 200 ghế. Khi cần ghế -> goi `SeatService.getSeatMap(roomId)`
+3. **Dependency Inversion**: Seat phu thuoc Room (co `room_id`), những Room KHONG phu thuoc Seat
 
-> **Quy tac**: @ManyToOne dat o phia "nhieu" (Seat). @OneToMany dat o phia "mot" (Room) -- chi khi THAT SU can (VD: cascade delete). Trong CineX, ta khong dung cascade ma dung soft delete rieng => khong can @OneToMany.
+> **Quy tắc**: @ManyToOne đặt o phia "nhieu" (Seat). @OneToMany đặt o phia "một" (Room) -- chi khi THAT SU cần (VD: cascade delete). Trong CineX, ta không đúng cascade ma đúng soft delete rieng => không cần @OneToMany.
 
 ---
 
-## 4. So do ghe (Seat) -- Chi tiet
+## 4. Sơ đồ ghế (Seat) -- Chi tiết
 
-### 4.1. SeatType -- Loai ghe
+### 4.1. SeatType -- Loại ghế
 
-| Gia tri | Mo ta | Vi tri thuong gap | Gia ve |
+| Giá trị | Mô tả | Vì tri thuong gap | Giá về |
 |---|---|---|---|
-| `STANDARD` | Ghe thuong | Hang A-D (gan man hinh), hang H-I | Gia co ban |
-| `VIP` | Ghe VIP -- dem lon hon, tam nhin tot | Hang E-G (giua phong) | +30-50% |
-| `COUPLE` | Ghe doi -- 2 nguoi ngoi chung 1 ghe rong | Hang J (hang cuoi) | x2 |
+| `STANDARD` | Ghế thuong | Hang A-D (gắn man hinh), hàng H-I | Giá co bạn |
+| `VIP` | Ghế VIP -- dem lớn hon, tám nhin tốt | Hang E-G (giua phòng) | +30-50% |
+| `COUPLE` | Ghế đôi -- 2 người ngoi chúng 1 ghế rộng | Hang J (hàng cuối) | x2 |
 
-### 4.2. SeatStatus -- Trang thai ghe
+### 4.2. SeatStatus -- Trang thai ghế
 
-| Gia tri | Mo ta | Hien thi tren FE |
+| Giá trị | Mô tả | Hiển thị trên FE |
 |---|---|---|
-| `AVAILABLE` | Ghe binh thuong, co the dat | Mau trang/xanh |
-| `BROKEN` | Ghe hong, KHONG cho dat | Mau do, khong click duoc |
+| `AVAILABLE` | Ghế bình thường, co the đặt | Mau trang/xanh |
+| `BROKEN` | Ghế hong, KHONG cho đặt | Mau đó, không click được |
 
-**Luu y**: `SeatStatus` khac voi trang thai khi dat ve:
-- `AVAILABLE` / `BROKEN` la **trang thai vat ly** cua ghe (hong hay khong hong) -- do admin quan ly
-- Khi dat ve, ghe se co trang thai **HOLDING** (dang giu) / **BOOKED** (da ban) -- do BookingService quan ly, luu trong bang `booking_seats`, KHONG phai trong bang `seats`
+**Luu y**: `SeatStatus` khác với trạng thái khi đặt vé:
+- `AVAILABLE` / `BROKEN` là **trạng thái vat ly** của ghế (hong hay không hong) -- đó admin quản lý
+- Khi đặt vé, ghế sẽ co trạng thái **HOLDING** (đang giữ) / **BOOKED** (đã bạn) -- đó BookingService quản lý, lưu trong bảng `booking_seats`, KHONG phải trong bảng `seats`
 
-### 4.3. Ghe doi (COUPLE) -- Ghep cap tu dong
+### 4.3. Ghế đôi (COUPLE) -- Ghép cấp tu đồng
 
-Khi sinh ghe cho hang COUPLE (VD: hang J, 12 cot):
+Khi sinh ghế cho hàng COUPLE (VD: hàng J, 12 cột):
 
 ```
 J1-J2   = COUPLE (cap 1)
@@ -318,7 +318,7 @@ J9-J10  = COUPLE (cap 5)
 J11-J12 = COUPLE (cap 6)
 ```
 
-**Truong hop dac biet**: Neu so cot LE (VD: 11 cot):
+**Truong hop đặc biệt**: Nếu so cột LE (VD: 11 cột):
 
 ```
 J1-J2   = COUPLE
@@ -328,7 +328,7 @@ J9-J10  = COUPLE
 J11     = STANDARD   <-- Ghe le cuoi cung => KHONG the la COUPLE => doi ve STANDARD
 ```
 
-Code xu ly:
+Code xử lý:
 
 ```java
 // SeatService.generateSeats()
@@ -339,9 +339,9 @@ if (isCoupleRow) {
 }
 ```
 
-### 4.4. Ghe hong (BROKEN) -- Luong xu ly
+### 4.4. Ghế hong (BROKEN) -- Luong xử lý
 
-**Admin danh dau ghe hong:**
+**Admin danh đầu ghế hỏng:**
 ```
 Admin chon ghe A5 tren Seat Map Editor
    |
@@ -356,7 +356,7 @@ SeatService.updateSeat(5, request)
 Ghe A5 bay gio co status = BROKEN
 ```
 
-**User dat ve -- ghe hong hien mau do:**
+**User đặt vé -- ghế hỏng hien mau đó:**
 ```
 User vao trang chon ghe
    |
@@ -373,7 +373,7 @@ FE render ghe A5 mau DO, disable click
 User click ghe A5 => KHONG co gi xay ra (disabled)
 ```
 
-**BE chan khi user co tinh gui request voi ghe hong:**
+**BE chan khi user co tinh gui request với ghế hỏng:**
 ```
 Khi BookingService xu ly dat ve:
    |-- Kiem tra tung seatId trong danh sach
@@ -381,9 +381,9 @@ Khi BookingService xu ly dat ve:
    |-- User khong the dat ghe hong du co gui request truc tiep
 ```
 
-### 4.5. Bulk update loai ghe
+### 4.5. Bulk update loại ghế
 
-Admin co the chon nhieu ghe cung luc va doi loai (VD: chon A1-A5 doi thanh VIP):
+Admin co the chon nhieu ghế cùng luc và đôi loại (VD: chon A1-A5 đôi thanh VIP):
 
 ```java
 // SeatService.bulkUpdateSeats()
@@ -403,12 +403,12 @@ if (request.getStatus() == SeatStatus.BROKEN) {
 }
 ```
 
-**Tai sao doi loai ghe thi khoi phuc BROKEN -> AVAILABLE?**
-Vi du: ghe A5 bi hong (ghe thuong). Admin muon thay ghe moi loai VIP -> ghe moi khong con hong nua -> tu dong AVAILABLE.
+**Tại sao đôi loại ghế thì khoi phuc BROKEN -> AVAILABLE?**
+Ví dụ: ghế A5 bi hong (ghế thường). Admin muốn thấy ghế mới loại VIP -> ghế mới không con hong nua -> tu đồng AVAILABLE.
 
 ---
 
-## 5. Generate Seats tu dong -- Thuat toan chi tiet
+## 5. Generate Seats tu đồng -- Thuật toán chi tiết
 
 ### Input mau
 
@@ -439,9 +439,9 @@ Vi du: ghe A5 bi hong (ghe thuong). Admin muon thay ghe moi loai VIP -> ghe moi 
                          MAN HINH
 ```
 
-Tong: 10 hang x 12 cot = 120 ghe
+Tong: 10 hàng x 12 cột = 120 ghế
 
-### Thuat toan tung buoc
+### Thuật toán tung buoc
 
 ```
 Buoc 1: Validate input
@@ -469,7 +469,7 @@ Buoc 5: Cap nhat room.totalSeats = 120
 Buoc 6: Tra ve SeatMapResponse (so do ghe nhom theo hang)
 ```
 
-### Validation -- Chong nhap sai
+### Validation -- Chong nhập sai
 
 ```java
 // Tinh hang lon nhat hop le
@@ -484,13 +484,13 @@ for (String vr : vipRows) {
 }
 ```
 
-Vi du loi: `totalRows=5` (hang A-E) nhung `vipRows=["G"]` => G > E => loi!
+Ví dụ loi: `totalRows=5` (hàng A-E) những `vipRows=["G"]` => G > E => loi!
 
 ---
 
-## 6. So do luong xu ly (ASCII Diagram)
+## 6. Sơ đồ luồng xử lý (ASCII Diagram)
 
-### 6.1. Admin tao phong va sinh ghe
+### 6.1. Admin tạo phòng và sinh ghế
 
 ```
 Admin Frontend                    Backend
@@ -548,7 +548,7 @@ Admin Frontend                    Backend
      |  Response: { id: 5, seatNumber: "A5", status: "BROKEN" }
 ```
 
-### 6.2. User dat ve -- ghe hong va ghe da ban
+### 6.2. User đặt vé -- ghế hỏng và ghế đã bạn
 
 ```
 User Frontend                     Backend
@@ -583,9 +583,9 @@ User Frontend                     Backend
 
 ---
 
-## 7. SQL duoc sinh ra cho tung operation
+## 7. SQL được sinh ra cho tung operation
 
-### 7.1. List phong co filter (Specification)
+### 7.1. List phòng co filter (Specification)
 
 ```sql
 -- GET /api/rooms?keyword=Room&type=IMAX&status=ACTIVE&page=0&size=20
@@ -607,9 +607,9 @@ ORDER BY r.created_at DESC
 OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY
 ```
 
-**Luu y**: Neu FE khong gui `type` va `status`, 2 dong AND cuoi se **khong co** -- Specification tu dong bo qua dieu kien null.
+**Luu y**: Nếu FE không gui `type` và `status`, 2 đồng AND cuối sẽ **không co** -- Specification tu đồng bộ qua dieu kien null.
 
-### 7.2. Tao phong
+### 7.2. Tao phòng
 
 ```sql
 -- Kiem tra trung ten
@@ -622,7 +622,7 @@ VALUES ('Room 1', 'IMAX', 0, 'ACTIVE', 'ACTIVE', 0,
         'admin', GETDATE(), 'admin', GETDATE())
 ```
 
-### 7.3. Xoa mem phong
+### 7.3. Xoa mem phòng
 
 ```sql
 -- Optimistic Locking: chi update neu version khop
@@ -634,7 +634,7 @@ SET storage_state = 'ARCHIVED',
 WHERE id = 1 AND version = 0
 ```
 
-### 7.4. Sinh ghe tu dong
+### 7.4. Sinh ghế tu đồng
 
 ```sql
 -- Buoc 1: Soft delete ghe cu
@@ -654,7 +654,7 @@ VALUES (1, 'A', 1, 'A1', 'STANDARD', 'AVAILABLE', 'ACTIVE', 0, 'admin', GETDATE(
 UPDATE rooms SET total_seats = 120, version = version + 1 WHERE id = 1 AND version = 0
 ```
 
-### 7.5. Lay so do ghe
+### 7.5. Lay sơ đồ ghế
 
 ```sql
 -- Chi lay ghe chua xoa, sap xep theo hang roi cot
@@ -664,7 +664,7 @@ WHERE s.room_id = 1
 ORDER BY s.row_label ASC, s.col_number ASC
 ```
 
-### 7.6. Bulk update ghe (doi loai/danh dau hong)
+### 7.6. Bulk update ghế (đôi loại/danh đầu hong)
 
 ```sql
 -- VD: Doi 5 ghe thanh VIP
@@ -680,7 +680,7 @@ WHERE id IN (5, 20) AND version = ?
 
 ---
 
-## 8. Annotation moi can biet
+## 8. Annotation mới cần biết
 
 ### @Builder.Default
 
@@ -689,9 +689,9 @@ WHERE id IN (5, 20) AND version = ?
 private RoomStatus status = RoomStatus.ACTIVE;
 ```
 
-**Van de**: Lombok `@Builder` **bo qua** gia tri mac dinh cua field. Khi goi `Room.builder().name("Room 1").build()`, truong `status` se la `null` chu KHONG phai `ACTIVE`.
+**Van de**: Lombok `@Builder` **bộ qua** giá trị mac dinh của field. Khi goi `Room.builder().name("Room 1").build()`, truong `status` sẽ là `null` chu KHONG phải `ACTIVE`.
 
-**Giai phap**: `@Builder.Default` bao Lombok: "Neu nguoi dung khong goi `.status(...)`, hay dung gia tri mac dinh."
+**Giai phap**: `@Builder.Default` bao Lombok: "Nếu người đúng không goi `.status(...)`, hay đúng giá trị mac dinh."
 
 ```java
 // KHONG co @Builder.Default:
@@ -703,9 +703,9 @@ Room room = Room.builder().name("Room 1").build();
 // room.status = RoomStatus.ACTIVE  --> OK!
 ```
 
-Trong module nay, `@Builder.Default` duoc dung o:
-- `Room.status` = `RoomStatus.ACTIVE` (phong moi mac dinh hoat dong)
-- `Seat.status` = `SeatStatus.AVAILABLE` (ghe moi mac dinh su dung duoc)
+Trong module này, `@Builder.Default` được dùng o:
+- `Room.status` = `RoomStatus.ACTIVE` (phòng mới mac dinh hoạt động)
+- `Seat.status` = `SeatStatus.AVAILABLE` (ghế mới mac dinh sử dụng được)
 
 ### @ManyToOne(fetch = FetchType.LAZY)
 
@@ -717,10 +717,10 @@ private Room room;
 
 - `@ManyToOne`: Nhieu Seat thuoc 1 Room
 - `fetch = LAZY`: Chi load Room khi goi `seat.getRoom()`, KHONG load san
-- `@JoinColumn(name = "room_id")`: Cot khoa ngoai trong bang `seats`
-- `nullable = false`: Moi ghe BAT BUOC phai thuoc 1 phong
+- `@JoinColumn(name = "room_id")`: Cot khoa ngoai trong bảng `seats`
+- `nullable = false`: Mới ghế BAT BUOC phải thuoc 1 phòng
 
-**Luu y**: `@ManyToOne` mac dinh la `EAGER` (load ngay). Trong CineX, ta luon dat `LAZY` de tranh N+1 problem (xem muc 3.3).
+**Luu y**: `@ManyToOne` mac dinh là `EAGER` (load ngày). Trong CineX, ta luon đặt `LAZY` de tranh N+1 problem (xem mục 3.3).
 
 ### @Modifying + @Query (JPQL Update)
 
@@ -731,14 +731,14 @@ private Room room;
 void softDeleteByRoomId(Long roomId);
 ```
 
-- `@Query`: Viet cau truy van thu cong bang JPQL (Java Persistence Query Language)
-- `@Modifying`: Bat buoc khi `@Query` la UPDATE hoac DELETE (khong phai SELECT). Neu thieu -> Spring bao loi luc runtime
-- `s.room.id`: JPQL cho phep truy cap quan he (Seat -> Room -> id), JPA tu dong dich thanh `WHERE room_id = ?`
-- `:roomId`: Tham so truyen vao, Spring tu dong bind tu method parameter
+- `@Query`: Viet cau truy vấn thu cong bảng JPQL (Java Persistence Query Language)
+- `@Modifying`: Bat buoc khi `@Query` là UPDATE hoặc DELETE (không phải SELECT). Nếu thieu -> Spring bao loi luc runtime
+- `s.room.id`: JPQL cho phep truy cập quan he (Seat -> Room -> id), JPA tu đồng dich thanh `WHERE room_id = ?`
+- `:roomId`: Tham so truyen vào, Spring tu đồng bind tu method parameter
 
 **JPQL vs Native SQL**:
-- JPQL: Viet theo ten entity + field (`Seat`, `storageState`), khong phai ten bang/cot (`seats`, `storage_state`). JPA dich sang SQL tuong ung voi DB dang dung (MySQL, SQL Server, PostgreSQL, ...)
-- Native SQL: Viet SQL thuan, phu thuoc DB cu the. Chi dung khi JPQL khong lam duoc
+- JPQL: Viet theo tên entity + field (`Seat`, `storageState`), không phải tên bảng/cột (`seats`, `storage_state`). JPA dich sang SQL tuong ung với DB đang đúng (MySQL, SQL Server, PostgreSQL, ...)
+- Native SQL: Viet SQL thuan, phu thuoc DB cũ the. Chi đúng khi JPQL không làm được
 
 ### @PreAuthorize("hasRole('ADMIN')")
 
@@ -748,15 +748,15 @@ void softDeleteByRoomId(Long roomId);
 public ApiResponse<SeatMapResponse> generateSeats(...) { ... }
 ```
 
-- Chi user co role `ADMIN` moi duoc goi endpoint nay
-- Neu user thuong goi -> tra 403 Forbidden
-- Spring Security kiem tra JWT token -> lay role -> so sanh voi `hasRole('ADMIN')`
+- Chi user co role `ADMIN` mới được gọi endpoint này
+- Nếu user thuong goi -> tra 403 Forbidden
+- Spring Security kiểm tra JWT token -> lay role -> so sánh với `hasRole('ADMIN')`
 
 ---
 
 ## 9. Request/Response mau
 
-### GET /api/rooms -- Danh sach phong (co filter + phan trang)
+### GET /api/rooms -- Danh sách phòng (co filter + phần trang)
 
 ```bash
 curl "http://localhost:8088/api/rooms?keyword=Room&type=IMAX&status=ACTIVE&page=0&size=10" \
@@ -789,7 +789,7 @@ curl "http://localhost:8088/api/rooms?keyword=Room&type=IMAX&status=ACTIVE&page=
 }
 ```
 
-### POST /api/rooms -- (Admin) Tao phong moi
+### POST /api/rooms -- (Admin) Tao phòng mới
 
 ```bash
 curl -X POST http://localhost:8088/api/rooms \
@@ -820,7 +820,7 @@ curl -X POST http://localhost:8088/api/rooms \
 }
 ```
 
-**Response loi -- trung ten (409):**
+**Response loi -- trung tên (409):**
 ```json
 {
   "success": false,
@@ -841,7 +841,7 @@ curl -X POST http://localhost:8088/api/rooms \
 }
 ```
 
-### POST /api/rooms/1/seats/generate -- (Admin) Sinh ghe tu dong
+### POST /api/rooms/1/seats/generate -- (Admin) Sinh ghế tu đồng
 
 ```bash
 curl -X POST http://localhost:8088/api/rooms/1/seats/generate \
@@ -881,16 +881,16 @@ curl -X POST http://localhost:8088/api/rooms/1/seats/generate \
 }
 ```
 
-### GET /api/rooms/1/seats -- Xem so do ghe
+### GET /api/rooms/1/seats -- Xem sơ đồ ghế
 
 ```bash
 curl http://localhost:8088/api/rooms/1/seats \
   -H "Authorization: Bearer <token>"
 ```
 
-Response cung format nhu generate, nhung khong thay doi du lieu.
+Response cùng format như generate, những không thấy đôi dữ liệu.
 
-### PUT /api/rooms/1/seats/5 -- (Admin) Cap nhat 1 ghe
+### PUT /api/rooms/1/seats/5 -- (Admin) Cap nhất 1 ghế
 
 ```bash
 curl -X PUT http://localhost:8088/api/rooms/1/seats/5 \
@@ -915,7 +915,7 @@ curl -X PUT http://localhost:8088/api/rooms/1/seats/5 \
 }
 ```
 
-### PUT /api/rooms/1/seats/bulk-update -- (Admin) Bulk update nhieu ghe
+### PUT /api/rooms/1/seats/bulk-update -- (Admin) Bulk update nhieu ghế
 
 ```bash
 # Doi 5 ghe thanh VIP
@@ -937,21 +937,21 @@ curl -X PUT http://localhost:8088/api/rooms/1/seats/bulk-update \
   }'
 ```
 
-### DELETE /api/rooms/1 -- (Admin) Xoa mem phong
+### DELETE /api/rooms/1 -- (Admin) Xoa mem phòng
 
 ```bash
 curl -X DELETE http://localhost:8088/api/rooms/1 \
   -H "Authorization: Bearer <admin_token>"
 ```
 
-### POST /api/rooms/1/restore -- (Admin) Khoi phuc phong da xoa
+### POST /api/rooms/1/restore -- (Admin) Khoi phuc phòng đã xóa
 
 ```bash
 curl -X POST http://localhost:8088/api/rooms/1/restore \
   -H "Authorization: Bearer <admin_token>"
 ```
 
-### POST /api/rooms/bulk-delete -- (Admin) Xoa nhieu phong
+### POST /api/rooms/bulk-delete -- (Admin) Xoa nhieu phòng
 
 ```bash
 curl -X POST http://localhost:8088/api/rooms/bulk-delete \
@@ -962,46 +962,46 @@ curl -X POST http://localhost:8088/api/rooms/bulk-delete \
 
 ---
 
-## 10. Cau hoi tu kiem tra
+## 10. Câu hỏi tự kiểm tra
 
-### Cau 1: Tai sao can `@Builder.Default` cho field `status` trong Room va Seat?
-> **Goi y**: Thu bo `@Builder.Default` roi goi `Room.builder().name("Test").build()`. Gia tri `status` se la gi? DB co cho phep null khong?
+### Câu 1: Tại sao cần `@Builder.Default` cho field `status` trong Room và Seat?
+> **Goi y**: Thu bộ `@Builder.Default` roi goi `Room.builder().name("Test").build()`. Giá trị `status` sẽ là gì? DB co cho phep null không?
 >
-> **Dap an**: Lombok `@Builder` bo qua gia tri mac dinh. Khong co `@Builder.Default` -> `status = null` -> vi cot `status` la `NOT NULL` trong DB -> loi `ConstraintViolationException` khi save.
+> **Dap an**: Lombok `@Builder` bộ qua giá trị mac dinh. Không co `@Builder.Default` -> `status = null` -> vì cột `status` là `NOT NULL` trong DB -> loi `ConstraintViolationException` khi save.
 
-### Cau 2: Neu FE gui `GET /api/rooms` KHONG co bat ky filter nao, Specification se sinh ra SQL nhu the nao?
-> **Goi y**: Xem method `fromFilter()` -- khi tat ca field cua `RoomFilter` deu null thi sao?
+### Câu 2: Nếu FE gui `GET /api/rooms` KHONG co bất kỳ filter nào, Specification sẽ sinh ra SQL như thế nào?
+> **Goi y**: Xem method `fromFilter()` -- khi tất cả field của `RoomFilter` deu null thì sao?
 >
-> **Dap an**: Chi co 1 dieu kien duy nhat: `WHERE storage_state IS NULL OR storage_state <> 'ARCHIVED'` (notDeleted). Cac dieu kien khac bi skip vi null. Ket qua: tra tat ca phong chua xoa.
+> **Dap an**: Chi co 1 dieu kien duy nhất: `WHERE storage_state IS NULL OR storage_state <> 'ARCHIVED'` (notDeleted). Cac dieu kien khác bi skip vì null. Ket qua: tra tất cả phòng chua xóa.
 
-### Cau 3: Khi admin sinh lai ghe (generate) cho phong da co ghe, chuyen gi xay ra voi ghe cu?
+### Câu 3: Khi admin sinh lai ghế (generate) cho phòng đã co ghế, chuyen gì xay ra với ghế cũ?
 > **Goi y**: Tim method `softDeleteByRoomId()` trong `SeatRepository`.
 >
-> **Dap an**: Ghe cu duoc **soft delete** (storage_state = ARCHIVED), KHONG bi xoa that. Sau do ghe moi duoc tao. Nhu vay, du lieu ghe cu van luu trong DB de doi chieu (audit trail). Cac booking cu van tham chieu duoc den ghe cu.
+> **Dap an**: Ghế cũ được **soft delete** (storage_state = ARCHIVED), KHONG bi xóa that. Sau đó ghế mới được tạo. Nhu vay, dữ liệu ghế cũ van lưu trong DB de đôi chiếu (audit trail). Cac booking cũ van tham chiếu được đến ghế cũ.
 
-### Cau 4: Tai sao dung `LinkedHashMap` thay vi `HashMap` khi nhom ghe theo hang?
-> **Goi y**: Thu doi thanh `HashMap` roi xem thu tu cac hang trong response.
+### Câu 4: Tại sao đúng `LinkedHashMap` thấy vì `HashMap` khi nhom ghế theo hàng?
+> **Goi y**: Thu đôi thanh `HashMap` roi xem thu tu các hàng trong response.
 >
-> **Dap an**: `HashMap` khong dam bao thu tu. FE can render ghe theo thu tu A -> B -> C -> ... -> J. `LinkedHashMap` giu nguyen thu tu insert. Vi query da ORDER BY rowLabel ASC, nen ghe duoc insert theo thu tu A, B, C, ... -> `LinkedHashMap` giu dung thu tu nay.
+> **Dap an**: `HashMap` không dam bao thu tu. FE cần render ghế theo thu tu A -> B -> C -> ... -> J. `LinkedHashMap` giữ nguyen thu tu insert. Vì query đã ORDER BY rowLabel ASC, nên ghế được insert theo thu tu A, B, C, ... -> `LinkedHashMap` giữ đúng thu tu này.
 
-### Cau 5: Neu hang couple co so cot le (VD: 11 cot), ghe cuoi cung (J11) la loai gi? Tai sao?
-> **Goi y**: Xem doan code `isLastOddCol` trong `SeatService.generateSeats()`.
+### Câu 5: Nếu hàng couple co so cột le (VD: 11 cột), ghế cuối cùng (J11) là loại gì? Tại sao?
+> **Goi y**: Xem đoạn code `isLastOddCol` trong `SeatService.generateSeats()`.
 >
-> **Dap an**: J11 la `STANDARD` (ghe thuong). Vi ghe doi luon di theo cap (1-2, 3-4, ..., 9-10), ghe thu 11 khong co cap -> khong the la COUPLE -> doi ve STANDARD. Nhu vay FE khong bi loi khi render ghe doi.
+> **Dap an**: J11 là `STANDARD` (ghế thường). Vì ghế đôi luon đi theo cấp (1-2, 3-4, ..., 9-10), ghế thu 11 không co cấp -> không the là COUPLE -> đôi về STANDARD. Nhu vay FE không bi loi khi render ghế đôi.
 
-### Cau 6: Tai sao Seat dung `@ManyToOne(fetch = LAZY)` thay vi de mac dinh EAGER?
-> **Goi y**: Tuong tuong list 200 ghe voi EAGER -- JPA se lam gi?
+### Câu 6: Tại sao Seat đúng `@ManyToOne(fetch = LAZY)` thấy vì de mac dinh EAGER?
+> **Goi y**: Tuong tuong list 200 ghế với EAGER -- JPA sẽ làm gì?
 >
-> **Dap an**: Mac dinh cua `@ManyToOne` la EAGER -- JPA se load Room entity moi khi load Seat. Khi list 200 ghe, JPA chay 200 cau `SELECT * FROM rooms WHERE id = ?` (N+1 problem). Voi LAZY, JPA chi chay 1 cau `SELECT * FROM seats WHERE room_id = ?` va KHONG load Room cho den khi goi `seat.getRoom()`.
+> **Dap an**: Mac dinh của `@ManyToOne` là EAGER -- JPA sẽ load Room entity mỗi khi load Seat. Khi list 200 ghế, JPA chay 200 cau `SELECT * FROM rooms WHERE id = ?` (N+1 problem). Voi LAZY, JPA chi chay 1 cau `SELECT * FROM seats WHERE room_id = ?` và KHONG load Room cho đến khi goi `seat.getRoom()`.
 
-### Cau 7: Khi bulk update doi loai ghe (VD: STANDARD -> VIP), neu ghe dang BROKEN thi sao?
-> **Goi y**: Doc phan `bulkUpdateSeats()` trong `SeatService` -- co dong `if (s.getStatus() == SeatStatus.BROKEN)`.
+### Câu 7: Khi bulk update đôi loại ghế (VD: STANDARD -> VIP), nếu ghế đang BROKEN thì sao?
+> **Goi y**: Doc phần `bulkUpdateSeats()` trong `SeatService` -- co đồng `if (s.getStatus() == SeatStatus.BROKEN)`.
 >
-> **Dap an**: Ghe se duoc tu dong khoi phuc thanh AVAILABLE. Logic: admin doi loai ghe = thay ghe moi -> ghe moi khong con hong -> AVAILABLE. Nhung neu admin chi danh dau BROKEN (khong doi loai), thi seatType duoc giu nguyen.
+> **Dap an**: Ghế sẽ được tu đồng khoi phuc thanh AVAILABLE. Logic: admin đôi loại ghế = thấy ghế mới -> ghế mới không con hong -> AVAILABLE. Nhưng nếu admin chi danh đầu BROKEN (không đôi loại), thì seatType được giữ nguyen.
 
 ---
 
-## 11. Tong ket kien truc
+## 11. Tong ket kiến trúc
 
 ```
 +-------------------+          +-------------------+
@@ -1033,9 +1033,90 @@ curl -X POST http://localhost:8088/api/rooms/bulk-delete \
 Quan he: rooms 1 ----> N seats (qua cot room_id)
 ```
 
-### Nguyen tac SOLID da ap dung:
-- **S (Single Responsibility)**: Room module chi quan ly phong. Seat module chi quan ly ghe. Controller chi nhan/tra request. Service chi chua logic.
-- **O (Open/Closed)**: Them filter moi (VD: loc theo so ghe) -> chi them field vao `RoomFilter` va them method vao `RoomSpecification`. KHONG sua `RoomService`.
-- **L (Liskov)**: Room va Seat deu ke thua BaseEntity, chi them field, khong override behavior.
-- **I (Interface Segregation)**: Repository chi co method thuc su duoc goi. `RoomRepository` chi co `existsByName()`. `SeatRepository` chi co `findByRoomId...()` va `softDeleteByRoomId()`.
-- **D (Dependency Inversion)**: Controller chi biet Service (khong biet Repository). SeatService inject `RoomRepository` de doc thong tin phong, nhung KHONG inject `RoomService` -- vi chi can doc du lieu, khong can business logic cua Room.
+### Nguyên tắc SOLID đã ap đúng:
+- **S (Single Responsibility)**: Room module chi quản lý phòng. Seat module chi quản lý ghế. Controller chi nhan/tra request. Service chi chua logic.
+- **O (Open/Closed)**: Them filter mới (VD: loc theo số ghế) -> chi thêm field vào `RoomFilter` và thêm method vào `RoomSpecification`. KHONG sửa `RoomService`.
+- **L (Liskov)**: Room và Seat deu ke thua BaseEntity, chi thêm field, không override behavior.
+- **I (Interface Segregation)**: Repository chi co method thực sự được gọi. `RoomRepository` chi co `existsByName()`. `SeatRepository` chi co `findByRoomId...()` và `softDeleteByRoomId()`.
+- **D (Dependency Inversion)**: Controller chi biết Service (không biết Repository). SeatService inject `RoomRepository` de đọc thong tin phòng, những KHONG inject `RoomService` -- vì chi cần đọc dữ liệu, không cần business logic của Room.
+
+---
+
+## Bổ sung — Phân định scope giữa 06-room và 07-seat
+
+### Vấn đề từ audit
+File 06-room hiện gộp cả nội đúng về Room và Seat. File 07-seat cũng nói lại nhiều phần về Room. **Trùng lặp lớn**, gây khó đọc và maintain.
+
+### Đề xuất scope rõ ràng
+
+| File | Phải có | KHÔNG nên có |
+|---|---|---|
+| `06-room` | Entity Room, CRUD phòng, RoomType (2D/3D/IMAX), validation tên phòng unique, soft delete, list filter theo type/active, restore | Chi tiết generate ghế, ghế đôi, FE drag-paint, color matrix |
+| `07-seat` | Entity Seat, generate seats từ grid layout, SeatType (STANDARD/VIP/COUPLE/BROKEN), bulk operations, FE drag-paint, color synchronization | Tổng quan Room CRUD, RoomType enum |
+
+### Cross-reference giữa 2 file
+Trong `06-room`:
+> Xem chi tiết về Seat management (sinh ghế, ghế đôi, drag-paint editor) ở [`07-seat-explained.md`](07-seat-explained.md).
+
+Trong `07-seat`:
+> Xem chi tiết về Room entity, CRUD phòng và RoomType ở [`06-room-explained.md`](06-room-explained.md).
+
+### Logic chống xóa Room đang có Showtime active
+
+Đây là validation thiếu trong cả 2 file:
+
+```java
+@Transactional
+public void deleteRoom(Long id) {
+    Room room = roomRepository.findById(id)
+        .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
+
+    // Kiểm tra có showtime active (chưa kết thúc) không
+    LocalDateTime now = LocalDateTime.now();
+    boolean hasActiveShowtimes = showtimeRepository.existsByRoomIdAndEndTimeAfterAndStatusNot(
+        id, now, ShowtimeStatus.CANCELLED
+    );
+
+    if (hasActiveShowtimes) {
+        throw new BusinessException(ErrorCode.ROOM_HAS_ACTIVE_SHOWTIMES);
+    }
+
+    // Soft delete room
+    room.setStorageState(StorageState.DELETED);
+
+    // Soft delete tất cả seats của room (cascade thủ công)
+    seatRepository.softDeleteByRoomId(id);
+
+    log.info("Soft deleted room {} and all its seats", room.getName());
+}
+```
+
+### Concurrency: 2 admin cùng generate ghế
+
+Trùng phát hiện ở file 06 và 07. Pattern đúng:
+```java
+@Entity
+public class Room extends BaseEntity {
+    @Version
+    private Long version;  // BaseEntity đã có
+}
+
+@Transactional
+public void generateSeats(Long roomId, SeatGenerationRequest req) {
+    Room room = roomRepository.findById(roomId).orElseThrow();
+    seatRepository.softDeleteByRoomId(roomId);
+    List<Seat> newSeats = buildSeatsFromRequest(req, room);
+    seatRepository.saveAll(newSeats);
+    room.setTotalSeats(newSeats.size());
+    // Hibernate UPDATE room SET total_seats=?, version=version+1
+}
+```
+
+Nếu 2 admin cùng `generateSeats(1)`:
+- Admin A commit trước → version 5 → 6
+- Admin B commit sâu → vẫn dùng version 5 (đọc cũ) → UPDATE WHERE version=5 → 0 row updated → `OptimisticLockException`
+- Admin B nhận lỗi → retry hoặc báo "có người khác đang sửa".
+
+### Cảnh báo về mất dấu tiếng Việt
+
+Phần lớn file này (mục gốc) **MẤT DẤU tiếng Việt** ("Tổng quan", "phòng" thấy vì "phòng", "ghế" thấy vì "ghế"). Vì phạm rule `CLAUDE.md`. Khi rảnh, nên audit lại để khôi phục dấu cho consistent.

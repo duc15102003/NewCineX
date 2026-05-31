@@ -1,4 +1,8 @@
-# 10 lỗi hay gặp khi code CineX + cách fix
+# 30 lỗi hay gặp khi code CineX + cách fix
+
+> Mở rộng từ 10 lỗi gốc. Xem thêm:
+> - [`backend/15-common-pitfalls.md`](backend/15-common-pitfalls.md) — Top 20 bug Spring chi tiết với code reproduce
+> - [`frontend/15-react-pitfalls.md`](frontend/15-react-pitfalls.md) — Top 18 bug React/TS/Tailwind
 
 ## 1. Trả Entity thẳng cho client → LỘ PASSWORD
 
@@ -207,3 +211,323 @@ public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex) {
     return ResponseEntity.status(500).body(ApiResponse.error("Unexpected error"));
 }
 ```
+
+---
+
+## 11. Self-invocation của `@Transactional`/`@Async`
+
+`this.method()` bypass AOP proxy → annotation không activate.
+
+```java
+@Service
+public class PaymentService {
+    public void payAndAudit() {
+        this.audit("...");  // ❌ Không trong transaction
+    }
+
+    @Transactional
+    public void audit(String msg) { ... }
+}
+```
+
+**Fix**: inject self `@Lazy` hoặc tách bean. Chi tiết xem `backend/15-common-pitfalls.md` mục #1.
+
+---
+
+## 12. Quên `@EnableAsync` / `@EnableScheduling` / `@EnableJpaAuditing`
+
+Annotation `@Async`, `@Scheduled`, `@CreatedDate` chỉ activate khi có `@Enable*` ở class config. Quên → annotation bị bỏ qua âm thầm.
+
+```java
+@SpringBootApplication
+@EnableAsync
+@EnableScheduling
+@EnableJpaAuditing  // ← bắt buộc cho audit fields
+public class CineXApplication { ... }
+```
+
+---
+
+## 13. `@OneToMany` / `@ManyToOne` fetch type
+
+`@ManyToOne` mặc định EAGER → mỗi lần load entity, Hibernate JOIN cả relationship → query nặng. `@OneToMany` mặc định LAZY → trở thành N+1 nếu loop access.
+
+```java
+@ManyToOne(fetch = FetchType.LAZY)  // ← override default
+private User user;
+```
+
+**Quy ước**: TẤT CẢ relationship LAZY, fetch khi cần qua `@EntityGraph` hoặc `JOIN FETCH`.
+
+---
+
+## 14. Mock entity với `@Data` Lombok
+
+```java
+@Entity
+@Data  // ❌ nguy hiểm
+public class Movie extends BaseEntity {
+    @ManyToMany private Set<Genre> genres;
+}
+```
+
+3 vấn đề:
+1. `toString()` bidirectional → stack overflow
+2. `equals/hashCode` resolve lazy → N+1
+3. hashCode đổi sau khi id assigned → Set lưu sai
+
+**Fix**: `@Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder` thay `@Data`.
+
+---
+
+## 15. Tailwind dynamic class
+
+```tsx
+<span className={`bg-${color}-500`}>  // ❌ KHÔNG hoạt động
+```
+
+Tailwind scan compile-time bằng regex. `bg-${color}-500` là runtime → CSS không có rule.
+
+**Fix**: map object:
+```tsx
+const COLORS = { red: "bg-red-500", green: "bg-green-500" };
+<span className={COLORS[color]}>
+```
+
+---
+
+## 16. Stale closure trong setInterval/setTimeout
+
+```tsx
+useEffect(() => {
+  setInterval(() => {
+    console.log(count);  // luôn log giá trị cũ
+  }, 1000);
+}, []);  // deps rỗng → capture count = 0 forever
+```
+
+**Fix**: functional setState (`setCount(c => c + 1)`) hoặc `useRef` giữ giá trị mới nhất.
+
+---
+
+## 17. WebSocket connect 2 lần trong React StrictMode
+
+```tsx
+useEffect(() => {
+  const client = createStompClient();
+  client.activate();
+  // ❌ thiếu cleanup → connect 2 lần trong dev → ghost connection
+}, []);
+```
+
+**Fix**:
+```tsx
+useEffect(() => {
+  const client = createStompClient();
+  client.activate();
+  return () => client.deactivate();
+}, []);
+```
+
+---
+
+## 18. Axios refresh token infinite loop
+
+```ts
+api.interceptors.response.use(null, async (err) => {
+  if (err.response?.status === 401) {
+    await api.post("/auth/refresh", {...});  // ❌ Cũng dùng `api`
+    // → /auth/refresh cũng có thể 401 → trigger refresh → infinite loop
+  }
+});
+```
+
+**Fix**: dùng `axios.post` thẳng cho `/auth/refresh`, bypass interceptor.
+
+---
+
+## 19. Mutation success không invalidate query
+
+```tsx
+const mutation = useMutation({
+  mutationFn: (data) => api.post("/movies", data),
+  // ❌ Sau khi tạo thành công, list UI không cập nhật
+});
+```
+
+**Fix**:
+```tsx
+const mutation = useMutation({
+  mutationFn: (data) => api.post("/movies", data),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["movies"] });
+  },
+});
+```
+
+---
+
+## 20. Race condition khi đặt ghế
+
+2 user click cùng ghế A1. Không có lock → cả 2 đều save → 2 booking cùng ghế.
+
+**Fix kết hợp**:
+1. Pessimistic Lock ở Service: `@Lock(PESSIMISTIC_WRITE)` khi check seat
+2. UNIQUE constraint DB: `(showtime_id, seat_id)` WHERE `status IN ('HELD','BOOKED')`
+3. Frontend optimistic UI + revert khi error
+
+---
+
+## 21. Idempotency Payment Callback
+
+MoMo có thể gửi callback 2 lần (network retry). Code SAI:
+```java
+public void handleCallback(...) {
+    payment.setStatus(SUCCESS);
+    booking.setStatus(CONFIRMED);
+    sendEmail();   // ← gửi 2 email!
+}
+```
+
+**Fix**:
+```java
+public void handleCallback(...) {
+    if (payment.getStatus() == SUCCESS) {
+        return;  // ← đã xử lý, skip
+    }
+    payment.setStatus(SUCCESS);
+    ...
+}
+```
+
+---
+
+## 22. JWT lưu localStorage XSS risk
+
+```ts
+localStorage.setItem("accessToken", token);  // ❌ XSS đọc được
+```
+
+**Mitigation**:
+- CSP header
+- KHÔNG `dangerouslySetInnerHTML` cho user input
+- DOMPurify cho rich text
+- React auto-escape JSX
+- HttpOnly cookie thay localStorage (trade-off với CSRF)
+
+---
+
+## 23. Notification không invalidate sau mutation read
+
+```tsx
+const markAsReadMutation = useMutation({
+  mutationFn: (id) => api.patch(`/notifications/${id}/read`),
+  // ❌ Badge count không cập nhật
+});
+```
+
+**Fix**: invalidate cả `notifications` và `unread-count`:
+```ts
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ["notifications"] });
+  queryClient.invalidateQueries({ queryKey: ["unread-count"] });
+}
+```
+
+---
+
+## 24. Quên cleanup WebSocket subscription
+
+```tsx
+useEffect(() => {
+  client.subscribe("/topic/showtime/10/seats", handler);
+  // ❌ Không unsubscribe → leak khi unmount
+}, []);
+```
+
+**Fix**:
+```tsx
+useEffect(() => {
+  const sub = client.subscribe("/topic/showtime/10/seats", handler);
+  return () => sub.unsubscribe();
+}, []);
+```
+
+---
+
+## 25. Trang protected redirect mất context
+
+```tsx
+function ProtectedRoute({ children }) {
+  if (!isAuth) return <Navigate to="/login" />;  // ❌ Mất context "đang từ đâu"
+  return children;
+}
+```
+
+User login xong về `/` thay vì trang gốc.
+
+**Fix**: lưu `state.from`:
+```tsx
+if (!isAuth) return <Navigate to="/login" state={{ from: location }} replace />;
+// LoginPage đọc state.from sau khi login → navigate về đúng trang
+```
+
+---
+
+## 26. Spec query không distinct → duplicate row
+
+```java
+Specification<Movie> spec = (root, query, cb) -> {
+    root.join("genres");  // INNER JOIN → 1 movie có 3 genre → 3 row
+    return cb.equal(...);
+};
+```
+
+**Fix**: `query.distinct(true)` hoặc dùng `EXISTS` subquery thay JOIN.
+
+---
+
+## 27. Index không có cho cột query thường xuyên
+
+Cột `bookings.user_id`, `bookings.showtime_id` không có index → list "vé của tôi" chạy full scan 100k row.
+
+**Fix**: bổ sung index ở Liquibase:
+```xml
+<createIndex tableName="bookings" indexName="idx_bookings_user_created">
+    <column name="user_id"/>
+    <column name="created_at" descending="true"/>
+</createIndex>
+```
+
+---
+
+## 28. Bulk update không có `clearAutomatically`
+
+```java
+@Modifying
+@Query("UPDATE Notification SET isRead = true WHERE userId = :id")
+int markAllAsRead(Long id);
+```
+
+Sau UPDATE bulk, persistent context vẫn giữ entity cũ → query tiếp đọc stale data.
+
+**Fix**: `@Modifying(clearAutomatically = true)`.
+
+---
+
+## 29. Token refresh race condition
+
+5 widget gọi 5 API song song → 5 fail 401 → 5 refresh song song.
+
+**Fix**: failedQueue pattern — chỉ 1 refresh, 4 request đợi token mới rồi retry.
+
+---
+
+## 30. `@Builder` skip BaseEntity fields
+
+```java
+User u = User.builder().id(1L).username("vanan").build();
+// ❌ id() không exist nếu User extends BaseEntity
+```
+
+**Fix**: `@SuperBuilder` cho cả BaseEntity và subclass.

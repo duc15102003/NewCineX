@@ -3,7 +3,7 @@
 ## 1. Tổng quan
 Module Payment xử lý **thanh toán** cho booking — tạo payment, xử lý callback từ cổng thanh toán, xuất vé điện tử.
 
-Giai đoạn đầu dùng **MockPaymentProcessor** (giả lập luôn thành công). Sau có thể thay bằng VNPay/Momo thật mà **không sửa code cũ** (Factory + Strategy pattern).
+CineX dùng **MoMoPaymentProcessor** (sandbox MoMo) cho thanh toán online và **CashPaymentProcessor** cho POS tại quầy. Có thể thêm VNPay/ZaloPay sau mà **không sửa code cũ** nhờ Factory + Strategy pattern.
 
 **3 pattern chính:**
 - **Factory Pattern** — chọn đúng processor theo payment method
@@ -17,14 +17,14 @@ Giai đoạn đầu dùng **MockPaymentProcessor** (giả lập luôn thành cô
 | File | Tác dụng | Design Pattern |
 |---|---|---|
 | `module/payment/entity/Payment.java` | Entity thanh toán, @OneToOne với Booking | BaseEntity, @OneToOne |
-| `module/payment/entity/PaymentMethod.java` | Enum: VNPAY, CASH (sẽ thêm MOMO) | Enum Pattern |
+| `module/payment/entity/PaymentMethod.java` | Enum: VNPAY, MOMO, CASH, TRANSFER (CineX hiện chạy MOMO + CASH; VNPAY/TRANSFER chưa có processor implement) | Enum Pattern |
 | `module/payment/entity/PaymentStatus.java` | Enum: PENDING, COMPLETED, FAILED | Enum Pattern |
 | `module/payment/dto/CreatePaymentRequest.java` | DTO tạo payment (bookingId, paymentMethod) | DTO + Validation |
 | `module/payment/dto/PaymentResponse.java` | DTO trả về payment (id, status, paymentUrl...) | DTO + Builder |
 | `module/payment/dto/TicketResponse.java` | DTO vé điện tử (movie, seats, QR code) | DTO + Builder |
 | `module/payment/processor/PaymentProcessor.java` | Interface chung cho mọi cổng thanh toán | Strategy Pattern (interface) |
-| `module/payment/processor/MockPaymentProcessor.java` | Giả lập VNPay, luôn thành công, dùng cho dev | Strategy (implementation) |
-| `module/payment/processor/CashPaymentProcessor.java` | Thanh toán tiền mặt tại quầy | Strategy (implementation) |
+| `module/payment/processor/MoMoPaymentProcessor.java` | Tích hợp MoMo sandbox: HMAC signing, redirect URL, IPN callback verify | Strategy (implementation) |
+| `module/payment/processor/CashPaymentProcessor.java` | Thanh toán tiền mặt tại quầy (POS), không cần gateway | Strategy (implementation) |
 | `module/payment/processor/PaymentProcessorFactory.java` | Chọn đúng processor theo method | Factory Pattern |
 | `module/payment/repository/PaymentRepository.java` | JPA repository, query theo bookingId / transactionCode | Repository |
 | `module/payment/service/PaymentService.java` | Business logic: createPayment, handleCallback | Service |
@@ -41,24 +41,26 @@ Giai đoạn đầu dùng **MockPaymentProcessor** (giả lập luôn thành cô
 User hold ghế (booking status = HOLDING)
     │
     ▼
-POST /api/payments/create { bookingId: 1, paymentMethod: "VNPAY" }
+POST /api/payments/create { bookingId: 1, paymentMethod: "MOMO" }
     │
     ▼
 PaymentService.createPayment()
     ├── 1. Check booking HOLDING + chưa có payment
-    ├── 2. Factory chọn processor: "VNPAY" → MockPaymentProcessor
+    ├── 2. Factory chọn processor: "MOMO" → MoMoPaymentProcessor
     ├── 3. idTrackerService.nextCodeWithDate("PAYMENT") → "PAY-20260520-001"
     ├── 4. processor.createPayment("PAY-20260520-001", 247500, "CineX Booking CX-...")
-    │       └── Mock: return "http://localhost:8088/api/payments/callback?transactionCode=PAY-20260520-001&status=SUCCESS"
-    ├── 5. INSERT Payment { booking, amount, method=VNPAY, transactionCode, status=PENDING }
-    └── 6. Return PaymentResponse { paymentUrl: "http://..." }
+    │       └── MoMo: gọi API sandbox MoMo → trả về URL https://test-payment.momo.vn/...
+    ├── 5. INSERT Payment { booking, amount, method=MOMO, transactionCode, status=PENDING }
+    └── 6. Return PaymentResponse { paymentUrl: "https://test-payment.momo.vn/..." }
     │
     ▼
 FE redirect user đến paymentUrl
     │
     ▼
-[Mock] User click link → trực tiếp gọi callback URL
-[Thật] VNPay xử lý thanh toán → redirect về callback URL
+User nhập OTP/quét QR MoMo → MoMo xử lý thanh toán
+MoMo gửi 2 callback song song:
+  - IPN (server-to-server): POST /api/payments/momo/ipn (đáng tin, có signature)
+  - Return URL (browser redirect): GET /payment/result?... (chỉ để hiển thị UI)
     │
     ▼
 GET /api/payments/callback?transactionCode=PAY-20260520-001&status=SUCCESS
@@ -96,9 +98,9 @@ Bạn vào Gong Cha gọi: "Trà sữa size L, ít đường, ít đá"
 → Bạn không quan tâm là máy pha nào đang làm
 
 Tương tự:
-User gọi: "Thanh toán bằng VNPAY"
+User gọi: "Thanh toán bằng MOMO"
 → PaymentProcessorFactory nhận
-→ Chọn MockPaymentProcessor (hiện tại) hoặc VNPayProcessor (production)
+→ Chọn MoMoPaymentProcessor
 → PaymentService không quan tâm processor nào đang xử lý
 ```
 
@@ -135,17 +137,17 @@ Khi Spring thấy `Map<String, PaymentProcessor>` trong constructor:
 
 ```
 Spring container:
-  Bean "VNPAY" = MockPaymentProcessor instance
-  Bean "CASH"  = CashPaymentProcessor instance
+  Bean "MOMO" = MoMoPaymentProcessor instance
+  Bean "CASH" = CashPaymentProcessor instance
 
 Map<String, PaymentProcessor> processors = {
-    "VNPAY": MockPaymentProcessor,
-    "CASH":  CashPaymentProcessor
+    "MOMO": MoMoPaymentProcessor,
+    "CASH": CashPaymentProcessor
 }
 
-processors.get("VNPAY") → MockPaymentProcessor
+processors.get("MOMO")  → MoMoPaymentProcessor
 processors.get("CASH")  → CashPaymentProcessor
-processors.get("MOMO")  → null → throw BusinessException
+processors.get("VNPAY") → null → throw BusinessException (chưa implement)
 ```
 
 #### So sánh: if-else vs Factory
@@ -226,9 +228,9 @@ Bạn chọn chiến lược, GPS dùng nó để tính đường.
 Khi bạn đổi chiến lược, GPS không cần viết lại từ đầu.
 
 Tương tự:
-  - MockPaymentProcessor (dev/test)
-  - VNPayPaymentProcessor (production VNPay)
+  - MoMoPaymentProcessor (online qua MoMo sandbox)
   - CashPaymentProcessor (tại quầy)
+  - (Tương lai) VnPayProcessor, ZaloPayProcessor
 → Cùng interface, logic khác nhau, dùng thay thế nhau
 ```
 
@@ -252,27 +254,49 @@ public interface PaymentProcessor {
 
 **Giải thích:** Interface = "hợp đồng" giữa Service và Processor. Service ký hợp đồng "tôi cần createPayment() và verifyCallback()". Processor nào muốn hợp tác phải thực hiện đủ 2 phương thức đó.
 
-#### Implementation 1 — MockPaymentProcessor (dev)
+#### Implementation 1 — MoMoPaymentProcessor (MoMo sandbox)
 
 ```java
-@Component("VNPAY")  // Key trong Map của Factory
+@Component("MOMO")  // Key trong Map của Factory
 @Slf4j
-public class MockPaymentProcessor implements PaymentProcessor {
+@RequiredArgsConstructor
+public class MoMoPaymentProcessor implements PaymentProcessor {
+
+    private final MoMoSigner moMoSigner;
+
+    @Value("${momo.partner-code}")
+    private String partnerCode;
+
+    @Value("${momo.endpoint}")
+    private String endpoint;  // https://test-payment.momo.vn/v2/gateway/api/create
 
     @Override
     public String createPayment(String transactionCode, BigDecimal amount, String description) {
-        // Trả URL giả lập — khi FE gọi URL này sẽ trigger callback với status=SUCCESS
-        String paymentUrl = "http://localhost:8088/api/payments/callback"
-                + "?transactionCode=" + transactionCode
-                + "&status=SUCCESS";
-        log.info("Mock payment created: {} - {} VND - URL: {}", transactionCode, amount, paymentUrl);
-        return paymentUrl;
+        MoMoCreatePaymentRequest req = MoMoCreatePaymentRequest.builder()
+            .partnerCode(partnerCode)
+            .orderId(transactionCode)
+            .amount(amount.longValue())
+            .orderInfo(description)
+            .ipnUrl(ipnUrl)
+            .redirectUrl(redirectUrl)
+            .requestType("captureWallet")
+            .requestId(UUID.randomUUID().toString())
+            .build();
+
+        // HMAC-SHA256 signing
+        String signature = moMoSigner.sign(moMoSigner.buildRawSignature(req));
+        req.setSignature(signature);
+
+        MoMoCreatePaymentResponse resp = moMoClient.post(endpoint, req);
+        log.info("MoMo payment created: {} - {} VND - URL: {}", transactionCode, amount, resp.payUrl());
+        return resp.payUrl();
     }
 
     @Override
     public boolean verifyCallback(Map<String, String> params) {
-        // Mock: luôn thành công nếu status = SUCCESS
-        return "SUCCESS".equals(params.get("status"));
+        // Verify MoMo signature (xem MoMoSigner.verifyCallback chi tiết ở mục 11)
+        return moMoSigner.verifyCallback(MoMoCallbackRequest.fromMap(params))
+            && "0".equals(params.get("resultCode"));  // 0 = success
     }
 }
 ```
@@ -299,13 +323,13 @@ public class CashPaymentProcessor implements PaymentProcessor {
 }
 ```
 
-#### Sẽ thêm VNPay thật — không sửa code cũ
+#### Mở rộng: thêm VNPay sau này — không sửa code cũ
 
 ```java
-// Khi deploy production, thay @Component("VNPAY") Mock → VNPay thật:
-@Component("VNPAY")  // Cùng tên → ghi đè MockPaymentProcessor
+// Tương lai khi tích hợp VNPay, chỉ cần thêm 1 file mới:
+@Component("VNPAY")  // Thêm key mới vào Map
 @Slf4j
-public class VNPayPaymentProcessor implements PaymentProcessor {
+public class VnPayPaymentProcessor implements PaymentProcessor {
 
     @Value("${vnpay.tmn-code}")
     private String tmnCode;
@@ -1102,3 +1126,204 @@ Template Method Pattern:
 
 7. **Nếu VNPay gửi callback 2 lần (điều thường xảy ra), hệ thống xử lý thế nào?**
    → `handleCallback()` kiểm tra `payment.status == PENDING` trước khi xử lý. Lần 2 thấy status đã là `COMPLETED` → throw `INVALID_REQUEST "Payment already processed"`. Booking không bị confirm 2 lần, notification không bị gửi 2 lần.
+
+---
+
+## 11. Bổ sung — MoMo HMAC Signing thực tế
+
+CineX dùng MoMo (không phải VNPay như sơ đồ cũ). Sau đây là code mẫu sign request MoMo production-ready.
+
+```java
+@Component
+@RequiredArgsConstructor
+public class MoMoSigner {
+
+    @Value("${momo.secret-key}")
+    private String secretKey;
+
+    @Value("${momo.partner-code}")
+    private String partnerCode;
+
+    @Value("${momo.access-key}")
+    private String accessKey;
+
+    /**
+     * Build raw signature string theo spec MoMo:
+     * accessKey=...&amount=...&extraData=...&ipnUrl=...&orderId=...
+     *   &orderInfo=...&partnerCode=...&redirectUrl=...&requestId=...&requestType=...
+     */
+    public String buildRawSignature(MoMoCreatePaymentRequest req) {
+        return String.format(
+            "accessKey=%s&amount=%d&extraData=%s&ipnUrl=%s&orderId=%s" +
+            "&orderInfo=%s&partnerCode=%s&redirectUrl=%s&requestId=%s&requestType=%s",
+            accessKey, req.amount(), req.extraData(), req.ipnUrl(), req.orderId(),
+            req.orderInfo(), partnerCode, req.redirectUrl(), req.requestId(), req.requestType()
+        );
+    }
+
+    /**
+     * HMAC-SHA256 hex
+     */
+    public String sign(String rawSignature) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            SecretKeySpec spec = new SecretKeySpec(secretKey.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+            mac.init(spec);
+            byte[] hmacBytes = mac.doFinal(rawSignature.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hmacBytes);
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            throw new RuntimeException("Cannot sign MoMo request", e);
+        }
+    }
+
+    /**
+     * Verify callback signature từ MoMo
+     */
+    public boolean verifyCallback(MoMoCallbackRequest callback) {
+        String raw = String.format(
+            "accessKey=%s&amount=%d&extraData=%s&message=%s&orderId=%s" +
+            "&orderInfo=%s&orderType=%s&partnerCode=%s&payType=%s&requestId=%s" +
+            "&responseTime=%d&resultCode=%d&transId=%d",
+            accessKey, callback.amount(), callback.extraData(), callback.message(),
+            callback.orderId(), callback.orderInfo(), callback.orderType(), partnerCode,
+            callback.payType(), callback.requestId(), callback.responseTime(),
+            callback.resultCode(), callback.transId()
+        );
+        String expectedSignature = sign(raw);
+        return expectedSignature.equals(callback.signature());
+    }
+}
+```
+
+**Quan trọng**:
+- Thứ tự field trong raw signature PHẢI theo spec MoMo (alphabetical).
+- `secret-key` chỉ ở server, KHÔNG BAO GIỜ expose ra FE.
+- Callback PHẢI verify signature trước khi update DB → chống fake callback.
+
+## 12. Bổ sung — Phân biệt IPN vs Return URL
+
+**Return URL** (browser redirect): MoMo redirect browser user về `/payment/result?orderId=...`. Không tin được — hacker có thể fake URL.
+
+**IPN** (Instant Payment Notification): MoMo server-to-server POST tới `/api/payments/momo/ipn` với signature. Đây là kênh đáng tin để update DB.
+
+Cả 2 đến gần như cùng lúc, không guaranteed order:
+```
+User thanh toán xong
+   ↓
+MoMo: 2 callback song song
+   ├─ IPN  → BE /api/payments/momo/ipn   (update DB)
+   └─ Return → Browser /payment/result   (chỉ navigate)
+   ↓
+FE PaymentResultPage:
+   - Poll API /api/bookings/{code}/status mỗi 2s
+   - Chờ IPN đến (max 30s)
+   - Hiển thị success/fail
+```
+
+**Code controller**:
+```java
+@PostMapping("/momo/ipn")
+public ResponseEntity<?> handleMoMoIpn(@RequestBody MoMoCallbackRequest callback) {
+    // 1. Verify signature
+    if (!moMoSigner.verifyCallback(callback)) {
+        log.warn("Invalid MoMo IPN signature for orderId={}", callback.orderId());
+        return ResponseEntity.status(400).body("Invalid signature");
+    }
+
+    // 2. Idempotent
+    Payment payment = paymentRepository.findByExternalOrderId(callback.orderId())
+        .orElseThrow();
+    if (payment.getStatus() == PaymentStatus.SUCCESS) {
+        log.info("Payment {} already processed", callback.orderId());
+        return ResponseEntity.ok().build();
+    }
+
+    // 3. Update
+    if (callback.resultCode() == 0) {  // 0 = success
+        paymentService.completePayment(payment.getId(), callback.transId());
+    } else {
+        paymentService.failPayment(payment.getId(), callback.message());
+    }
+
+    return ResponseEntity.ok().build();
+}
+```
+
+## 13. Bổ sung — Refund Flow
+
+### Schema bổ sung
+```sql
+ALTER TABLE payments ADD refund_amount DECIMAL(15,2);
+ALTER TABLE payments ADD refunded_at DATETIME2;
+ALTER TABLE payments ADD refund_trans_id NVARCHAR(50);
+
+-- PaymentStatus enum bổ sung: REFUNDED
+```
+
+### Service
+```java
+@Transactional
+public void refundPayment(Long paymentId, String reason) {
+    Payment payment = paymentRepository.findById(paymentId)
+        .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+
+    if (payment.getStatus() != PaymentStatus.SUCCESS) {
+        throw new BusinessException(ErrorCode.PAYMENT_NOT_REFUNDABLE);
+    }
+
+    Booking booking = payment.getBooking();
+    long minutesUntilShowtime = ChronoUnit.MINUTES.between(
+        Instant.now(), booking.getShowtime().getStartTime()
+    );
+
+    // Quy ước hoàn tiền theo thời gian
+    BigDecimal refundPercent;
+    if (minutesUntilShowtime >= 120) {       // > 2h: 80%
+        refundPercent = new BigDecimal("0.80");
+    } else if (minutesUntilShowtime >= 60) {  // 1-2h: 50%
+        refundPercent = new BigDecimal("0.50");
+    } else {
+        throw new BusinessException(ErrorCode.TOO_LATE_TO_REFUND);
+    }
+
+    BigDecimal refundAmount = payment.getAmount().multiply(refundPercent);
+
+    // Gọi MoMo refund API
+    MoMoRefundResponse resp = moMoClient.refund(
+        payment.getExternalTransId(), refundAmount.longValue(), reason
+    );
+
+    payment.setStatus(PaymentStatus.REFUNDED);
+    payment.setRefundAmount(refundAmount);
+    payment.setRefundedAt(Instant.now());
+    payment.setRefundTransId(resp.transId());
+
+    booking.setStatus(BookingStatus.CANCELLED);
+
+    // Release seats
+    booking.getBookingSeats().forEach(bs -> bs.setStatus(SeatStatus.AVAILABLE));
+
+    // Decrement voucher usage if any
+    if (booking.getVoucherCode() != null) {
+        voucherService.releaseUsage(booking.getVoucherCode());
+    }
+
+    eventPublisher.publishEvent(new BookingRefundedEvent(booking, refundAmount));
+}
+```
+
+### Endpoint
+```java
+@PostMapping("/{id}/refund")
+@PreAuthorize("hasRole('USER') and @paymentSecurity.isOwner(#id, authentication)")
+public ApiResponse<Void> refund(@PathVariable Long id, @RequestBody RefundRequest req) {
+    paymentService.refundPayment(id, req.reason());
+    return ApiResponse.success(null);
+}
+```
+
+### Error cases
+- Đã CHECKED_IN → 400 `CANNOT_REFUND_CHECKED_IN`
+- Còn < 1h → 400 `TOO_LATE_TO_REFUND`
+- Voucher đã hết hạn → vẫn refund nhưng không trả voucher
+- MoMo refund API fail → rollback transaction, throw `REFUND_FAILED`

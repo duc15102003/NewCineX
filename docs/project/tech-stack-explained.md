@@ -29,16 +29,16 @@
 20. [Biểu đồ — Recharts](#20-biểu-đồ--recharts)
 21. [Xuất báo cáo — jsPDF + SheetJS](#21-xuất-báo-cáo--jspdf--sheetjs)
 22. [POS — Bán hàng tại quầy (SnackOrder)](#22-pos--bán-hàng-tại-quầy-snackorder)
-27. [Thanh toán MoMo Sandbox](#27-thanh-toán-momo-sandbox)
-28. [POS Bán vé tại quầy](#28-pos-bán-vé-tại-quầy)
-29. [Ghế hỏng (BROKEN)](#29-ghế-hỏng-broken)
-30. [Cấu hình động (System Config)](#30-cấu-hình-động-system-config)
-31. [Phim "Đang chiếu" theo suất chiếu thực tế](#31-phim-đang-chiếu-theo-suất-chiếu-thực-tế)
-22. [Voucher — Mã giảm giá](#22-voucher--mã-giảm-giá)
-23. [Containerization — Docker](#23-containerization--docker)
-24. [Testing — JUnit + Testcontainers](#24-testing--junit--testcontainers)
-25. [Design Patterns — Tổng hợp](#25-design-patterns--tổng-hợp)
-26. [Sơ đồ tổng thể](#26-sơ-đồ-tổng-thể)
+23. [Voucher — Mã giảm giá](#23-voucher--mã-giảm-giá)
+24. [Containerization — Docker](#24-containerization--docker)
+25. [Testing — JUnit + Testcontainers](#25-testing--junit--testcontainers)
+26. [Design Patterns — Tổng hợp](#26-design-patterns--tổng-hợp)
+27. [Sơ đồ tổng thể](#27-sơ-đồ-tổng-thể)
+28. [Thanh toán MoMo Sandbox](#28-thanh-toán-momo-sandbox)
+29. [POS Bán vé tại quầy](#29-pos-bán-vé-tại-quầy)
+30. [Ghế hỏng (BROKEN)](#30-ghế-hỏng-broken)
+31. [Cấu hình động (System Config)](#31-cấu-hình-động-system-config)
+32. [Phim "Đang chiếu" theo suất chiếu thực tế](#32-phim-đang-chiếu-theo-suất-chiếu-thực-tế)
 
 ---
 
@@ -1824,7 +1824,7 @@ private List<SnackOrderItem> items = new ArrayList<>();
 
 ---
 
-## 22. Voucher — Mã giảm giá
+## 23. Voucher — Mã giảm giá
 
 ### Voucher là gì?
 
@@ -1985,7 +1985,7 @@ Quy tắc nghiệp vụ:
 
 ---
 
-## 23. Containerization — Docker
+## 24. Containerization — Docker
 
 ### Docker là gì?
 
@@ -2029,7 +2029,7 @@ docker-compose logs backend -f     # Xem log backend
 
 ---
 
-## 24. Testing — JUnit + Testcontainers
+## 25. Testing — JUnit + Testcontainers
 
 ### JUnit 5
 
@@ -2059,7 +2059,7 @@ class BookingServiceTest {
 
 ---
 
-## 25. Design Patterns — Tổng hợp
+## 26. Design Patterns — Tổng hợp
 
 ### Các pattern đã áp dụng trong CineX
 
@@ -2087,7 +2087,7 @@ class BookingServiceTest {
 
 ---
 
-## 26. Sơ đồ tổng thể
+## 27. Sơ đồ tổng thể
 
 ### Luồng đặt vé (end-to-end)
 
@@ -2138,14 +2138,14 @@ User chọn phương thức thanh toán        |
     |                                    |
     v                                    |
 [Frontend] POST /api/payments -----> [PaymentController]
-    { bookingId, method: "VNPAY" }       |
+    { bookingId, method: "MOMO" }        |
                                          v
                                     [PaymentService]
-                                    1. PaymentProcessorFactory.get("VNPAY")  // Factory Pattern
-                                    2. VnPayProcessor.createPayment(...)      // Strategy Pattern
+                                    1. PaymentProcessorFactory.get("MOMO")   // Factory Pattern
+                                    2. MoMoPaymentProcessor.createPayment(...) // Strategy Pattern
                                          |
                                          v
-                                    Redirect -> Trang thanh toán VNPay
+                                    Redirect -> Trang thanh toán MoMo
                                          |
                                          v
                                     Thanh toán thành công
@@ -2248,7 +2248,7 @@ cd /Users/vutuongan/cinex/frontend && npm run dev
 
 ---
 
-## 27. Thanh toán MoMo Sandbox
+## 28. Thanh toán MoMo Sandbox
 
 ### MoMo là gì?
 
@@ -2335,7 +2335,7 @@ PaymentProcessor (interface)
 
 ---
 
-## 28. POS Bán vé tại quầy
+## 29. POS Bán vé tại quầy
 
 ### Bài toán
 
@@ -2388,7 +2388,7 @@ Bán vé thành công → toast mã booking
 
 ---
 
-## 29. Ghế hỏng (BROKEN)
+## 30. Ghế hỏng (BROKEN)
 
 ### Bài toán
 
@@ -2442,7 +2442,7 @@ if (!brokenSeats.isEmpty()) {
 
 ---
 
-## 30. Cấu hình động (System Config)
+## 31. Cấu hình động (System Config)
 
 ### Bài toán
 
@@ -2485,7 +2485,7 @@ Sửa config:
 
 ---
 
-## 31. Phim "Đang chiếu" theo suất chiếu thực tế
+## 32. Phim "Đang chiếu" theo suất chiếu thực tế
 
 ### Cách cũ (sai)
 

@@ -110,7 +110,7 @@ public void markAsRead(Long notificationId, Long currentUserId) {
     |         )
     |     )
     |
-    v (Spring Event Bus — đồng bộ, cùng transaction)
+    v (Spring Event Bus — bất đồng bộ qua @Async, chạy trên thread riêng)
     |
 [PaymentEventListener.handlePaymentCompleted(event)]
     |
@@ -292,12 +292,20 @@ User user = userRepository.getReferenceById(userId);
 notification.setUser(user); // chỉ lưu FK, không cần load toàn bộ User
 ```
 
-### Spring Events là đồng bộ (Synchronous)
-Mặc định, `@EventListener` chạy trong **cùng thread và cùng transaction** với publisher. Nghĩa là:
-- PaymentService commit → EventListener cũng trong transaction đó
-- Nếu EventListener lỗi → transaction rollback luôn (cả payment lẫn notification)
+### Spring Events trong CineX — bất đồng bộ qua @Async
 
-Nếu muốn bất đồng bộ (async): dùng `@Async @EventListener` — nhưng cần cẩn thận về error handling.
+**Mặc định Spring**, `@EventListener` chạy **đồng bộ** trong cùng thread và cùng transaction với publisher → nếu listener lỗi thì transaction rollback luôn (cả payment).
+
+**Trong CineX**, `PaymentEventListener.handlePaymentCompleted()` được đánh dấu `@Async @EventListener` (xem `payment/listener/PaymentEventListener.java:39-40`). Hệ quả:
+
+- PaymentService publish event → **return ngay** (không chờ listener).
+- Listener chạy trên **thread riêng** lấy từ pool của `TaskExecutor`.
+- Listener gửi email (chậm) hoặc tạo notification → **không block response** trả về client.
+- Nếu listener lỗi (vd SMTP timeout) → **payment vẫn thành công**, transaction payment đã commit từ trước.
+
+**Điều kiện để @Async hoạt động:** class `CineXApplication` phải có `@EnableAsync` — nếu thiếu, annotation `@Async` bị bỏ qua âm thầm, listener lại chạy đồng bộ.
+
+**Cảnh báo race condition:** vì `@Async` chạy trên thread khác, listener có thể chạy **trước khi** transaction của PaymentService commit xong → query DB thấy data cũ. Nếu cần đợi commit trước, đổi sang `@TransactionalEventListener(phase = AFTER_COMMIT)` thay cho `@EventListener` thường (chi tiết xem [10-payment-explained.md](10-payment-explained.md) mục @Async).
 
 ### Bulk update (markAllAsRead)
 ```java
@@ -463,4 +471,4 @@ curl -X PUT http://localhost:8088/api/notifications/read-all \
 2. **createNotification là internal API — sao không có endpoint?** → Notification do hệ thống tự tạo (khi payment completed, booking confirmed), không phải user tự gửi thông báo cho mình.
 3. **NotificationType dùng static String thay vì enum vì sao?** → Linh hoạt hơn: thêm type mới không cần sửa enum class và không cần migration DB. Enum thích hợp khi giá trị fixed và ít thay đổi.
 4. **Tại sao không trả 404 khi user cố đọc notification của người khác?** → Trả 403 FORBIDDEN thay vì 404 NOT_FOUND. Lý do: 404 vô tình "leak" thông tin — user biết ID đó có tồn tại. 403 an toàn hơn: chỉ báo "không có quyền" mà không tiết lộ gì thêm.
-5. **Spring Event chạy đồng bộ hay bất đồng bộ mặc định? Hệ quả là gì?** → Đồng bộ — cùng thread và transaction với PaymentService. Nếu createNotification lỗi → toàn bộ transaction (bao gồm cả payment) bị rollback. Dùng @Async @EventListener nếu muốn notification lỗi không ảnh hưởng payment.
+5. **Spring Event mặc định chạy đồng bộ hay bất đồng bộ? CineX dùng cách nào?** → Mặc định Spring là **đồng bộ** — listener cùng thread, cùng transaction với publisher; listener lỗi sẽ rollback luôn payment. Riêng CineX đánh dấu `PaymentEventListener.handlePaymentCompleted` bằng `@Async @EventListener` để chạy **bất đồng bộ trên thread riêng** — gửi email/notification thất bại không ảnh hưởng payment. Điều kiện: class main phải có `@EnableAsync`, nếu không `@Async` bị bỏ qua âm thầm và lại chạy đồng bộ.

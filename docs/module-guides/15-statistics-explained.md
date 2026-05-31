@@ -843,3 +843,106 @@ curl -X GET "http://localhost:8088/api/statistics/top-movies?limit=5" \
 
 8. **Trong hàm exportExcel, tại sao cần `ws['!merges']`?**
    *Gợi ý: Merge cells để tiêu đề và section label trải dài toàn bộ cột, không bị cắt nhỏ*
+
+---
+
+## 11. Bổ sung — Cache với Redis
+
+Statistics query đắt (aggregate nhiều bảng) → cache 5-15 phút giảm tải DB.
+
+```java
+@Service
+@RequiredArgsConstructor
+public class StatisticsService {
+    private final RedisTemplate<String, String> redisTemplate;
+    private final ObjectMapper mapper;
+    private final StatisticsRepository repository;
+
+    private static final Duration TTL = Duration.ofMinutes(10);
+
+    public OverviewResponse getOverview(LocalDate from, LocalDate to) {
+        String key = String.format("stats:overview:%s:%s", from, to);
+        String cached = redisTemplate.opsForValue().get(key);
+
+        if (cached != null) {
+            return readValue(cached, OverviewResponse.class);
+        }
+
+        OverviewResponse result = computeOverview(from, to);
+        redisTemplate.opsForValue().set(key, writeValue(result), TTL);
+        return result;
+    }
+}
+```
+
+Cache miss penalty 1 lần, hit nhanh các lần sau.
+
+## 12. Bổ sung — Index khuyến nghị cho query thống kê
+
+```sql
+-- Booking by date range + status (revenue, count)
+CREATE INDEX idx_bookings_status_created
+ON bookings (status, created_at DESC)
+WHERE status IN ('CONFIRMED', 'CHECKED_IN');
+
+-- Payment by status + paid_at (revenue)
+CREATE INDEX idx_payments_status_paid
+ON payments (status, paid_at DESC)
+WHERE status = 'SUCCESS';
+
+-- BookingSeat by status + booking_id (occupancy)
+CREATE INDEX idx_booking_seats_booking_status
+ON booking_seats (booking_id, status);
+
+-- Movie ratings (top movies)
+CREATE INDEX idx_movies_rating
+ON movies (average_rating DESC, review_count DESC)
+WHERE storage_state = 'ACTIVE';
+
+-- Showtime by date (occupancy theo phòng/ngày)
+CREATE INDEX idx_showtimes_room_date
+ON showtimes (room_id, start_time);
+```
+
+## 13. Bổ sung — Endpoint top-snacks + occupancy SQL
+
+### Top snacks
+```sql
+SELECT
+    s.id, s.name, s.image_url,
+    SUM(bs.quantity) AS total_sold,
+    SUM(bs.quantity * bs.price) AS revenue
+FROM booking_snacks bs
+JOIN snacks s ON bs.snack_id = s.id
+JOIN bookings b ON bs.booking_id = b.id
+WHERE b.status IN ('CONFIRMED', 'CHECKED_IN')
+  AND b.created_at BETWEEN :from AND :to
+GROUP BY s.id, s.name, s.image_url
+ORDER BY total_sold DESC
+OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY;
+```
+
+### Occupancy rate
+```sql
+SELECT
+    r.id, r.name AS room_name,
+    COUNT(DISTINCT st.id) AS total_showtimes,
+    SUM(seat_counts.total_seats) AS total_capacity,
+    SUM(booked_counts.booked_seats) AS total_booked,
+    CAST(SUM(booked_counts.booked_seats) AS FLOAT)
+        / NULLIF(SUM(seat_counts.total_seats), 0) AS occupancy_rate
+FROM rooms r
+JOIN showtimes st ON st.room_id = r.id
+CROSS APPLY (
+    SELECT COUNT(*) AS total_seats FROM seats WHERE room_id = r.id
+) seat_counts
+CROSS APPLY (
+    SELECT COUNT(*) AS booked_seats
+    FROM booking_seats bs
+    JOIN bookings b ON bs.booking_id = b.id
+    WHERE b.showtime_id = st.id AND bs.status IN ('BOOKED', 'CHECKED_IN')
+) booked_counts
+WHERE st.start_time BETWEEN :from AND :to
+GROUP BY r.id, r.name
+ORDER BY occupancy_rate DESC;
+```

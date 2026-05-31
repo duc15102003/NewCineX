@@ -497,7 +497,7 @@ public ApiResponse<MovieResponse> createMovie(@Valid @RequestBody MovieRequest r
 
 **Áp dụng trong CineX — Thanh toán:**
 
-Hiện tại CineX hỗ trợ: VNPay, MoMo, Tiền mặt. Muốn thêm ZaloPay:
+Hiện tại CineX hỗ trợ: MoMo, Tiền mặt (CASH), Chuyển khoản (TRANSFER). Muốn thêm VNPay/ZaloPay:
 
 ```java
 // ĐÚNG: Tạo class mới, KHÔNG sửa code cũ
@@ -514,10 +514,10 @@ public class ZaloPayPaymentProcessor implements PaymentProcessor {
 ```
 
 ```java
-// SAI: Thêm ZaloPay bằng cách sửa code cũ (if-else)
+// SAI: Thêm cổng mới bằng cách sửa code cũ (if-else)
 public String createPayment(PaymentMethod method, ...) {
-    if (method == VNPAY) { ... }
-    else if (method == MOMO) { ... }
+    if (method == MOMO) { ... }
+    else if (method == CASH) { ... }
     else if (method == ZALOPAY) { ... }   // Sửa code cũ mỗi lần thêm → dễ bug
 }
 ```
@@ -532,7 +532,7 @@ public String createPayment(PaymentMethod method, ...) {
 
 - `Movie extends BaseEntity`: Movie thêm field `title`, `duration`, ... nhưng KHÔNG override `getId()`, `getStorageState()`, ... Mọi code dùng `BaseEntity` đều hoạt động đúng với `Movie`.
 
-- `PaymentProcessor` interface: `VNPayProcessor`, `MoMoProcessor`, `CashProcessor` — tất cả đều implement `createPayment()` và `verifyCallback()`. `PaymentService` gọi `processor.createPayment(...)` mà không cần biết đang dùng cổng nào.
+- `PaymentProcessor` interface: `MoMoPaymentProcessor`, `CashPaymentProcessor` (và tương lai có thể thêm `VnPayProcessor`, `ZaloPayProcessor`) — tất cả đều implement `createPayment()` và `verifyCallback()`. `PaymentService` gọi `processor.createPayment(...)` mà không cần biết đang dùng cổng nào.
 
 ### 3.4. I — Interface Segregation (Tách interface nhỏ)
 
@@ -823,7 +823,7 @@ Bất kỳ Service nào cần biết user hiện tại → inject `SecurityServi
 | # | Pattern | Giải thích | File áp dụng |
 |---|---|---|---|
 | 1 | **Builder** | Tạo object phức tạp bằng cách gọi `.field1().field2().build()` thay vì constructor 10 tham số. Lombok `@Builder` tự sinh code. | `ApiResponse.java`, `Movie.java`, `User.java` |
-| 2 | **Factory** | `PaymentProcessorFactory` nhận `PaymentMethod` (VNPAY/MOMO/CASH) → trả đúng processor tương ứng. Spring tự inject Map<String, PaymentProcessor>. | `payment/processor/PaymentProcessorFactory.java` |
+| 2 | **Factory** | `PaymentProcessorFactory` nhận `PaymentMethod` (MOMO/CASH) → trả đúng processor tương ứng. Spring tự inject Map<String, PaymentProcessor>. | `payment/processor/PaymentProcessorFactory.java` |
 | 3 | **Singleton** | Mỗi Spring Bean mặc định là singleton — chỉ có 1 instance duy nhất trong toàn app. `MovieService`, `MovieRepository`, ... đều là singleton. | Tất cả `@Service`, `@Component`, `@Repository` |
 
 ### Nhóm Structural (Cấu trúc)
@@ -954,19 +954,19 @@ public interface MovieMapper {
 
 ```java
 public String processPayment(String method, BigDecimal amount) {
-    if (method.equals("VNPAY")) {
-        // 50 dòng code VNPay...
-    } else if (method.equals("MOMO")) {
+    if (method.equals("MOMO")) {
         // 50 dòng code MoMo...
     } else if (method.equals("CASH")) {
         // 30 dòng code Cash...
+    } else if (method.equals("VNPAY")) {
+        // 50 dòng code VNPay...
     }
     // Thêm ZaloPay → sửa file này → 200 dòng → 1 file khổng lồ
-    // Ai đó sửa MoMo → có thể vô tình ảnh hưởng VNPay (cùng file)
+    // Ai đó sửa MoMo → có thể vô tình ảnh hưởng Cash (cùng file)
 }
 ```
 
-**SAU — Strategy + Factory pattern:**
+**SAU — Strategy + Factory pattern (CineX đang dùng):**
 
 ```java
 // Interface (PaymentProcessor.java) — 2 method, clean
@@ -976,16 +976,16 @@ public interface PaymentProcessor {
 }
 
 // Mỗi cổng = 1 file riêng, không ảnh hưởng nhau
-@Component("VNPAY")  public class VNPayProcessor implements PaymentProcessor { ... }
-@Component("MOMO")   public class MoMoProcessor implements PaymentProcessor { ... }
-@Component("CASH")   public class CashProcessor implements PaymentProcessor { ... }
+@Component("MOMO") public class MoMoPaymentProcessor implements PaymentProcessor { ... }
+@Component("CASH") public class CashPaymentProcessor implements PaymentProcessor { ... }
+// Tương lai: @Component("VNPAY") public class VnPayProcessor implements PaymentProcessor { ... }
 
 // Factory tự tìm đúng processor
 @Component
 public class PaymentProcessorFactory {
     private final Map<String, PaymentProcessor> processors;  // Spring inject tự động
     public PaymentProcessor getProcessor(PaymentMethod method) {
-        return processors.get(method.name());                 // VNPAY → VNPayProcessor
+        return processors.get(method.name());                 // MOMO → MoMoPaymentProcessor
     }
 }
 
@@ -993,7 +993,7 @@ public class PaymentProcessorFactory {
 PaymentProcessor processor = factory.getProcessor(paymentMethod);
 String url = processor.createPayment(code, amount, desc);
 
-// Thêm ZaloPay → tạo 1 file mới ZaloPayProcessor.java → DONE, KHÔNG sửa code cũ
+// Thêm VNPay/ZaloPay → tạo 1 file mới VnPayProcessor.java → DONE, KHÔNG sửa code cũ
 ```
 
 ---
@@ -1050,45 +1050,45 @@ frontend/src/
 
 | | `ddl-auto=update` | Liquibase |
 |---|---|---|
-| Tự tạo bảng | Co, nhung co the xoa cot, mat data | Co, qua changelog XML ro rang |
-| Track lich su | Khong | Co (bang `DATABASECHANGELOG`) |
-| Rollback | Khong | Co |
-| Team nhieu dev | De conflict | Moi dev tao file changelog rieng |
-| Production | **KHONG AN TOAN** | An toan, kiem soat duoc |
+| Tự tạo bảng | Có, nhưng có thể xóa cột, mất data | Có, qua changelog XML rõ ràng |
+| Theo dõi lịch sử | Không | Có (bảng `DATABASECHANGELOG`) |
+| Rollback | Không | Có |
+| Team nhiều dev | Dễ conflict | Mỗi dev tạo file changelog riêng |
+| Production | **KHÔNG AN TOÀN** | An toàn, kiểm soát được |
 
-### Cach hoat dong
+### Cách hoạt động
 
-1. Khi Backend start → Liquibase doc `db.changelog-master.xml`
-2. So sanh voi bang `DATABASECHANGELOG` trong DB (da chay nhung changeset nao?)
-3. Chay cac changeset **chua chay** → tao/sua bang
-4. Ghi lai vao `DATABASECHANGELOG`
+1. Khi Backend start → Liquibase đọc `db.changelog-master.xml`
+2. So sánh với bảng `DATABASECHANGELOG` trong DB (đã chạy những changeset nào?)
+3. Chạy các changeset **chưa chạy** → tạo/sửa bảng
+4. Ghi lại vào `DATABASECHANGELOG`
 
-### Them bang moi
+### Thêm bảng mới
 
-1. Tao file `db/changelog/changes/002-create-xxx-table.xml`
-2. Them dong `<include file="...002..."/>` vao `db.changelog-master.xml`
-3. Restart Backend → Liquibase tu chay
+1. Tạo file `db/changelog/changes/002-create-xxx-table.xml`
+2. Thêm dòng `<include file="...002..."/>` vào `db.changelog-master.xml`
+3. Restart Backend → Liquibase tự chạy
 
 ---
 
-## 10. Authentication Flow (Luong xac thuc)
+## 10. Authentication Flow (Luồng xác thực)
 
-### Dang nhap
+### Đăng nhập
 
 ```
 Client                          Backend
   |                                |
   +-- POST /api/auth/login ------->|
   |   { username, password }       |
-  |                                +-- Tim user trong DB
+  |                                +-- Tìm user trong DB
   |                                +-- BCrypt.matches(password, hash)
-  |                                +-- Neu dung -> JwtUtil.generateToken(username)
+  |                                +-- Nếu đúng -> JwtUtil.generateToken(username)
   |<--- { token: "eyJ..." } ------+
   |                                |
-  +-- Luu token vao localStorage   |
+  +-- Lưu token vào localStorage   |
 ```
 
-### Goi API co xac thuc
+### Gọi API có xác thực
 
 ```
 Client                          Backend
@@ -1096,42 +1096,42 @@ Client                          Backend
   +-- GET /api/movies ------------>|  Header: Authorization: Bearer eyJ...
   |                                |
   |                                +-- JwtAuthFilter:
-  |                                |   1. Lay token tu header "Authorization"
+  |                                |   1. Lấy token từ header "Authorization"
   |                                |   2. jwtUtil.extractUsername(token)
   |                                |   3. userDetailsService.loadByUsername(username)
   |                                |   4. jwtUtil.isTokenValid(token, username)
-  |                                |   5. Set SecurityContext (da xac thuc)
+  |                                |   5. Set SecurityContext (đã xác thực)
   |                                |
-  |                                +-- Controller xu ly request binh thuong
+  |                                +-- Controller xử lý request bình thường
   |<--- { success: true, data } ---+
 ```
 
-**JWT (JSON Web Token) la gi?**
-Tuong tuong JWT nhu the can cuoc cong dan: khi ban vao toa nha, bao ve kiem tra the → xac dinh ban la ai, co quyen vao khong. The nay do cong an cap (server tao token), bao ve chi kiem tra (verify), khong can goi dien hoi cong an moi lan.
+**JWT (JSON Web Token) là gì?**
+Tưởng tượng JWT như thẻ căn cước công dân: khi bạn vào tòa nhà, bảo vệ kiểm tra thẻ → xác định bạn là ai, có quyền vào không. Thẻ này do công an cấp (server tạo token), bảo vệ chỉ kiểm tra (verify), không cần gọi điện hỏi công an mỗi lần.
 
 ---
 
-## 11. Cau hoi tu kiem tra
+## 11. Câu hỏi tự kiểm tra
 
-Sau khi doc xong tai lieu, hay tu tra loi cac cau hoi sau:
+Sau khi đọc xong tài liệu, hãy tự trả lời các câu hỏi sau:
 
-1. **Controller co nen goi Repository truc tiep khong? Tai sao?**
-   → Khong. Vi bo qua Service = bo qua business logic (validation, authorization, ...).
+1. **Controller có nên gọi Repository trực tiếp không? Tại sao?**
+   → Không. Vì bỏ qua Service = bỏ qua business logic (validation, authorization, ...).
 
-2. **Neu bo `@Transactional` khoi method `createBooking()` (hold 3 ghe), ghe thu 3 loi thi dieu gi xay ra?**
-   → 2 ghe dau da luu vao DB, ghe thu 3 loi → data khong nhat quan. Voi `@Transactional` → ca 3 rollback.
+2. **Nếu bỏ `@Transactional` khỏi method `createBooking()` (hold 3 ghế), ghế thứ 3 lỗi thì điều gì xảy ra?**
+   → 2 ghế đầu đã lưu vào DB, ghế thứ 3 lỗi → data không nhất quán. Với `@Transactional` → cả 3 rollback.
 
-3. **Tai sao dung `ApiResponse<T>` boc moi response thay vi tra entity thang?**
-   → (1) Format thong nhat cho FE, (2) Khong lo field nhay cam (password, ...), (3) Them metadata (success, message, timestamp).
+3. **Tại sao dùng `ApiResponse<T>` bọc mọi response thay vì trả entity thẳng?**
+   → (1) Format thống nhất cho FE, (2) Không lộ field nhạy cảm (password, ...), (3) Thêm metadata (success, message, timestamp).
 
-4. **Them cong thanh toan ZaloPay can sua nhung file nao?**
-   → Chi tao 1 file moi `ZaloPayPaymentProcessor.java` implement `PaymentProcessor`. KHONG sua bat ky file nao khac (Open/Closed Principle).
+4. **Thêm cổng thanh toán ZaloPay cần sửa những file nào?**
+   → Chỉ tạo 1 file mới `ZaloPayPaymentProcessor.java` implement `PaymentProcessor`. KHÔNG sửa bất kỳ file nào khác (Open/Closed Principle).
 
-5. **Tai sao CineX to chuc code theo module/ (Package by Feature) thay vi controller/, service/ (Package by Layer)?**
-   → Khi sua tinh nang "Phim" → moi file lien quan nam trong `module/movie/` → de tim, de sua. Package by Layer phai nhay qua 4-5 folder khac nhau.
+5. **Tại sao CineX tổ chức code theo module/ (Package by Feature) thay vì controller/, service/ (Package by Layer)?**
+   → Khi sửa tính năng "Phim" → mọi file liên quan nằm trong `module/movie/` → dễ tìm, dễ sửa. Package by Layer phải nhảy qua 4-5 folder khác nhau.
 
-6. **`@Version` trong BaseEntity dung de lam gi?**
-   → Optimistic Locking: khi 2 admin cung sua 1 phim, nguoi save sau se bi loi (version khong khop) thay vi ghi de mat data cua nguoi save truoc.
+6. **`@Version` trong BaseEntity dùng để làm gì?**
+   → Optimistic Locking: khi 2 admin cùng sửa 1 phim, người save sau sẽ bị lỗi (version không khớp) thay vì ghi đè mất data của người save trước.
 
-7. **Tai sao `BookingCleanupScheduler` can thiet? Neu khong co thi sao?**
-   → Ghe se bi "hold" vinh vien: user chon ghe nhung khong thanh toan → ghe bi khoa → khong ai dat duoc → mat doanh thu.
+7. **Tại sao `BookingCleanupScheduler` cần thiết? Nếu không có thì sao?**
+   → Ghế sẽ bị "hold" vĩnh viễn: user chọn ghế nhưng không thanh toán → ghế bị khóa → không ai đặt được → mất doanh thu.

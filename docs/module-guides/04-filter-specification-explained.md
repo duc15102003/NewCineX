@@ -1,27 +1,27 @@
-# Filter DTO + Specification Pattern -- Giai thich chi tiet cho nguoi moi
+# Filter DTO + Specification Pattern -- Giải thích chi tiết cho người mới
 
 ---
 
-## 1. Tong quan: Bai toan tim kiem dong
+## 1. Tổng quan: Bài toán tìm kiếm đồng
 
-### Van de thuc te
+### Vấn đề thực tế
 
-Hinh dung ban vao trang admin cua rap phim CineX. Ban can tim phim:
+Hinh đúng bạn vào trang admin của rap phim CineX. Bạn cần tìm phim:
 - Theo **tu khoa** ("Avengers")
-- Theo **trang thai** (dang chieu / sap chieu)
-- Theo **the loai** (hanh dong / tinh cam)
-- Theo **dang co suat chieu** hay khong
-- Hoac **ket hop** nhieu dieu kien cung luc
+- Theo **trạng thái** (đang chiếu / sắp chiếu)
+- Theo **the loại** (hanh đồng / tinh cam)
+- Theo **đang có suất chiếu** hay không
+- Hoặc **ket hop** nhieu dieu kien cùng luc
 
-FE gui request kieu nay:
+FE gui request kiểu này:
 
 ```
 GET /api/movies?keyword=Avengers&status=NOW_SHOWING&genreId=1&page=0&size=20
 ```
 
-Cau hoi: Backend viet code the nao de xu ly **tat ca to hop filter**?
+Câu hỏi: Backend viet code thế nào de xử lý **tất cả tổ hợp filter**?
 
-### Cach SAI: Viet if-else hoac nhieu method trong Repository
+### Cách SAI: Viet if-else hoặc nhieu method trong Repository
 
 ```java
 // SAI -- Moi to hop filter = 1 method rieng
@@ -32,11 +32,11 @@ Page<Movie> findByTitleContainingAndStatusAndGenresId(String title, MovieStatus 
 // ... con nhieu nua!
 ```
 
-Neu co **N** filter, so method can viet la **2^N** (moi filter co the co hoac khong). Voi 5 filter, ban can 2^5 = **32 method**! Them 1 filter moi = so method **nhan doi**.
+Nếu co **N** filter, so method cần viet là **2^N** (mỗi filter có the co hoặc không). Voi 5 filter, bạn cần 2^5 = **32 method**! Them 1 filter mới = so method **nhan đôi**.
 
-### Cach DUNG: Specification Pattern
+### Cách ĐÚNG: Specification Pattern
 
-Specification Pattern cho phep ban **ghep cac dieu kien WHERE dong**, tuy vao filter nao co gia tri. Chi can **1 method duy nhat** `findAll(spec, pageable)`.
+Specification Pattern cho phep bạn **ghép các dieu kien WHERE đồng**, tuy vào filter nào co giá trị. Chi cần **1 method duy nhất** `findAll(spec, pageable)`.
 
 ```
 FE gui query params --> Spring bind vao Filter DTO --> Specification.fromFilter() --> findAll(spec, pageable)
@@ -44,18 +44,18 @@ FE gui query params --> Spring bind vao Filter DTO --> Specification.fromFilter(
 
 ---
 
-## 2. Specification Pattern la gi?
+## 2. Specification Pattern là gì?
 
-### Vi du doi thuong: Loc san pham tren Shopee
+### Ví dụ đời thường: Lọc sản phẩm trên Shopee
 
-Khi ban vao Shopee tim mua dien thoai:
-1. Go "iPhone" vao o tim kiem --> **keyword**
-2. Chon muc gia "5-10 trieu" --> **price range**
+Khi bạn vào Shopee tìm mua dien thoai:
+1. Go "iPhone" vào o tìm kiếm --> **keyword**
+2. Chon mục giá "5-10 trieu" --> **price range**
 3. Chon thuong hieu "Apple" --> **brand**
-4. Chon "4 sao tro len" --> **rating**
+4. Chon "4 sao tro lên" --> **rating**
 5. Tick "Mien phi van chuyen" --> **free shipping**
 
-Shopee khong viet 32 ham khac nhau cho 5 bo loc nay. Ho **ghep tung dieu kien** lai voi nhau:
+Shopee không viet 32 ham khác nhau cho 5 bộ loc này. Ho **ghép tung dieu kien** lai với nhau:
 
 ```
 SELECT * FROM products
@@ -66,30 +66,30 @@ WHERE name LIKE '%iPhone%'           -- keyword (co)
   AND free_shipping = true           -- free shipping (co)
 ```
 
-Neu ban bo tick "Mien phi van chuyen", dong cuoi bien mat. Neu ban khong chon thuong hieu, dong `brand = 'Apple'` bien mat. **Moi bo loc la 1 khoi doc lap, ghep vao hoac bo ra tuy y.**
+Nếu bạn bộ tick "Mien phi van chuyen", đồng cuối bien mat. Nếu bạn không chon thuong hieu, đồng `brand = 'Apple'` bien mat. **Mới bộ loc là 1 khoi đọc lap, ghép vào hoặc bộ ra tuy y.**
 
-Specification Pattern trong Spring lam chinh xac dieu nay: **moi bo loc la 1 method nho**, ghep lai bang `.and()`.
+Specification Pattern trong Spring làm chính xác dieu này: **mới bộ loc là 1 method nhỏ**, ghép lai bảng `.and()`.
 
-### Dinh nghia chinh thuc
+### Định nghĩa chính thức
 
-> **Specification Pattern** (thuoc nhom Behavioral): Tach rieng tung dieu kien truy van thanh cac doi tuong (Specification) doc lap. Cac doi tuong nay co the **to hop** (AND, OR, NOT) de tao truy van phuc tap, ma **khong can sua code cu**.
+> **Specification Pattern** (thuoc nhom Behavioral): Tach rieng tung dieu kien truy vấn thanh các đối tượng (Specification) đọc lap. Cac đối tượng này co the **to hop** (AND, OR, NOT) de tạo truy vấn phức tạp, ma **không cần sửa code cũ**.
 
-Trong Spring Data JPA, interface `Specification<T>` co 1 method duy nhat:
+Trong Spring Data JPA, interface `Specification<T>` co 1 method duy nhất:
 
 ```java
 Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb);
 ```
 
-Ba tham so nay la gi?
-- **`root`**: Dai dien cho bang (entity) dang query. `root.get("title")` = cot `title` trong bang `movies`.
-- **`query`**: Doi tuong CriteriaQuery, dung khi can subquery, distinct, group by.
-- **`cb`** (CriteriaBuilder): Nha may tao dieu kien. `cb.equal()` = `=`, `cb.like()` = `LIKE`, `cb.or()` = `OR`, v.v.
+Ba tham so này là gì?
+- **`root`**: Dai dien cho bảng (entity) đang query. `root.get("title")` = cột `title` trong bảng `movies`.
+- **`query`**: Doi tuong CriteriaQuery, đúng khi cần subquery, distinct, group by.
+- **`cb`** (CriteriaBuilder): Nha may tạo dieu kien. `cb.equal()` = `=`, `cb.like()` = `LIKE`, `cb.or()` = `OR`, v.v.
 
 ---
 
-## 3. So sanh TRUOC va SAU khi dung Specification
+## 3. So sánh TRƯỚC và SAU khi dùng Specification
 
-### TRUOC: 2^N method trong Repository (KHONG DUNG)
+### TRƯỚC: 2^N method trong Repository (KHÔNG DÙNG)
 
 ```java
 // MovieRepository.java -- KHONG DUNG!
@@ -127,11 +127,11 @@ public Page<Movie> list(String keyword, MovieStatus status, Long genreId, ...) {
 ```
 
 **Van de:**
-- Them 1 filter moi (VD: `language`) --> so method **nhan doi** (32 thanh 64)
-- If-else trong Service phinh to khong kiem soat
+- Them 1 filter mới (VD: `language`) --> so method **nhan đôi** (32 thanh 64)
+- If-else trong Service phinh to không kiem soat
 - De copy-paste sai, kho maintain
 
-### SAU: 1 method + Specification (DUNG)
+### SAU: 1 method + Specification (ĐÚNG)
 
 ```java
 // MovieRepository.java -- Chi 1 dong!
@@ -149,15 +149,15 @@ public PageResponse<MovieListResponse> listMovies(MovieFilter filter, Pageable p
 }
 ```
 
-**Them 1 filter moi (`language`)**: chi them 1 field vao DTO + 1 method + 1 dong if. **Repository, Service, Controller khong sua gi.**
+**Them 1 filter mới (`language`)**: chi thêm 1 field vào DTO + 1 method + 1 đồng if. **Repository, Service, Controller không sửa gì.**
 
 ---
 
-## 4. Cach viet Specification tung buoc
+## 4. Cách viết Specification từng bước
 
-Lay `MovieSpecification` lam vi du. File: `backend/src/main/java/com/cinex/module/movie/specification/MovieSpecification.java`
+Lay `MovieSpecification` làm ví dụ. File: `backend/src/main/java/com/cinex/module/movie/specification/MovieSpecification.java`
 
-### Buoc 1: Tao class utility voi constructor private
+### Bước 1: Tạo class utility với constructor private
 
 ```java
 public class MovieSpecification {
@@ -167,13 +167,13 @@ public class MovieSpecification {
 }
 ```
 
-**Tai sao constructor private?** Vi class nay chi chua cac method static (cong cu), khong can tao doi tuong. Giong nhu lop `Math` trong Java: ban goi `Math.abs()` chu khong bao gio `new Math()`.
+**Tại sao constructor private?** Vì class này chi chua các method static (công cụ), không cần tạo đối tượng. Giong như lop `Math` trong Java: bạn goi `Math.abs()` chu không bao giờ `new Math()`.
 
-### Buoc 2: Viet tung method filter nho
+### Bước 2: Viết từng method filter nhỏ
 
-Moi method tra ve `Specification<Movie>` -- mot doi tuong bieu dien **1 dieu kien WHERE**.
+Mới method trả về `Specification<Movie>` -- một đối tượng bieu dien **1 dieu kien WHERE**.
 
-#### hasTitle() -- Tim theo tu khoa
+#### hasTitle() -- Tìm theo từ khóa
 
 ```java
 public static Specification<Movie> hasTitle(String keyword) {
@@ -182,15 +182,15 @@ public static Specification<Movie> hasTitle(String keyword) {
 }
 ```
 
-Giai thich:
-- `root.get("title")` = cot `title` trong bang `movies`
-- `cb.lower(...)` = ham `LOWER()` trong SQL, de tim khong phan biet hoa/thuong
+Giải thích:
+- `root.get("title")` = cột `title` trong bảng `movies`
+- `cb.lower(...)` = ham `LOWER()` trong SQL, de tìm không phân biệt hoa/thuong
 - `cb.like(...)` = `LIKE` trong SQL
-- `"%" + keyword + "%"` = tim chuoi chua keyword o bat ky vi tri nao
+- `"%" + keyword + "%"` = tìm chuoi chua keyword o bất kỳ vị trí nào
 
 SQL sinh ra: `LOWER(m.title) LIKE '%avengers%'`
 
-#### hasStatus() -- Loc theo trang thai
+#### hasStatus() -- Lọc theo trạng thái
 
 ```java
 public static Specification<Movie> hasStatus(MovieStatus status) {
@@ -201,7 +201,7 @@ public static Specification<Movie> hasStatus(MovieStatus status) {
 
 SQL sinh ra: `m.status = 'NOW_SHOWING'`
 
-#### hasGenre() -- Loc theo the loai (co JOIN)
+#### hasGenre() -- Lọc theo thể loại (có JOIN)
 
 ```java
 public static Specification<Movie> hasGenre(Long genreId) {
@@ -212,14 +212,14 @@ public static Specification<Movie> hasGenre(Long genreId) {
 }
 ```
 
-Giai thich:
+Giải thích:
 - `root.join("genres", JoinType.LEFT)` = `LEFT JOIN movie_genres mg ON m.id = mg.movie_id`
-- `genreJoin.get("id")` = cot `id` cua bang `genres`
-- Dung `LEFT JOIN` de phim khong co genre van tra ve (chi la khong match dieu kien)
+- `genreJoin.get("id")` = cột `id` của bảng `genres`
+- Dùng `LEFT JOIN` de phim không co genre van trả về (chi là không match dieu kien)
 
 SQL sinh ra: `LEFT JOIN movie_genres mg ON m.id = mg.movie_id ... AND mg.genre_id = 1`
 
-#### notDeleted() -- Chi lay ban ghi chua xoa
+#### notDeleted() -- Chỉ lấy bản ghi chưa xóa
 
 ```java
 public static Specification<Movie> notDeleted() {
@@ -231,11 +231,11 @@ public static Specification<Movie> notDeleted() {
 }
 ```
 
-**Day la phan QUAN TRONG nhat -- tai sao can `cb.or(isNull, notEqual)`?**
+**Day là phần QUAN TRONG nhất -- tại sao cần `cb.or(isNull, notEqual)`?**
 
-Xem phan 8 ben duoi de hieu chi tiet.
+Xem phần 8 bên dưới de hieu chi tiết.
 
-### Buoc 3: Viet fromFilter() -- ghep tat ca lai
+### Bước 3: Viết fromFilter() -- ghép tất cả lại
 
 ```java
 public static Specification<Movie> fromFilter(MovieFilter filter) {
@@ -260,17 +260,17 @@ public static Specification<Movie> fromFilter(MovieFilter filter) {
 }
 ```
 
-Giai thich tung dong:
+Giải thích tung đồng:
 
-1. `Specification.where(null)` -- Tao spec rong, tuong duong `WHERE TRUE`. Moi dieu kien se AND them vao.
+1. `Specification.where(null)` -- Tao spec rộng, tuong duong `WHERE TRUE`. Mới dieu kien sẽ AND thêm vào.
 
-2. Moi `if` kiem tra: **neu filter co gia tri thi ghep them dieu kien**. Neu FE khong gui `status` --> `filter.getStatus()` = null --> bo qua, khong them vao WHERE.
+2. Mới `if` kiểm tra: **nếu filter co giá trị thì ghép thêm dieu kien**. Nếu FE không gui `status` --> `filter.getStatus()` = null --> bộ qua, không thêm vào WHERE.
 
-3. `spec.and(...)` -- Noi dieu kien moi vao cuoi. Giong nhu xep gach LEGO: moi vien gach la 1 dieu kien, xep bao nhieu tuy y.
+3. `spec.and(...)` -- Nói dieu kien mới vào cuối. Giong như xep gach LEGO: mới vien gach là 1 dieu kien, xep bao nhieu tuy y.
 
-**Vi du cu the:**
+**Ví dụ cũ the:**
 
-FE gui: `?keyword=Avengers&status=NOW_SHOWING` (khong gui genreId, khong gui showing)
+FE gui: `?keyword=Avengers&status=NOW_SHOWING` (không gui genreId, không gui showing)
 
 ```
 Specification.where(null)                    --> WHERE TRUE
@@ -281,7 +281,7 @@ Specification.where(null)                    --> WHERE TRUE
   // showing = null --> BO QUA
 ```
 
-FE gui: `?genreId=1` (chi loc the loai, khong co keyword hay status)
+FE gui: `?genreId=1` (chi loc the loại, không co keyword hay status)
 
 ```
 Specification.where(null)                    --> WHERE TRUE
@@ -294,11 +294,11 @@ Specification.where(null)                    --> WHERE TRUE
 
 ---
 
-## 5. Filter DTO: Nhan params tu FE, type-safe
+## 5. Filter DTO: Nhận params từ FE, type-safe
 
-### Filter DTO la gi?
+### Filter DTO là gì?
 
-**DTO** (Data Transfer Object) la class chi chua **data**, khong chua logic. **Filter DTO** la DTO chuyen dung de chua cac tham so loc/tim kiem.
+**DTO** (Data Transfer Object) là class chi chua **data**, không chua logic. **Filter DTO** là DTO chuyen đúng de chua các tham so loc/tìm kiếm.
 
 File: `backend/src/main/java/com/cinex/module/movie/dto/MovieFilter.java`
 
@@ -317,9 +317,9 @@ public class MovieFilter {
 }
 ```
 
-### Tai sao dung Filter DTO ma khong dung @RequestParam?
+### Tại sao dùng Filter DTO mà không dùng @RequestParam?
 
-So sanh 3 cach:
+So sánh 3 cách:
 
 ```java
 // CACH 1: Nhieu @RequestParam -- them filter = sua SIGNATURE cua Controller + Service
@@ -347,24 +347,24 @@ public ApiResponse list(MovieFilter filter, Pageable pageable) { ... }
 // IDE autocomplete: filter.getKeyword(), filter.getStatus(), ...
 ```
 
-### Spring tu dong bind query params vao DTO nhu the nao?
+### Spring tự động bind query params vào DTO như thế nào?
 
 Khi FE gui:
 ```
 GET /api/movies?keyword=Avengers&status=NOW_SHOWING&genreId=1
 ```
 
-Spring tu dong:
-1. Tao doi tuong `new MovieFilter()`
+Spring tu đồng:
+1. Tao đối tượng `new MovieFilter()`
 2. Goi `filter.setKeyword("Avengers")`
 3. Goi `filter.setStatus(MovieStatus.NOW_SHOWING)` (tu chuyen String thanh Enum!)
 4. Goi `filter.setGenreId(1L)` (tu chuyen String "1" thanh Long)
-5. `filter.getIncludeDeleted()` = `null` (vi FE khong gui param nay)
+5. `filter.getIncludeDeleted()` = `null` (vì FE không gui param này)
 6. `filter.getShowing()` = `null`
 
-**Khong can `@RequestParam`!** Spring Boot tu bind query params vao DTO object khi ten field KHOP voi ten param.
+**Không cần `@RequestParam`!** Spring Boot tu bind query params vào DTO object khi tên field KHOP với tên param.
 
-### Bang tong hop Filter DTO trong du an
+### Bảng tổng hợp Filter DTO trong dự án
 
 | Module | Filter DTO | Fields | File |
 |---|---|---|---|
@@ -380,11 +380,11 @@ Spring tu dong:
 
 ---
 
-## 6. Ghep Specification: spec.and() -- Chain Pattern
+## 6. Ghép Specification: spec.and() -- Chain Pattern
 
-### Cach ghep hoat dong
+### Cách ghép hoạt động
 
-`spec.and(dieuKienMoi)` tra ve **Specification moi** chua **ca dieu kien cu va dieu kien moi**. Day la **Immutable Chain** -- moi lan `.and()` tao doi tuong moi, khong sua doi tuong cu.
+`spec.and(dieuKienMoi)` trả về **Specification mới** chua **cả dieu kien cũ và dieu kien mới**. Day là **Immutable Chain** -- mỗi lần `.and()` tạo đối tượng mới, không sửa đối tượng cũ.
 
 ```
                                     Specification rong
@@ -399,7 +399,7 @@ Spring tu dong:
                               (gom 3 dieu kien AND)
 ```
 
-Khi `findAll(spec, pageable)` duoc goi, Spring/Hibernate duyet qua chuoi nay va sinh ra SQL:
+Khi `findAll(spec, pageable)` được gọi, Spring/Hibernate duyet qua chuoi này và sinh ra SQL:
 
 ```sql
 WHERE (storage_state IS NULL OR storage_state <> 'ARCHIVED')
@@ -407,13 +407,13 @@ WHERE (storage_state IS NULL OR storage_state <> 'ARCHIVED')
   AND status = 'NOW_SHOWING'
 ```
 
-### Co the dung .or() khong?
+### Co the đúng .or() không?
 
 Co! Ngoai `.and()`, Spring Specification con ho tro:
-- `.or(spec2)` -- ghep bang OR
+- `.or(spec2)` -- ghép bảng OR
 - `Specification.not(spec)` -- dao nguoc dieu kien
 
-Vi du trong `UserSpecification.hasKeyword()`:
+Ví dụ trong `UserSpecification.hasKeyword()`:
 
 ```java
 public static Specification<User> hasKeyword(String keyword) {
@@ -430,13 +430,13 @@ public static Specification<User> hasKeyword(String keyword) {
 
 SQL sinh ra: `(LOWER(username) LIKE '%vanan%' OR LOWER(email) LIKE '%vanan%' OR LOWER(full_name) LIKE '%vanan%')`
 
-User go "vanan" --> tim trong **ca 3 field** cung luc.
+User go "vanan" --> tìm trong **cả 3 field** cùng luc.
 
 ---
 
 ## 7. JpaSpecificationExecutor: findAll(spec, pageable)
 
-### Repository chi can them 1 dong
+### Repository chi cần thêm 1 đồng
 
 ```java
 public interface MovieRepository
@@ -446,20 +446,20 @@ public interface MovieRepository
 }
 ```
 
-**`JpaSpecificationExecutor<T>`** la interface cua Spring Data JPA, cung cap san cac method:
+**`JpaSpecificationExecutor<T>`** là interface của Spring Data JPA, cùng cấp san các method:
 
-| Method | Tac dung | Tuong duong SQL |
+| Method | Tac đúng | Tuong duong SQL |
 |---|---|---|
-| `findAll(Specification)` | Tim tat ca thoa dieu kien | `SELECT * FROM movies WHERE ...` |
-| `findAll(Specification, Pageable)` | Tim + phan trang + sap xep | `... ORDER BY ... OFFSET ... FETCH ...` |
-| `findAll(Specification, Sort)` | Tim + sap xep (khong phan trang) | `... ORDER BY ...` |
-| `findOne(Specification)` | Tim 1 ban ghi | `... FETCH FIRST 1 ROW ONLY` |
-| `count(Specification)` | Dem so luong | `SELECT COUNT(*) FROM movies WHERE ...` |
-| `exists(Specification)` | Co ton tai khong | `SELECT CASE WHEN COUNT > 0 ...` |
+| `findAll(Specification)` | Tim tất cả thoa dieu kien | `SELECT * FROM movies WHERE ...` |
+| `findAll(Specification, Pageable)` | Tim + phần trang + sắp xếp | `... ORDER BY ... OFFSET ... FETCH ...` |
+| `findAll(Specification, Sort)` | Tim + sắp xếp (không phần trang) | `... ORDER BY ...` |
+| `findOne(Specification)` | Tim 1 bạn ghi | `... FETCH FIRST 1 ROW ONLY` |
+| `count(Specification)` | Dem số lượng | `SELECT COUNT(*) FROM movies WHERE ...` |
+| `exists(Specification)` | Co ton tai không | `SELECT CASE WHEN COUNT > 0 ...` |
 
-**Ban KHONG can viet bat ky method nao trong Repository.** Chi can `extends JpaSpecificationExecutor<Movie>` la co tat ca.
+**Bạn KHONG cần viet bất kỳ method nào trong Repository.** Chi cần `extends JpaSpecificationExecutor<Movie>` là co tất cả.
 
-### Luong du lieu toan bo
+### Luong dữ liệu toan bộ
 
 ```
 Controller                     Service                         Repository              Database
@@ -484,21 +484,21 @@ Controller                     Service                         Repository       
 
 ---
 
-## 8. Xu ly NULL storageState: cb.or(isNull, notEqual) -- Tai sao can?
+## 8. Xử lý NULL storageState: cb.or(isNull, notEqual) -- Tại sao cần?
 
-Day la phan **nhieu nguoi bi nham nhat**.
+Day là phần **nhieu người bi nhằm nhất**.
 
 ### Van de
 
-Trong `BaseEntity`, field `storageState` co gia tri mac dinh:
+Trong `BaseEntity`, field `storageState` co giá trị mac dinh:
 
 ```java
 private StorageState storageState = StorageState.ACTIVE;
 ```
 
-Nhung trong database, co truong hop `storage_state` la **NULL** (VD: data cu truoc khi them field nay, hoac insert truc tiep vao DB).
+Nhưng trong database, co truong hop `storage_state` là **NULL** (VD: data cũ trước khi thêm field này, hoặc insert trực tiếp vào DB).
 
-### Neu chi dung `cb.notEqual()` thi sao?
+### Nếu chi đúng `cb.notEqual()` thì sao?
 
 ```java
 // SAI!
@@ -510,14 +510,14 @@ public static Specification<Movie> notDeleted() {
 
 SQL sinh ra: `WHERE storage_state <> 'ARCHIVED'`
 
-**Van de**: Trong SQL, `NULL <> 'ARCHIVED'` = **NULL** (khong phai TRUE!). Do la SQL three-valued logic:
-- `NULL = 'ARCHIVED'` --> `NULL` (khong phai FALSE)
-- `NULL <> 'ARCHIVED'` --> `NULL` (khong phai TRUE)
-- `NULL` trong WHERE clause --> row **bi loai** (chi giu row co gia tri TRUE)
+**Van de**: Trong SQL, `NULL <> 'ARCHIVED'` = **NULL** (không phải TRUE!). Đó là SQL three-valued logic:
+- `NULL = 'ARCHIVED'` --> `NULL` (không phải FALSE)
+- `NULL <> 'ARCHIVED'` --> `NULL` (không phải TRUE)
+- `NULL` trong WHERE clause --> row **bi loại** (chi giữ row co giá trị TRUE)
 
-Ket qua: **Ban ghi co `storage_state = NULL` bi loai ra**, mac du no KHONG bi xoa!
+Ket qua: **Bạn ghi co `storage_state = NULL` bi loại ra**, mac du no KHONG bi xóa!
 
-### Cach dung: cb.or(isNull, notEqual)
+### Cách dùng: cb.or(isNull, notEqual)
 
 ```java
 // DUNG!
@@ -532,25 +532,25 @@ public static Specification<Movie> notDeleted() {
 
 SQL sinh ra: `WHERE (storage_state IS NULL OR storage_state <> 'ARCHIVED')`
 
-Bang truth table:
+Bảng truth table:
 
 | storage_state | `IS NULL` | `<> 'ARCHIVED'` | `IS NULL OR <> 'ARCHIVED'` | Ket qua |
 |---|---|---|---|---|
-| `NULL` | TRUE | NULL | **TRUE** | Giu lai |
-| `'ACTIVE'` | FALSE | TRUE | **TRUE** | Giu lai |
-| `'ARCHIVED'` | FALSE | FALSE | **FALSE** | Loai bo |
+| `NULL` | TRUE | NULL | **TRUE** | Giữ lai |
+| `'ACTIVE'` | FALSE | TRUE | **TRUE** | Giữ lai |
+| `'ARCHIVED'` | FALSE | FALSE | **FALSE** | Loại bộ |
 
-**Tat ca 9 Specification trong du an deu dung pattern nay** cho method `notDeleted()`. Day la loi phong thu -- dam bao khong bao gio mat du lieu vi NULL.
+**Tất cả 9 Specification trong du an deu đúng pattern này** cho method `notDeleted()`. Day là loi phòng thu -- dam bao không bao giờ mat dữ liệu vì NULL.
 
 ---
 
-## 9. EXISTS subquery cho phim "dang chieu" (hasActiveShowtimes)
+## 9. EXISTS subquery cho phim "đang chiếu" (hasActiveShowtimes)
 
-### Bai toan
+### Bài toán
 
-Tab "Dang chieu" tren trang chu can hien phim co **it nhat 1 suat chieu chua ket thuc**. Khong phai tat ca phim co status `NOW_SHOWING` deu dang chieu -- co the suat cuoi cung da ket thuc roi nhung admin chua doi status.
+Tab "Dang chiếu" trên trang chủ cần hien phim co **it nhất 1 suất chiếu chua kết thúc**. Không phải tất cả phim co status `NOW_SHOWING` deu đang chiếu -- co the suất cuối cùng đã kết thúc roi những admin chua đôi status.
 
-Cach chinh xac nhat: **Kiem tra bang `showtimes` xem co suat nao co `endTime >= now` khong.**
+Cách chính xác nhất: **Kiểm tra bảng `showtimes` xem co suất nào co `endTime >= now` không.**
 
 ### Code
 
@@ -605,7 +605,7 @@ WHERE ...                                    -- cac dieu kien khac (notDeleted, 
   )
 ```
 
-### Tai sao dung EXISTS thay vi JOIN?
+### Tại sao đúng EXISTS thấy vì JOIN?
 
 ```sql
 -- JOIN: Co the tra ve TRUNG LAP (1 phim co 5 suat --> tra 5 dong)
@@ -620,13 +620,13 @@ WHERE EXISTS (SELECT 1 FROM showtimes s WHERE s.movie_id = m.id AND s.end_time >
 -- --> Phim "Avengers" chi tra ve 1 dong, du co 100 suat chieu
 ```
 
-`EXISTS` cung **nhanh hon JOIN** trong truong hop nay vi database chi can tim **1 ban ghi thoa man** la dung ngay, khong can duyet het.
+`EXISTS` cùng **nhanh hon JOIN** trong truong hop này vì database chi cần tìm **1 bạn ghi thoa man** là đúng ngày, không cần duyet het.
 
 ---
 
 ## 10. Code mau day du tu du an
 
-### 10.1 MovieSpecification -- Day du nhat (co JOIN, subquery)
+### 10.1 MovieSpecification -- Day du nhất (co JOIN, subquery)
 
 File: `backend/src/main/java/com/cinex/module/movie/specification/MovieSpecification.java`
 
@@ -672,7 +672,7 @@ public class MovieSpecification {
 }
 ```
 
-### 10.2 UserSpecification -- Tim keyword tren nhieu field
+### 10.2 UserSpecification -- Tim keyword trên nhieu field
 
 File: `backend/src/main/java/com/cinex/module/user/specification/UserSpecification.java`
 
@@ -792,9 +792,9 @@ public class BookingSpecification {
 }
 ```
 
-**Diem hay:** Cung 1 Filter DTO nhung 2 entry point khac nhau cho 2 role. User luon bi gioi han boi `userId`, admin thi khong.
+**Điểm hay:** Cung 1 Filter DTO những 2 entry point khác nhau cho 2 role. User luon bi gioi han boi `userId`, admin thì không.
 
-### 10.5 ShowtimeSpecification -- Loc theo ngay (date range)
+### 10.5 ShowtimeSpecification -- Loc theo ngày (date range)
 
 File: `backend/src/main/java/com/cinex/module/showtime/specification/ShowtimeSpecification.java`
 
@@ -814,9 +814,9 @@ public static Specification<Showtime> onDate(LocalDate date) {
 
 SQL: `WHERE start_time >= '2026-05-31 00:00:00' AND start_time < '2026-06-01 00:00:00'`
 
-**Tai sao `< dayEnd` ma khong phai `<= dayEnd`?** Vi dung `<= 23:59:59` se bo sot cac thoi diem nhu `23:59:59.500`. Dung `< ngay hom sau` bao phu **toan bo** ngay hom nay.
+**Tại sao `< dayEnd` ma không phải `<= dayEnd`?** Vì đúng `<= 23:59:59` sẽ bộ sot các thoi điểm như `23:59:59.500`. Dùng `< ngay hom sau` bao phu **toan bộ** ngày hom này.
 
-### 10.6 VoucherSpecification -- Loc theo thoi gian (da het han)
+### 10.6 VoucherSpecification -- Loc theo thời gian (đã het han)
 
 File: `backend/src/main/java/com/cinex/module/voucher/specification/VoucherSpecification.java`
 
@@ -828,7 +828,7 @@ public static Specification<Voucher> isExpired() {
 
 SQL: `WHERE end_date < '2026-05-31 14:30:00'`
 
-### 10.7 SnackSpecification -- Filter cong khai (chi snack available)
+### 10.7 SnackSpecification -- Filter công khai (chi snack available)
 
 File: `backend/src/main/java/com/cinex/module/snack/specification/SnackSpecification.java`
 
@@ -846,13 +846,13 @@ public static Specification<Snack> publicFilter() {
 }
 ```
 
-**Diem hay:** Ngoai `fromFilter()` (cho admin), con co `publicFilter()` (cho user) voi dieu kien cung hon.
+**Điểm hay:** Ngoai `fromFilter()` (cho admin), con co `publicFilter()` (cho user) với dieu kien cùng hon.
 
 ---
 
-## 11. SQL sinh ra khi ghep nhieu filter
+## 11. SQL sinh ra khi ghép nhieu filter
 
-### Vi du 1: Movie -- keyword + status + genreId
+### Ví dụ 1: Movie -- keyword + status + genreId
 
 Request: `GET /api/movies?keyword=Avengers&status=NOW_SHOWING&genreId=1&page=0&size=20`
 
@@ -869,7 +869,7 @@ ORDER BY m.created_at DESC                                           -- @Pageabl
 OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY                               -- page=0, size=20
 ```
 
-### Vi du 2: Movie -- chi showing (co subquery)
+### Ví dụ 2: Movie -- chi showing (co subquery)
 
 Request: `GET /api/movies?showing=true`
 
@@ -887,7 +887,7 @@ ORDER BY m.created_at DESC
 OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY
 ```
 
-### Vi du 3: User -- keyword tim nhieu field + role
+### Ví dụ 3: User -- keyword tìm nhieu field + role
 
 Request: `GET /api/users?keyword=vanan&role=ADMIN`
 
@@ -904,7 +904,7 @@ WHERE (u.storage_state IS NULL OR u.storage_state <> 'ARCHIVED')
 ORDER BY u.created_at DESC
 ```
 
-### Vi du 4: Booking -- admin tim theo bookingCode
+### Ví dụ 4: Booking -- admin tìm theo bookingCode
 
 Request: `GET /api/admin/bookings?keyword=BK20260531&status=CONFIRMED`
 
@@ -920,7 +920,7 @@ WHERE (b.storage_state IS NULL OR b.storage_state <> 'ARCHIVED')
 ORDER BY b.created_at DESC
 ```
 
-### Vi du 5: Showtime -- loc theo ngay + phim + phong
+### Ví dụ 5: Showtime -- loc theo ngày + phim + phòng
 
 Request: `GET /api/showtimes?movieId=5&roomId=2&date=2026-06-01`
 
@@ -937,11 +937,11 @@ ORDER BY s.created_at DESC
 
 ---
 
-## 12. Them filter moi vao he thong: Chi 2 buoc
+## 12. Them filter mới vào hệ thống: Chi 2 buoc
 
-### Vi du: Them filter "language" cho Movie
+### Ví dụ: Them filter "language" cho Movie
 
-**Buoc 1:** Them field vao Filter DTO
+**Bước 1:** Them field vào Filter DTO
 
 ```java
 // MovieFilter.java
@@ -957,7 +957,7 @@ public class MovieFilter {
 }
 ```
 
-**Buoc 2:** Them method + if trong Specification
+**Bước 2:** Them method + if trong Specification
 
 ```java
 // MovieSpecification.java
@@ -978,77 +978,77 @@ public static Specification<Movie> fromFilter(MovieFilter filter) {
 }
 ```
 
-**Xong!** Khong can sua gi o:
-- Controller -- van nhan `MovieFilter filter`, signature khong doi
-- Service -- van goi `MovieSpecification.fromFilter(filter)`, khong doi
-- Repository -- van dung `findAll(spec, pageable)`, khong doi
-- Frontend -- chi can them `&language=vi` vao query params
+**Xong!** Không cần sửa gì o:
+- Controller -- van nhan `MovieFilter filter`, signature không đôi
+- Service -- van goi `MovieSpecification.fromFilter(filter)`, không đôi
+- Repository -- van đúng `findAll(spec, pageable)`, không đôi
+- Frontend -- chi cần thêm `&language=vi` vào query params
 
-**Day la nguyen tac Open/Closed Principle (OCP):** Mo cho viec mo rong (them filter), dong cho viec sua doi (khong sua code cu).
+**Day là nguyên tắc Open/Closed Principle (OCP):** Mo cho viec mo rộng (thêm filter), đồng cho viec sửa đôi (không sửa code cũ).
 
-### So sanh voi cach khong dung Specification
+### So sánh với cách không đúng Specification
 
-| | Khong dung Specification | Dung Specification |
+| | Không đúng Specification | Dùng Specification |
 |---|---|---|
-| Them filter moi | Sua Controller (them param) + Service (them if-else) + Repository (them method) = **3 file** | Sua DTO (them field) + Specification (them method + if) = **1-2 file** |
-| So method trong Repository | 2^N (N = so filter) | **0** (dung findAll co san) |
-| Controller signature | Thay doi moi lan them filter | **Khong doi** (nhan DTO) |
+| Them filter mới | Sửa Controller (thêm param) + Service (thêm if-else) + Repository (thêm method) = **3 file** | Sửa DTO (thêm field) + Specification (thêm method + if) = **1-2 file** |
+| So method trong Repository | 2^N (N = so filter) | **0** (đúng findAll co san) |
+| Controller signature | Thay đôi mỗi lần thêm filter | **Không đôi** (nhan DTO) |
 
 ---
 
-## 13. Cau hoi tu kiem tra
+## 13. Câu hỏi tự kiểm tra
 
-### Cau 1: Tai sao `Specification.where(null)` ma khong phai `Specification.where(notDeleted())`?
+### Câu 1: Tại sao `Specification.where(null)` ma không phải `Specification.where(notDeleted())`?
 
-> **Tra loi:** `where(null)` tao spec rong (WHERE TRUE), de moi dieu kien tiep theo duoc ghep tu do. Neu bat dau bang `where(notDeleted())`, thi khi `includeDeleted = true`, ban khong co cach BO dieu kien `notDeleted` ra. Bat dau rong + ghep co dieu kien = linh hoat hon.
+> **Tra loi:** `where(null)` tạo spec rộng (WHERE TRUE), de mới dieu kien tiếp theo được ghép từ đó. Nếu bắt đầu bảng `where(notDeleted())`, thì khi `includeDeleted = true`, bạn không co cách BO dieu kien `notDeleted` ra. Bắt đầu rộng + ghép co dieu kien = linh hoat hon.
 
-### Cau 2: Neu bo `cb.isNull(root.get("storageState"))` trong `notDeleted()`, dieu gi xay ra?
+### Câu 2: Nếu bộ `cb.isNull(root.get("storageState"))` trong `notDeleted()`, điều gì xay ra?
 
-> **Tra loi:** Ban ghi co `storage_state = NULL` trong database se **bi loai khoi ket qua**, mac du chung KHONG bi xoa. Vi trong SQL, `NULL <> 'ARCHIVED'` = NULL (khong phai TRUE), nen WHERE clause loai dong do. Day la loi do SQL three-valued logic.
+> **Tra loi:** Bạn ghi co `storage_state = NULL` trong database sẽ **bi loại khoi ket qua**, mac du chúng KHONG bi xóa. Vì trong SQL, `NULL <> 'ARCHIVED'` = NULL (không phải TRUE), nên WHERE clause loại đồng đó. Day là loi đó SQL three-valued logic.
 
-### Cau 3: Tai sao dung `Boolean.TRUE.equals(filter.getIncludeDeleted())` thay vi `filter.getIncludeDeleted() == true`?
+### Câu 3: Tại sao đúng `Boolean.TRUE.equals(filter.getIncludeDeleted())` thấy vì `filter.getIncludeDeleted() == true`?
 
-> **Tra loi:** Vi `includeDeleted` kieu `Boolean` (wrapper class), co the la `null`. Neu `null == true` --> **NullPointerException** vi Java unbox null thanh boolean. `Boolean.TRUE.equals(null)` --> tra ve `false` an toan, khong bao gio NullPointerException.
+> **Tra loi:** Vì `includeDeleted` kiểu `Boolean` (wrapper class), co the là `null`. Nếu `null == true` --> **NullPointerException** vì Java unbox null thanh boolean. `Boolean.TRUE.equals(null)` --> trả về `false` an toàn, không bao giờ NullPointerException.
 
-### Cau 4: BookingSpecification co 2 method `fromFilter` va `fromAdminFilter`. Tai sao khong dung 1 method chung?
+### Câu 4: BookingSpecification co 2 method `fromFilter` và `fromAdminFilter`. Tại sao không đúng 1 method chúng?
 
-> **Tra loi:** Vi logic khac nhau ve mat bao mat:
-> - User **BAT BUOC** chi xem booking cua minh --> `Specification.where(hasUser(userId))` la diem bat dau
-> - Admin xem TAT CA booking --> `Specification.where(null)` la diem bat dau
+> **Tra loi:** Vì logic khác nhau về mat bao mat:
+> - User **BAT BUOC** chi xem booking của mình --> `Specification.where(hasUser(userId))` là điểm bắt đầu
+> - Admin xem TAT CA booking --> `Specification.where(null)` là điểm bắt đầu
 >
-> Neu gop chung, de quen truyen userId cho user --> **lo data** (user xem duoc booking nguoi khac). Tach rieng = dam bao compiler bat loi neu thieu userId.
+> Nếu ghép chúng, de quen truyen userId cho user --> **lo data** (user xem được booking người khác). Tach rieng = dam bao compiler bật loi nếu thieu userId.
 
-### Cau 5: Neu FE gui `GET /api/movies` khong co bat ky query param nao, SQL sinh ra la gi?
+### Câu 5: Nếu FE gui `GET /api/movies` không co bất kỳ query param nào, SQL sinh ra là gì?
 
-> **Tra loi:** Tat ca field trong MovieFilter deu la `null`, nen khong co `if` nao match (tru `notDeleted` vi `includeDeleted = null` --> `!Boolean.TRUE.equals(null)` = true). SQL chi co:
+> **Tra loi:** Tất cả field trong MovieFilter deu là `null`, nên không co `if` nào match (tru `notDeleted` vì `includeDeleted = null` --> `!Boolean.TRUE.equals(null)` = true). SQL chi co:
 > ```sql
 > SELECT * FROM movies
 > WHERE (storage_state IS NULL OR storage_state <> 'ARCHIVED')
 > ORDER BY created_at DESC
 > OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY
 > ```
-> Tuc la: **lay tat ca phim chua xoa, phan trang 20 ban ghi/trang.**
+> Tuc là: **lay tất cả phim chua xóa, phần trang 20 bạn ghi/trang.**
 
-### Cau 6: Tai sao `hasActiveShowtimes()` dung EXISTS subquery thay vi JOIN bang showtimes?
+### Câu 6: Tại sao `hasActiveShowtimes()` đúng EXISTS subquery thấy vì JOIN bảng showtimes?
 
-> **Tra loi:** JOIN se gay **trung lap ket qua** -- 1 phim co 5 suat chieu se tra ve 5 dong. EXISTS chi tra TRUE/FALSE nen moi phim chi xuat hien 1 lan. Ngoai ra, EXISTS **nhanh hon** vi database chi can tim 1 ban ghi thoa man la dung, khong duyet het bang.
+> **Tra loi:** JOIN sẽ gay **trung lap ket qua** -- 1 phim co 5 suất chiếu sẽ trả về 5 đồng. EXISTS chi tra TRUE/FALSE nên mới phim chi xuat hien 1 lan. Ngoai ra, EXISTS **nhanh hon** vì database chi cần tìm 1 bạn ghi thoa man là đúng, không duyet het bảng.
 
-### Cau 7: Trong ShowtimeSpecification, method `onDate()` dung `lessThan(startTime, dayEnd)` thay vi `lessThanOrEqualTo`. Tai sao?
+### Câu 7: Trong ShowtimeSpecification, method `onDate()` đúng `lessThan(startTime, dayEnd)` thấy vì `lessThanOrEqualTo`. Tại sao?
 
-> **Tra loi:** Vi `dayEnd = date.plusDays(1).atStartOfDay()` = 00:00:00 ngay hom sau. Neu dung `<=`, thi suat chieu bat dau luc dung 00:00:00 ngay hom sau cung duoc tinh vao ngay hom nay -- sai. Dung `<` thi chi lay cac suat trong ngay hom nay (00:00:00.000 --> 23:59:59.999...).
+> **Tra loi:** Vì `dayEnd = date.plusDays(1).atStartOfDay()` = 00:00:00 ngày hom sâu. Nếu đúng `<=`, thì suất chiếu bắt đầu luc đúng 00:00:00 ngày hom sâu cùng được tính vào ngày hom này -- sai. Dùng `<` thì chi lay các suất trong ngày hom này (00:00:00.000 --> 23:59:59.999...).
 
 ---
 
-## Bang tong hop Specification trong du an
+## Bảng tổng hợp Specification trong du an
 
-| Module | Specification | Ky thuat dac biet | File |
+| Module | Specification | Ky thuat đặc biệt | File |
 |---|---|---|---|
 | Movie | `MovieSpecification` | JOIN (genre), EXISTS subquery (showtime) | `module/movie/specification/MovieSpecification.java` |
 | Genre | `GenreSpecification` | LIKE (name) | `module/movie/specification/GenreSpecification.java` |
 | Room | `RoomSpecification` | Nhieu enum filter (type, status) | `module/room/specification/RoomSpecification.java` |
-| User | `UserSpecification` | OR tren nhieu field (username, email, fullName) | `module/user/specification/UserSpecification.java` |
+| User | `UserSpecification` | OR trên nhieu field (username, email, fullName) | `module/user/specification/UserSpecification.java` |
 | Booking | `BookingSpecification` | 2 entry point (user vs admin), navigate relation (user.id) | `module/booking/specification/BookingSpecification.java` |
 | Showtime | `ShowtimeSpecification` | Date range (onDate), navigate relation (movie.id, room.id) | `module/showtime/specification/ShowtimeSpecification.java` |
 | Snack | `SnackSpecification` | publicFilter() rieng cho user, OR keyword (name, category) | `module/snack/specification/SnackSpecification.java` |
-| Voucher | `VoucherSpecification` | So sanh thoi gian (isExpired), OR keyword (code, description) | `module/voucher/specification/VoucherSpecification.java` |
-| Review | `ReviewSpecification` | So sanh (>=) rating, navigate relation (movie.id) | `module/review/specification/ReviewSpecification.java` |
+| Voucher | `VoucherSpecification` | So sánh thời gian (isExpired), OR keyword (code, description) | `module/voucher/specification/VoucherSpecification.java` |
+| Review | `ReviewSpecification` | So sánh (>=) rating, navigate relation (movie.id) | `module/review/specification/ReviewSpecification.java` |

@@ -1,69 +1,69 @@
-# Module Showtime -- Giai thich chi tiet
+# Module Showtime -- Giải thích chi tiết
 
-## 1. Tong quan
+## 1. Tổng quan
 
-### Module nay lam gi?
+### Module này làm gì?
 
-Module Showtime quan ly **suat chieu phim** -- tuc la "phim nao chieu o phong nao, ngay gio nao, gia ve bao nhieu". Day la module trung tam noi **Movie** (phim) voi **Room** (phong), tao ra lich chieu de nguoi dung dat ve.
+Module Showtime quản lý **suất chiếu phim** -- tuc là "phim nào chiếu o phòng nào, ngày giờ nào, giá vé bao nhieu". Day là module trung tám nơi **Movie** (phim) với **Room** (phòng), tạo ra lich chiếu de người đúng đặt vé.
 
-### Vi du doi thuong
+### Ví dụ đời thường
 
-Hay tuong tuong ban la quan ly rap phim. Moi sang ban phai:
-1. Chon phim nao chieu hom nay (VD: "Avengers" dai 150 phut)
-2. Chon phong chieu (VD: "Phong IMAX")
-3. Chon gio bat dau (VD: 14:00)
-4. He thong tu tinh gio ket thuc: 14:00 + 150 phut phim + 15 phut don phong = 16:45
-5. He thong kiem tra: phong IMAX co trong tu 14:00 den 16:45 khong?
-6. Dat gia ve: thuong 75.000d, VIP 100.000d, doi 150.000d
+Hay tuong tuong bạn là quản lý rap phim. Mới sang bạn phải:
+1. Chon phim nào chiếu hom này (VD: "Avengers" dài 150 phút)
+2. Chon phòng chiếu (VD: "Phòng IMAX")
+3. Chon giờ bắt đầu (VD: 14:00)
+4. Hệ thống tu tinh giờ kết thúc: 14:00 + 150 phút phim + 15 phút don phòng = 16:45
+5. Hệ thống kiểm tra: phòng IMAX co trong tu 14:00 đến 16:45 không?
+6. Đặt giá vé: thuong 75.000d, VIP 100.000d, đôi 150.000d
 
-### Bai toan chinh
+### Bài toán chinh
 
-| Bai toan | Mo ta | Do kho |
+| Bài toán | Mô tả | Do kho |
 |---|---|---|
-| Tinh `endTime` tu dong | `startTime + movie.duration + buffer` (buffer doc tu DB, khong hardcode) | Trung binh |
-| Kiem tra trung gio | 2 suat chieu khong duoc chong thoi gian trong cung 1 phong | Kho |
-| Validate gia ve | Gia thuong <= VIP <= doi (business rule) | De |
-| Khong sua suat da co ve | Neu da co nguoi dat ve thi khong duoc sua suat chieu | Trung binh |
-| Filter da dieu kien | Loc theo movieId, roomId, ngay, trang thai (dong thoi hoac rieng le) | Trung binh |
+| Tinh `endTime` tu đồng | `startTime + movie.duration + buffer` (buffer đọc tu DB, không hardcode) | Trung binh |
+| Kiểm tra trung giờ | 2 suất chiếu không được chong thời gian trong cùng 1 phòng | Kho |
+| Validate giá vé | Giá thuong <= VIP <= đôi (business rule) | De |
+| Không sửa suất đã co về | Nếu đã co người đặt vé thì không được sửa suất chiếu | Trung binh |
+| Filter đã dieu kien | Loc theo movieId, roomId, ngày, trạng thái (đồng thời hoặc rieng le) | Trung binh |
 
 ---
 
-## 2. Danh sach files da tao
+## 2. Danh sách files đã tạo
 
-| File | Tac dung | Design Pattern |
+| File | Tac đúng | Design Pattern |
 |---|---|---|
-| `entity/Showtime.java` | Entity JPA, quan he @ManyToOne voi Movie va Room | Inheritance (BaseEntity) |
-| `entity/ShowtimeStatus.java` | Enum trang thai: SCHEDULED, ONGOING, FINISHED, CANCELLED | Enum Pattern |
+| `entity/Showtime.java` | Entity JPA, quan he @ManyToOne với Movie và Room | Inheritance (BaseEntity) |
+| `entity/ShowtimeStatus.java` | Enum trạng thái: SCHEDULED, ONGOING, FINISHED, CANCELLED | Enum Pattern |
 | `dto/ShowtimeFilter.java` | Nhan params filter tu FE: movieId, roomId, date, status | Filter DTO |
-| `dto/ShowtimeRequest.java` | DTO nhan du lieu tao/sua suat chieu, co validation | DTO + Validation |
-| `dto/ShowtimeResponse.java` | DTO tra chi tiet (movie info, room info, prices, availableSeats) | DTO + Builder |
-| `dto/ShowtimeListResponse.java` | DTO rut gon cho danh sach (khong co availableSeats) | DTO + Builder |
-| `repository/ShowtimeRepository.java` | JpaSpecificationExecutor + method kiem tra trung gio | Repository |
-| `specification/ShowtimeSpecification.java` | Build query WHERE dong tu filter | Specification Pattern |
+| `dto/ShowtimeRequest.java` | DTO nhan dữ liệu tạo/sửa suất chiếu, co validation | DTO + Validation |
+| `dto/ShowtimeResponse.java` | DTO tra chi tiết (movie info, room info, prices, availableSeats) | DTO + Builder |
+| `dto/ShowtimeListResponse.java` | DTO rut gon cho danh sach (không co availableSeats) | DTO + Builder |
+| `repository/ShowtimeRepository.java` | JpaSpecificationExecutor + method kiểm tra trung giờ | Repository |
+| `specification/ShowtimeSpecification.java` | Build query WHERE đồng tu filter | Specification Pattern |
 | `mapper/ShowtimeMapper.java` | MapStruct chuyen Showtime -> DTO, map nested fields | Mapper (MapStruct) |
-| `service/ShowtimeService.java` | CRUD + check trung gio + tinh endTime + validate gia | Service Layer |
+| `service/ShowtimeService.java` | CRUD + check trung giờ + tinh endTime + validate giá | Service Layer |
 | `controller/ShowtimeController.java` | 8 endpoints REST (CRUD + bulk + restore) | Controller Layer |
 
 ---
 
-## 3. Design Patterns chi tiet
+## 3. Design Patterns chi tiết
 
 ### 3.1 Specification Pattern (Behavioral)
 
-#### Pattern nay la gi?
+#### Pattern này là gì?
 
-Specification Pattern cho phep **xay dung cau truy van WHERE dong** -- tuc la tuy thuoc vao nguoi dung gui gi len, he thong se tu ghep cac dieu kien loc lai voi nhau.
+Specification Pattern cho phep **xay đúng cau truy vấn WHERE đồng** -- tuc là tuy thuoc vào người đúng gui gì lên, hệ thống sẽ tu ghép các dieu kien loc lai với nhau.
 
-#### Vi du doi thuong
+#### Ví dụ đời thường
 
-Tuong tuong ban vao trang Shopee tim ao:
+Tuong tuong bạn vào trang Shopee tìm ao:
 - Chi chon "ao thun" -> WHERE category = 'ao_thun'
-- Them chon "mau den" -> WHERE category = 'ao_thun' AND color = 'den'
-- Them chon "gia duoi 200k" -> WHERE category = 'ao_thun' AND color = 'den' AND price < 200000
+- Them chon "mau đến" -> WHERE category = 'ao_thun' AND color = 'đến'
+- Them chon "giá dưới 200k" -> WHERE category = 'ao_thun' AND color = 'đến' AND price < 200000
 
-Moi lan ban tick them 1 bo loc, he thong **ghep them** 1 dieu kien AND. Do chinh la Specification Pattern.
+Mới lan bạn tick thêm 1 bộ loc, hệ thống **ghép thêm** 1 dieu kien AND. Do chinh là Specification Pattern.
 
-#### Ap dung o dau trong code?
+#### Ap đúng ở đâu trong code?
 
 File: `specification/ShowtimeSpecification.java`
 
@@ -92,11 +92,11 @@ public static Specification<Showtime> fromFilter(ShowtimeFilter filter) {
 }
 ```
 
-Moi method nhu `hasMovie()`, `hasRoom()`, `onDate()` tra ve 1 "manh" dieu kien. Method `fromFilter()` ghep cac manh lai = `.and()`.
+Mới method như `hasMovie()`, `hasRoom()`, `onDate()` trả về 1 "manh" dieu kien. Method `fromFilter()` ghép các manh lai = `.and()`.
 
-#### Tai sao dung pattern nay?
+#### Tại sao đúng pattern này?
 
-**KHONG dung Specification (code xau):**
+**KHONG đúng Specification (code xấu):**
 ```java
 // Phai viet N method cho moi to hop filter
 List<Showtime> findByMovieId(Long movieId);
@@ -106,37 +106,37 @@ List<Showtime> findByMovieIdAndRoomIdAndDate(Long movieId, Long roomId, LocalDat
 // ... 2^4 = 16 to hop voi 4 filter -> BUNG NO!
 ```
 
-**CO dung Specification (code tot):**
+**CO đúng Specification (code tốt):**
 ```java
 // Chi can 1 method duy nhat
 Page<Showtime> findAll(Specification<Showtime> spec, Pageable pageable);
 // FE gui gi len -> tu dong ghep dieu kien -> 1 query duy nhat
 ```
 
-#### Khi nao KHONG nen dung?
+#### Khi nào KHONG nên dùng?
 
-- Khi chi co 1-2 filter co dinh (VD: `findByUsername`) -> dung Spring Data method naming don gian hon.
-- Khi query qua phuc tap (nhieu JOIN, subquery) -> dung `@Query` JPQL hoac native SQL.
+- Khi chi co 1-2 filter co dinh (VD: `findByUsername`) -> đúng Spring Data method naming đơn giản hon.
+- Khi query qua phức tạp (nhieu JOIN, subquery) -> đúng `@Query` JPQL hoặc native SQL.
 
 ---
 
-### 3.2 Overlap Detection -- Kiem tra trung gio (Thuat toan)
+### 3.2 Overlap Detection -- Kiểm tra trung giờ (Thuật toán)
 
-#### Bai toan
+#### Bài toán
 
-Trong 1 phong chieu, 2 suat chieu **khong duoc chong thoi gian**. Vi du phong IMAX dang co suat 14:00-16:30, thi khong the tao suat 15:00-17:00 vi chung "de len nhau".
+Trong 1 phòng chiếu, 2 suất chiếu **không được chong thời gian**. Ví dụ phòng IMAX đang co suất 14:00-16:30, thì không the tạo suất 15:00-17:00 vì chúng "de lên nhau".
 
 #### Cong thuc kinh dien
 
-Cho 2 khoang thoi gian:
-- Khoang 1: [A, B] (suat cu: A = startTime, B = endTime)
-- Khoang 2: [C, D] (suat moi: C = startTime, D = endTime)
+Cho 2 khoang thời gian:
+- Khoang 1: [A, B] (suất cũ: A = startTime, B = endTime)
+- Khoang 2: [C, D] (suất mới: C = startTime, D = endTime)
 
 ```
 HAI KHOANG GIAO NHAU KHI VA CHI KHI:  A < D  AND  C < B
 ```
 
-Cong thuc nay **rat ngan gon** nhung nhieu nguoi nham. Hay hieu theo huong nguoc lai:
+Cong thuc này **rat ngắn gon** những nhieu người nhằm. Hay hieu theo huong nguoc lai:
 
 ```
 HAI KHOANG KHONG GIAO NHAU KHI:  B <= C  HOAC  D <= A
@@ -148,7 +148,7 @@ HAI KHOANG KHONG GIAO NHAU KHI:  B <= C  HOAC  D <= A
    = A < D AND C < B  (doi vi tri)
 ```
 
-#### Minh hoa bang hinh
+#### Mình hoa bảng hinh
 
 ```
 Truong hop 1: KHONG trung (suat cu ket thuc truoc suat moi)
@@ -176,7 +176,7 @@ Suat moi:  |====14:00====16:30====|
                               17:00 > 16:30 => C < B la FALSE => KHONG giao
 ```
 
-#### Ap dung trong code
+#### Ap đúng trong code
 
 File: `repository/ShowtimeRepository.java`
 
@@ -188,14 +188,14 @@ File: `repository/ShowtimeRepository.java`
 List<Showtime> findConflictingShowtimes(Long roomId, LocalDateTime startTime, LocalDateTime endTime);
 ```
 
-Giai thich tung dong:
-- `s.room.id = :roomId` -- Chi kiem tra trong **cung phong** (phong khac thi khong can check)
-- `s.startTime < :endTime` -- Suat cu bat dau truoc khi suat moi ket thuc (dieu kien A < D)
-- `s.endTime > :startTime` -- Suat cu ket thuc sau khi suat moi bat dau (dieu kien C < B)
-- `storageState <> 'DELETED'` -- Bo qua suat da xoa mem
-- `status <> 'CANCELLED'` -- Bo qua suat da huy (phong da free)
+Giải thích tung đồng:
+- `s.room.id = :roomId` -- Chi kiểm tra trong **cùng phòng** (phòng khác thì không cần check)
+- `s.startTime < :endTime` -- Suất cũ bắt đầu trước khi suất mới kết thúc (dieu kien A < D)
+- `s.endTime > :startTime` -- Suất cũ kết thúc sâu khi suất mới bắt đầu (dieu kien C < B)
+- `storageState <> 'DELETED'` -- Bỏ qua suất đã xóa mem
+- `status <> 'CANCELLED'` -- Bỏ qua suất đã huy (phòng đã free)
 
-**Luu y quan trong khi UPDATE:** Khi sua suat chieu, phai **loai tru chinh no** ra khoi danh sach conflict. Neu khong, suat chieu se tu "trung" voi chinh minh:
+**Luu y quan trọng khi UPDATE:** Khi sửa suất chiếu, phải **loại tru chinh no** ra khoi danh sach conflict. Nếu không, suất chiếu sẽ tu "trung" với chinh mình:
 
 ```java
 // File: service/ShowtimeService.java, method updateShowtime()
@@ -209,18 +209,18 @@ if (!conflicts.isEmpty()) {
 
 ---
 
-### 3.3 Buffer ve sinh phong (Cau hinh dong tu SystemConfig)
+### 3.3 Buffer về sinh phòng (Cau hinh đồng tu SystemConfig)
 
-#### Bai toan
+#### Bài toán
 
-Sau khi phim ket thuc, nhan vien can thoi gian de:
+Sau khi phim kết thúc, nhan vien cần thời gian de:
 - Don dep rac, nuoc uong con sot
-- Kiem tra ghe hu
-- Chuan bi cho luot khan gia tiep theo
+- Kiểm tra ghế hu
+- Chuan bi cho luot khan giá tiếp theo
 
-=> Can **cong them** thoi gian buffer vao endTime.
+=> Can **cong thêm** thời gian buffer vào endTime.
 
-#### Tai sao KHONG hardcode?
+#### Tại sao KHONG hardcode?
 
 ```java
 // SAI -- Hardcode:
@@ -235,7 +235,7 @@ LocalDateTime endTime = startTime.plusMinutes(movie.getDuration()).plusMinutes(b
 // Loi: Admin vao trang Config, sua "showtime.buffer_minutes" = 20 -> co hieu luc ngay!
 ```
 
-#### Cach tinh endTime chi tiet
+#### Cách tinh endTime chi tiết
 
 ```
 endTime = startTime + movie.duration + bufferMinutes
@@ -255,7 +255,7 @@ Vi du cu the:
   => Suat tiep theo cua phong nay som nhat la 16:45
 ```
 
-#### SystemConfigService hoat dong the nao?
+#### SystemConfigService hoạt động thế nào?
 
 ```
                 +-------------------+
@@ -282,30 +282,30 @@ Vi du cu the:
                   Tra ve: 15
 ```
 
-- Khi server khoi dong: doc TAT CA config tu DB vao `ConcurrentHashMap` (cache trong RAM)
-- Khi can doc config: doc tu RAM (cuc nhanh, khong can query DB moi lan)
-- Khi admin sua config: ghi vao DB + cap nhat RAM cung luc
-- Default value: neu key khong ton tai trong DB, tra ve gia tri mac dinh (tham so thu 2)
+- Khi server khoi đồng: đọc TAT CA config tu DB vào `ConcurrentHashMap` (cache trong RAM)
+- Khi cần đọc config: đọc tu RAM (cuc nhanh, không cần query DB mỗi lần)
+- Khi admin sửa config: ghi vào DB + cấp nhất RAM cùng luc
+- Default value: nếu key không ton tai trong DB, trả về giá trị mac dinh (tham so thu 2)
 
 ---
 
-### 3.4 Validate gia ve -- Business Rule
+### 3.4 Validate giá vé -- Business Rule
 
-#### Quy tac
+#### Quy tắc
 
 ```
 Gia thuong (base)  <=  Gia VIP  <=  Gia doi (couple)
 ```
 
-#### Tai sao co quy tac nay?
+#### Tại sao co quy tắc này?
 
-- **Ghe thuong**: ghe binh dan, vi tri binh thuong -> gia re nhat
-- **Ghe VIP**: ghe rong hon, vi tri tot hon (giua phong, hang giua) -> dat hon ghe thuong
-- **Ghe doi**: 2 ghe lien nhau (danh cho cap doi), co tay vin chung -> dat nhat (vi 2 nguoi ngoi)
+- **Ghế thuong**: ghế binh dan, vị trí bình thường -> giá re nhất
+- **Ghế VIP**: ghế rộng hon, vị trí tốt hon (giua phòng, hàng giua) -> đặt hon ghế thường
+- **Ghế đôi**: 2 ghế lien nhau (danh cho cặp đôi), co tay vin chúng -> đặt nhất (vì 2 người ngoi)
 
-Neu admin nhap gia VIP = 50.000 nhung gia thuong = 75.000 -> **vo ly** (VIP ma re hon thuong?) -> he thong bao loi.
+Nếu admin nhập giá VIP = 50.000 những giá thuong = 75.000 -> **vô ly** (VIP ma re hon thuong?) -> hệ thống bao loi.
 
-#### Ap dung trong code
+#### Ap đúng trong code
 
 File: `service/ShowtimeService.java`, method `validatePriceHierarchy()`
 
@@ -333,11 +333,11 @@ private void validatePriceHierarchy(ShowtimeRequest request) {
 }
 ```
 
-**Tai sao dung `compareTo()` thay vi `<` ?**
-Vi `basePrice` co kieu `BigDecimal`, khong phai `int`/`long`. Trong Java, `BigDecimal` khong ho tro toan tu `<`, `>` truc tiep. Phai dung `compareTo()`:
-- `a.compareTo(b) < 0` => a nho hon b
-- `a.compareTo(b) == 0` => a bang b
-- `a.compareTo(b) > 0` => a lon hon b
+**Tại sao đúng `compareTo()` thấy vì `<` ?**
+Vì `basePrice` co kiểu `BigDecimal`, không phải `int`/`long`. Trong Java, `BigDecimal` không ho tro toan tu `<`, `>` trực tiếp. Phai đúng `compareTo()`:
+- `a.compareTo(b) < 0` => a nhỏ hon b
+- `a.compareTo(b) == 0` => a bảng b
+- `a.compareTo(b) > 0` => a lớn hon b
 
 ---
 
@@ -354,16 +354,16 @@ private Movie movie;   // movie.title, movie.posterUrl, movie.duration
 private Room room;     // room.name, room.type
 ```
 
-Nhung DTO `ShowtimeResponse` lai co cac field **phang** (flat):
+Nhưng DTO `ShowtimeResponse` lai co các field **phang** (flat):
 ```java
 private String movieTitle;      // Khong phai Movie object
 private String roomName;        // Khong phai Room object
 private String roomType;
 ```
 
-=> Can bao MapStruct: "lay `movie.title` gan vao `movieTitle`".
+=> Can bao MapStruct: "lay `movie.title` gắn vào `movieTitle`".
 
-#### Ap dung trong code
+#### Ap đúng trong code
 
 File: `mapper/ShowtimeMapper.java`
 
@@ -383,9 +383,9 @@ public interface ShowtimeMapper {
 }
 ```
 
-#### MapStruct sinh code gi?
+#### MapStruct sinh code gì?
 
-Khi build (`./gradlew build`), MapStruct **tu dong sinh** file `ShowtimeMapperImpl.java`:
+Khi build (`./gradlew build`), MapStruct **tu đồng sinh** file `ShowtimeMapperImpl.java`:
 
 ```java
 // Code duoc MapStruct TU SINH (ban khong can viet)
@@ -412,31 +412,31 @@ public ShowtimeResponse toResponse(Showtime showtime) {
 }
 ```
 
-**Luu y ve Lazy Loading:**
-- Movie va Room deu dung `fetch = FetchType.LAZY` -> khi goi `showtime.getMovie()`, Hibernate se chay 1 query SELECT rieng de lay Movie.
-- Day KHONG phai N+1 problem vi moi request chi xu ly 1 showtime (trong `getShowtime()`). Nhung o `listShowtimes()` thi co the gap N+1 -- moi showtime trong trang se trigger 1 query Movie va 1 query Room.
-- Cach fix N+1 (neu can toi uu): dung `@EntityGraph` hoac `JOIN FETCH` trong repository.
+**Luu y về Lazy Loading:**
+- Movie và Room deu đúng `fetch = FetchType.LAZY` -> khi goi `showtime.getMovie()`, Hibernate sẽ chay 1 query SELECT rieng de lay Movie.
+- Day KHONG phải N+1 problem vì mới request chi xử lý 1 showtime (trong `getShowtime()`). Nhưng o `listShowtimes()` thì co the gap N+1 -- mới showtime trong trang sẽ trigger 1 query Movie và 1 query Room.
+- Cách fix N+1 (nếu cần toi uu): đúng `@EntityGraph` hoặc `JOIN FETCH` trong repository.
 
 ---
 
-### 3.6 DTO Pattern -- 2 Response cho 2 muc dich
+### 3.6 DTO Pattern -- 2 Response cho 2 mục dich
 
-#### Tai sao can 2 DTO response?
+#### Tại sao cần 2 DTO response?
 
 | | `ShowtimeListResponse` | `ShowtimeResponse` |
 |---|---|---|
-| Dung cho | Danh sach (GET /api/showtimes) | Chi tiet (GET /api/showtimes/{id}) |
-| Co `availableSeats`? | Khong | Co |
-| Co `movieDuration`? | Khong | Co |
-| Ly do | Danh sach khong can tinh ghe trong (ton query) | Chi tiet can hien thi ghe trong |
+| Dùng cho | Danh sách (GET /api/showtimes) | Chi tiết (GET /api/showtimes/{id}) |
+| Co `availableSeats`? | Không | Co |
+| Co `movieDuration`? | Không | Co |
+| Lý đó | Danh sách không cần tinh ghế trong (ton query) | Chi tiết cần hiển thị ghế trong |
 
-**Nguyen tac: Interface Segregation** -- Khong ep client nhan du lieu khong can. Danh sach chi can thong tin co ban de hien thi bang (table), chi tiet moi can day du.
+**Nguyên tắc: Interface Segregation** -- Không ep client nhan dữ liệu không cần. Danh sách chi cần thong tin co bạn de hiển thị bảng (table), chi tiết mới cần day du.
 
 ---
 
-## 4. So do luong xu ly chi tiet
+## 4. Sơ đồ luồng xử lý chi tiết
 
-### 4.1 Tao suat chieu (POST /api/showtimes)
+### 4.1 Tao suất chiếu (POST /api/showtimes)
 
 ```
 Client (Admin)
@@ -508,7 +508,7 @@ ApiResponse.ok("Showtime created", response)
   => HTTP 200
 ```
 
-### 4.2 Sua suat chieu (PUT /api/showtimes/{id})
+### 4.2 Sửa suất chiếu (PUT /api/showtimes/{id})
 
 ```
 Client (Admin)
@@ -571,13 +571,13 @@ ShowtimeService.deleteShowtime(id)
   => UPDATE showtimes SET storage_state = 'ARCHIVED' WHERE id = ?
 ```
 
-**Tai sao xoa mem (soft delete)?**
-- Neu xoa that (DELETE FROM) -> mat du lieu vinh vien, khong the khoi phuc
-- Xoa mem = dat co "da xoa" -> khi query thi bo qua (WHERE storage_state <> 'ARCHIVED')
-- Admin co the "khoi phuc" bat cu luc nao (POST /api/showtimes/{id}/restore)
-- Du lieu van con trong DB de bao cao, thong ke
+**Tại sao xóa mem (soft delete)?**
+- Nếu xóa that (DELETE FROM) -> mat dữ liệu vinh vien, không the khoi phuc
+- Xoa mem = đặt co "đã xóa" -> khi query thì bộ qua (WHERE storage_state <> 'ARCHIVED')
+- Admin co the "khoi phuc" bất cứ luc nào (POST /api/showtimes/{id}/restore)
+- Dữ liệu van con trong DB de bao cao, thong ke
 
-### 4.4 Danh sach voi filter (GET /api/showtimes?movieId=1&date=2026-05-25)
+### 4.4 Danh sách với filter (GET /api/showtimes?movieId=1&date=2026-05-25)
 
 ```
 ShowtimeService.listShowtimes(filter, pageable)
@@ -600,13 +600,13 @@ Page<ShowtimeListResponse>
 
 ---
 
-## 5. MapStruct Mapping Nested Fields -- Chi tiet
+## 5. MapStruct Mapping Nested Fields -- Chi tiết
 
-### Van de cot loi
+### Van de cột loi
 
-Trong DB, bang `showtimes` chi luu `movie_id` (so) va `room_id` (so). Nhung FE can hien thi **ten phim**, **ten phong** -- khong phai ID.
+Trong DB, bảng `showtimes` chi lưu `movie_id` (so) và `room_id` (so). Nhưng FE cần hiển thị **tên phim**, **tên phòng** -- không phải ID.
 
-### Cach MapStruct giai quyet
+### Cách MapStruct giai quyet
 
 ```
 ENTITY (Showtime)                    DTO (ShowtimeResponse)
@@ -653,9 +653,9 @@ Spring inject:      @Autowired ShowtimeMapper  -> ShowtimeMapperImpl
 
 ---
 
-## 6. SQL duoc sinh ra cho tung operation
+## 6. SQL được sinh ra cho từng operation
 
-### 6.1 Danh sach suat chieu (filter movieId + date)
+### 6.1 Danh sách suất chiếu (filter movieId + date)
 
 ```sql
 -- FE goi: GET /api/showtimes?movieId=1&date=2026-05-25&page=0&size=20
@@ -677,7 +677,7 @@ SELECT m.* FROM movies m WHERE m.id = 1;      -- Lazy load Movie
 SELECT r.* FROM rooms r WHERE r.id = 2;        -- Lazy load Room
 ```
 
-### 6.2 Chi tiet suat chieu (GET /api/showtimes/5)
+### 6.2 Chi tiết suất chiếu (GET /api/showtimes/5)
 
 ```sql
 -- Buoc 1: Lay showtime
@@ -694,7 +694,7 @@ WHERE b.showtime_id = 5
   AND b.status IN ('HOLDING', 'CONFIRMED');
 ```
 
-### 6.3 Kiem tra trung gio (khi tao/sua suat chieu)
+### 6.3 Kiểm tra trung giờ (khi tạo/sửa suất chiếu)
 
 ```sql
 -- Tim suat chieu xung dot trong phong 2, khoang 14:00-16:45
@@ -709,7 +709,7 @@ WHERE s.room_id = 2
 -- Neu tra ve >= 1 dong -> trung gio -> throw SHOWTIME_CONFLICT
 ```
 
-### 6.4 Tao suat chieu (INSERT)
+### 6.4 Tao suất chiếu (INSERT)
 
 ```sql
 INSERT INTO showtimes (
@@ -727,7 +727,7 @@ INSERT INTO showtimes (
 );
 ```
 
-### 6.5 Sua suat chieu (UPDATE)
+### 6.5 Sửa suất chiếu (UPDATE)
 
 ```sql
 -- Truoc khi update, kiem tra co booking active khong:
@@ -759,16 +759,16 @@ WHERE id = 5;
 
 ---
 
-## 7. Cau hinh dong (SystemConfig)
+## 7. Cấu hình động (SystemConfig)
 
-### Cac config lien quan den module Showtime
+### Cac config lien quan đến module Showtime
 
-| Key | Gia tri mac dinh | Mo ta | Ai thay doi? |
+| Key | Giá trị mac dinh | Mô tả | Ai thấy đôi? |
 |---|---|---|---|
-| `showtime.buffer_minutes` | `15` | So phut don dep phong giua 2 suat chieu | Admin (trang Config) |
-| `booking.cutoff_after_start_minutes` | `15` | Sau khi phim bat dau bao nhieu phut thi khong cho dat ve nua | Admin (trang Config) |
+| `showtime.buffer_minutes` | `15` | So phút don dep phòng giua 2 suất chiếu | Admin (trang Config) |
+| `booking.cutoff_after_start_minutes` | `15` | Sau khi phim bắt đầu bao nhieu phút thì không cho đặt vé nua | Admin (trang Config) |
 
-### Cach hoat dong
+### Cách hoạt động
 
 ```
 1. Bang system_config trong DB:
@@ -795,17 +795,17 @@ WHERE id = 5;
 5. KHONG can restart server!
 ```
 
-### Tai sao dung ConcurrentHashMap?
+### Tại sao đúng ConcurrentHashMap?
 
-- `HashMap` binh thuong **khong an toan** khi nhieu thread doc/ghi dong thoi (multi-thread) -> co the bi loi data
-- `ConcurrentHashMap` duoc thiet ke cho multi-thread -> nhieu request doc cung luc van an toan
-- Server web xu ly nhieu request song song (moi request = 1 thread) -> bat buoc dung ConcurrentHashMap
+- `HashMap` bình thường **không an toàn** khi nhieu thread đọc/ghi đồng thời (multi-thread) -> co the bi loi data
+- `ConcurrentHashMap` được thiết kế cho multi-thread -> nhieu request đọc cùng luc van an toàn
+- Server web xử lý nhieu request song song (mới request = 1 thread) -> bật buoc đúng ConcurrentHashMap
 
 ---
 
-## 8. Request/Response mau
+## 8. Request/Response mẫu
 
-### 8.1 Danh sach suat chieu (PUBLIC -- khong can dang nhap)
+### 8.1 Danh sách suất chiếu (PUBLIC -- không cần đăng nhập)
 
 ```bash
 curl "http://localhost:8088/api/showtimes?movieId=1&date=2026-05-25&page=0&size=20"
@@ -862,7 +862,7 @@ curl "http://localhost:8088/api/showtimes?movieId=1&date=2026-05-25&page=0&size=
 }
 ```
 
-### 8.2 Chi tiet suat chieu (PUBLIC)
+### 8.2 Chi tiết suất chiếu (PUBLIC)
 
 ```bash
 curl "http://localhost:8088/api/showtimes/1"
@@ -895,7 +895,7 @@ curl "http://localhost:8088/api/showtimes/1"
 }
 ```
 
-### 8.3 Tao suat chieu (ADMIN -- can JWT)
+### 8.3 Tao suất chiếu (ADMIN -- cần JWT)
 
 ```bash
 curl -X POST "http://localhost:8088/api/showtimes" \
@@ -937,7 +937,7 @@ curl -X POST "http://localhost:8088/api/showtimes" \
 }
 ```
 
-### 8.4 Loi: Trung gio (409 Conflict)
+### 8.4 Loi: Trung giờ (409 Conflict)
 
 ```bash
 # Tao suat chieu trung gio voi suat da co
@@ -963,7 +963,7 @@ curl -X POST "http://localhost:8088/api/showtimes" \
 }
 ```
 
-### 8.5 Loi: Gia VIP nho hon gia thuong (400)
+### 8.5 Loi: Giá VIP nhỏ hon giá thuong (400)
 
 ```json
 {
@@ -973,7 +973,7 @@ curl -X POST "http://localhost:8088/api/showtimes" \
 }
 ```
 
-### 8.6 Loi: Sua suat chieu da co ve dat (400)
+### 8.6 Loi: Sửa suất chiếu đã co về đặt (400)
 
 ```json
 {
@@ -997,7 +997,7 @@ curl -X DELETE "http://localhost:8088/api/showtimes/1" \
 }
 ```
 
-### 8.8 Khoi phuc suat da xoa (ADMIN)
+### 8.8 Khoi phuc suất đã xóa (ADMIN)
 
 ```bash
 curl -X POST "http://localhost:8088/api/showtimes/1/restore" \
@@ -1012,7 +1012,7 @@ curl -X POST "http://localhost:8088/api/showtimes/1/restore" \
 }
 ```
 
-### 8.9 Xoa nhieu suat cung luc (Bulk delete -- ADMIN)
+### 8.9 Xoa nhieu suất cùng luc (Bulk delete -- ADMIN)
 
 ```bash
 curl -X POST "http://localhost:8088/api/showtimes/bulk-delete" \
@@ -1030,50 +1030,263 @@ curl -X POST "http://localhost:8088/api/showtimes/bulk-delete" \
 
 ---
 
-## 9. Annotation va API moi su dung
+## 9. Annotation và API mới sử dụng
 
-| Annotation / API | Tac dung | Vi du |
+| Annotation / API | Tac đúng | Ví dụ |
 |---|---|---|
-| `@ManyToOne(fetch = LAZY)` | Quan he nhieu-mot, chi load khi goi getter (tiet kiem query) | Showtime -> Movie |
-| `@JoinColumn(name, nullable)` | Chi dinh ten cot khoa ngoai trong DB | `@JoinColumn(name = "movie_id")` |
-| `@Enumerated(EnumType.STRING)` | Luu enum duoi dang chuoi (khong phai so) trong DB | status = 'SCHEDULED' |
-| `@Builder.Default` | Dat gia tri mac dinh khi dung Builder pattern | `status = ShowtimeStatus.SCHEDULED` |
-| `@PreAuthorize("hasRole('ADMIN')")` | Chi cho phep user co role ADMIN goi endpoint nay | Tao/Sua/Xoa suat chieu |
-| `@PageableDefault(size, sort, direction)` | Gia tri mac dinh cho phan trang | size=20, sort=createdAt DESC |
-| `@Valid` | Kich hoat validation tren request DTO (@NotNull, @Min,...) | createShowtime(@Valid request) |
-| `@Transactional` | Dam bao tat ca query trong method chay trong 1 transaction | createShowtime() |
-| `@Transactional(readOnly = true)` | Toi uu cho method chi doc (Hibernate khong theo doi thay doi) | listShowtimes() |
-| `JpaSpecificationExecutor<T>` | Interface cho phep Repository dung Specification de query | ShowtimeRepository |
-| `Specification.where(null)` | Tao spec rong (khong co WHERE), lam diem bat dau de ghep `.and()` | fromFilter() |
-| `@Mapping(source, target)` | Bao MapStruct map tu field nay sang field kia | movie.title -> movieTitle |
-| `@Mapping(target, ignore=true)` | Bao MapStruct bo qua field nay (tu tinh trong code) | availableSeats |
+| `@ManyToOne(fetch = LAZY)` | Quan he nhieu-một, chi load khi goi getter (tiet kiem query) | Showtime -> Movie |
+| `@JoinColumn(name, nullable)` | Chi dinh tên cột khoa ngoai trong DB | `@JoinColumn(name = "movie_id")` |
+| `@Enumerated(EnumType.STRING)` | Luu enum dưới đang chuoi (không phải so) trong DB | status = 'SCHEDULED' |
+| `@Builder.Default` | Đặt giá trị mac dinh khi đúng Builder pattern | `status = ShowtimeStatus.SCHEDULED` |
+| `@PreAuthorize("hasRole('ADMIN')")` | Chi cho phep user co role ADMIN goi endpoint này | Tao/Sửa/Xoa suất chiếu |
+| `@PageableDefault(size, sort, direction)` | Giá trị mac dinh cho phần trang | size=20, sort=createdAt DESC |
+| `@Valid` | Kich hoat validation trên request DTO (@NotNull, @Min,...) | createShowtime(@Valid request) |
+| `@Transactional` | Dam bao tất cả query trong method chay trong 1 transaction | createShowtime() |
+| `@Transactional(readOnly = true)` | Toi uu cho method chi đọc (Hibernate không theo đôi thấy đôi) | listShowtimes() |
+| `JpaSpecificationExecutor<T>` | Interface cho phep Repository đúng Specification de query | ShowtimeRepository |
+| `Specification.where(null)` | Tao spec rộng (không co WHERE), làm điểm bắt đầu de ghép `.and()` | fromFilter() |
+| `@Mapping(source, target)` | Bao MapStruct map tu field này sang field kia | movie.title -> movieTitle |
+| `@Mapping(target, ignore=true)` | Bao MapStruct bộ qua field này (tu tinh trong code) | availableSeats |
 | `@Query("JPQL...")` | Viet cau query JPQL tuy chinh trong Repository | findConflictingShowtimes |
-| `BigDecimal.compareTo()` | So sanh 2 gia tri BigDecimal (khong dung duoc < >) | validatePriceHierarchy |
+| `BigDecimal.compareTo()` | So sánh 2 giá trị BigDecimal (không đúng được < >) | validatePriceHierarchy |
 
 ---
 
-## 10. Cau hoi tu kiem tra
+## 10. Câu hỏi tự kiểm tra
 
-### Cau 1: Cong thuc kiem tra 2 khoang thoi gian giao nhau la gi?
+### Câu 1: Cong thuc kiểm tra 2 khoang thời gian giao nhau là gì?
 **Tra loi:** [A, B] giao [C, D] khi `A < D AND C < B`. Trong code: `s.startTime < :endTime AND s.endTime > :startTime`.
 
-### Cau 2: Tai sao khi UPDATE suat chieu lai can `conflicts.removeIf(s -> s.getId().equals(id))`?
-**Tra loi:** Vi query `findConflictingShowtimes()` se tra ve chinh suat chieu dang sua (no "trung" voi chinh no). Neu khong loai tru, moi lan update deu bao loi trung gio -- khong bao gio sua duoc.
+### Câu 2: Tại sao khi UPDATE suất chiếu lai cần `conflicts.removeIf(s -> s.getId().equals(id))`?
+**Tra loi:** Vì query `findConflictingShowtimes()` sẽ trả về chinh suất chiếu đang sửa (no "trung" với chinh no). Nếu không loại tru, mỗi lần update deu bao loi trung giờ -- không bao giờ sửa được.
 
-### Cau 3: Tai sao buffer_minutes doc tu SystemConfig thay vi hardcode `15`?
-**Tra loi:** De admin co the thay doi buffer ma khong can sua code + rebuild + restart server. Vi du: het mua he, rap it nguoi hon, admin giam buffer tu 15 -> 10 phut de xep duoc nhieu suat chieu hon trong ngay.
+### Câu 3: Tại sao buffer_minutes đọc tu SystemConfig thấy vì hardcode `15`?
+**Tra loi:** De admin co the thấy đôi buffer ma không cần sửa code + rebuild + restart server. Ví dụ: het mua he, rap it người hon, admin giam buffer tu 15 -> 10 phút de xep được nhieu suất chiếu hon trong ngày.
 
-### Cau 4: Neu admin tao suat chieu voi gia VIP = 50.000 va gia thuong = 75.000 thi dieu gi xay ra?
-**Tra loi:** He thong throw `BusinessException(INVALID_REQUEST, "Gia VIP phai lon hon hoac bang gia thuong")` -- HTTP 400. Vi ghe VIP phai dat hon ghe thuong, khong the re hon.
+### Câu 4: Nếu admin tạo suất chiếu với giá VIP = 50.000 và giá thuong = 75.000 thì điều gì xay ra?
+**Tra loi:** Hệ thống throw `BusinessException(INVALID_REQUEST, "Gia VIP phai lon hon hoac bang gia thuong")` -- HTTP 400. Vì ghế VIP phải đặt hon ghế thường, không the re hon.
 
-### Cau 5: Tai sao can 2 DTO response (`ShowtimeListResponse` va `ShowtimeResponse`) thay vi dung 1 cai?
-**Tra loi:** `ShowtimeListResponse` dung cho danh sach (nhieu ban ghi), khong co `availableSeats` vi tinh ghe trong can query them (ton performance). `ShowtimeResponse` dung cho chi tiet (1 ban ghi), co `availableSeats` va `movieDuration`. Day la nguyen tac Interface Segregation -- khong ep client nhan du lieu khong can.
+### Câu 5: Tại sao cần 2 DTO response (`ShowtimeListResponse` và `ShowtimeResponse`) thấy vì đúng 1 cai?
+**Tra loi:** `ShowtimeListResponse` đúng cho danh sach (nhieu bạn ghi), không co `availableSeats` vì tinh ghế trong cần query thêm (ton performance). `ShowtimeResponse` đúng cho chi tiết (1 bạn ghi), co `availableSeats` và `movieDuration`. Day là nguyên tắc Interface Segregation -- không ep client nhan dữ liệu không cần.
 
-### Cau 6: Suat chieu da co 3 nguoi dat ve. Admin muon doi gio chieu tu 14:00 sang 16:00. Co duoc khong?
-**Tra loi:** KHONG. He thong kiem tra `bookingRepository.countByShowtimeIdAndStatusIn(id, [HOLDING, CONFIRMED])` = 3 > 0, se throw loi "Khong the sua suat chieu da co 3 ve dat". Admin phai huy tat ca booking truoc hoac tao suat chieu moi.
+### Câu 6: Suất chiếu đã co 3 người đặt vé. Admin muốn đôi giờ chiếu tu 14:00 sang 16:00. Co được không?
+**Tra loi:** KHONG. Hệ thống kiểm tra `bookingRepository.countByShowtimeIdAndStatusIn(id, [HOLDING, CONFIRMED])` = 3 > 0, sẽ throw loi "Không the sửa suất chiếu đã co 3 về đặt". Admin phải huy tất cả booking trước hoặc tạo suất chiếu mới.
 
-### Cau 7: Method `onDate(LocalDate date)` trong Specification filter the nao? Tai sao khong dung `date.equals()`?
-**Tra loi:** Vi `startTime` co kieu `LocalDateTime` (ngay + gio), con `date` chi la `LocalDate` (ngay). Khong the so sanh truc tiep. Phai chuyen sang khoang: `startTime >= ngay_do 00:00:00` AND `startTime < ngay_hom_sau 00:00:00`. Vi du ngay 25/05: `>= 2026-05-25 00:00` AND `< 2026-05-26 00:00`.
+### Câu 7: Method `onDate(LocalDate date)` trong Specification filter thế nào? Tại sao không đúng `date.equals()`?
+**Tra loi:** Vì `startTime` co kiểu `LocalDateTime` (ngày + giờ), con `date` chi là `LocalDate` (ngày). Không the so sánh trực tiếp. Phai chuyen sang khoang: `startTime >= ngay_do 00:00:00` AND `startTime < ngay_hom_sau 00:00:00`. Ví dụ ngày 25/05: `>= 2026-05-25 00:00` AND `< 2026-05-26 00:00`.
 
-### Cau 8: MapStruct goi `showtime.getMovie().getTitle()` nhung Movie la LAZY. Dieu gi xay ra?
-**Tra loi:** Khi goi `getMovie()`, Hibernate phat hien Movie chua duoc load (vi LAZY), se tu dong chay 1 cau SELECT de lay Movie tu DB. Day goi la **lazy loading trigger**. O chi tiet (1 showtime) thi ok, nhung o danh sach (N showtime) thi moi showtime se trigger 1 query Movie rieng -- day la **N+1 problem**. Cach fix: dung `@EntityGraph` hoac `JOIN FETCH` trong repository.
+### Câu 8: MapStruct goi `showtime.getMovie().getTitle()` những Movie là LAZY. Dieu gì xay ra?
+**Tra loi:** Khi goi `getMovie()`, Hibernate phát hiện Movie chua được load (vì LAZY), sẽ tu đồng chay 1 cau SELECT de lay Movie tu DB. Day goi là **lazy loading trigger**. O chi tiết (1 showtime) thì ok, những o danh sach (N showtime) thì mới showtime sẽ trigger 1 query Movie rieng -- day là **N+1 problem**. Cách fix: đúng `@EntityGraph` hoặc `JOIN FETCH` trong repository.
+
+---
+
+## 11. Bổ sung — Edge case Midnight (suất chiếu qua nửa đêm)
+
+### Vấn đề
+Admin tạo suất chiếu 23:30, phim dài 150 phút → endTime = 02:00 NGÀY HÔM SAU.
+
+Câu hỏi:
+- Overlap detection có chính xác không?
+- Filter "suất chiếu ngày 24/05" có hiển thị suất 23:30 ngày 24 (kết thúc 02:00 ngày 25)?
+- Filter ngày 25 có hiển thị suất này không?
+
+### Kiểm tra overlap với midnight
+Công thức gốc `A < D AND C < B` vẫn đúng với LocalDateTime vì so sánh datetime full (cả ngày + giờ).
+
+Ví dụ:
+- Suất A: 24/05 23:30 → 25/05 02:00 (3D Avengers)
+- Suất B: 25/05 01:00 → 25/05 03:00 (phim khác cùng phòng)
+
+```
+A: 2026-05-24 23:30  →  2026-05-25 02:00
+B: 2026-05-25 01:00  →  2026-05-25 03:00
+
+A.start < B.end?  2026-05-24 23:30 < 2026-05-25 03:00 → TRUE
+B.start < A.end?  2026-05-25 01:00 < 2026-05-25 02:00 → TRUE
+→ Overlap detected → reject
+```
+
+Công thức vẫn chính xác xuyên ngày. **Không cần fix code**.
+
+### Hiển thị suất theo ngày
+Filter "ngày 24/05" thường lọc theo `startTime`:
+```sql
+WHERE startTime >= '2026-05-24 00:00:00'
+  AND startTime <  '2026-05-25 00:00:00'
+```
+
+Suất 23:30 ngày 24 → hiển thị (start 24/05).
+
+Suất 23:30 ngày 24 KHÔNG hiển thị ở filter ngày 25 dù kết thúc 02:00 ngày 25.
+
+**Đây có thể là UX không mong muốn**: user xem lịch ngày 25, không biết có suất "rớt" từ đêm trước. Tùy nghiệp vụ:
+
+**Option 1**: chỉ hiển thị theo startTime (đơn giản, hiện tại).
+**Option 2**: hiển thị cả suất đang chiếu khi ngày bắt đầu:
+```sql
+WHERE startTime BETWEEN :dateStart AND :dateEnd
+   OR (startTime < :dateStart AND endTime > :dateStart)
+```
+
+CineX khuyến nghị Option 1 vì rõ ràng và phù hợp thông thường (rạp ít chiếu xuyên đêm).
+
+### Cảnh báo buffer time với midnight
+Buffer 15 phút giữa 2 suất:
+- Suất A: 24/05 23:30 → 25/05 02:00
+- Cần khoảng nghỉ → suất B sớm nhất: 25/05 02:15
+
+Code:
+```java
+LocalDateTime aEndWithBuffer = aEnd.plusMinutes(bufferMinutes);
+// 2026-05-25 02:00 + 15 phút = 2026-05-25 02:15
+// Kiểm tra bStart >= aEndWithBuffer
+```
+
+LocalDateTime tự handle ngày → không có lỗi xuyên ngày.
+
+## 12. Bổ sung — Auto-update status SCHEDULED → ONGOING → FINISHED
+
+Nghiệp vụ: status showtime tự cập nhật theo thời gian thực:
+- `SCHEDULED`: chưa bắt đầu
+- `ONGOING`: đang chiếu (now ∈ [startTime, endTime])
+- `FINISHED`: đã kết thúc (now > endTime)
+
+### Cách 1: Scheduler (đơn giản)
+```java
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class ShowtimeStatusScheduler {
+
+    private final ShowtimeRepository repository;
+
+    @Scheduled(fixedRate = 60_000) // mỗi 1 phút
+    @Transactional
+    public void updateStatuses() {
+        LocalDateTime now = LocalDateTime.now();
+
+        // SCHEDULED → ONGOING
+        int ongoing = repository.markOngoingByTime(now);
+        // FINISHED
+        int finished = repository.markFinishedByTime(now);
+
+        if (ongoing > 0 || finished > 0) {
+            log.info("Updated showtime status: {} ongoing, {} finished", ongoing, finished);
+        }
+    }
+}
+```
+
+Repository:
+```java
+@Modifying
+@Query("UPDATE Showtime s SET s.status = 'ONGOING' " +
+       "WHERE s.status = 'SCHEDULED' AND s.startTime <= :now AND s.endTime > :now")
+int markOngoingByTime(@Param("now") LocalDateTime now);
+
+@Modifying
+@Query("UPDATE Showtime s SET s.status = 'FINISHED' " +
+       "WHERE s.status = 'ONGOING' AND s.endTime <= :now")
+int markFinishedByTime(@Param("now") LocalDateTime now);
+```
+
+### Cách 2: Computed status (không cần scheduler)
+KHÔNG lưu status trong DB. Tính runtime qua method:
+
+```java
+public ShowtimeStatus getCurrentStatus() {
+    LocalDateTime now = LocalDateTime.now();
+    if (now.isBefore(startTime)) return ShowtimeStatus.SCHEDULED;
+    if (now.isAfter(endTime)) return ShowtimeStatus.FINISHED;
+    return ShowtimeStatus.ONGOING;
+}
+```
+
+**Pros**: không cần scheduler, không cần multi-instance lock.
+**Cons**: không index được theo status, filter status phải scan.
+
+CineX chọn **Cách 1** vì cần filter `WHERE status = 'ONGOING'` nhanh + reporting historical.
+
+### Multi-instance cảnh báo
+Nếu deploy 3 instance → 3 scheduler chạy song song → duplicate work. Dùng ShedLock (xem `backend/04-spring-features.md` mục 14).
+
+## 13. Bổ sung — Cancel Showtime với side-effect
+
+### Yêu cầu nghiệp vụ
+Admin cancel suất chiếu → tất cả booking trong suất phải được hủy + refund.
+
+### Service
+```java
+@Transactional
+public void cancelShowtime(Long id, String reason) {
+    Showtime showtime = showtimeRepository.findById(id)
+        .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+
+    if (showtime.getStatus() == ShowtimeStatus.FINISHED) {
+        throw new BusinessException(ErrorCode.SHOWTIME_ALREADY_FINISHED);
+    }
+
+    // 1. Đánh dấu cancel
+    showtime.setStatus(ShowtimeStatus.CANCELLED);
+    showtime.setCancelReason(reason);
+
+    // 2. Lấy tất cả booking đang active
+    List<Booking> activeBookings = bookingRepository.findByShowtimeIdAndStatusIn(
+        id, List.of(BookingStatus.HOLDING, BookingStatus.CONFIRMED)
+    );
+
+    // 3. Refund từng booking
+    for (Booking booking : activeBookings) {
+        try {
+            if (booking.getStatus() == BookingStatus.CONFIRMED) {
+                // Đã thanh toán → refund 100% (admin cancel, không phải user)
+                paymentService.refundFull(booking.getPayment().getId(),
+                    "Admin cancel showtime: " + reason);
+            }
+            booking.setStatus(BookingStatus.CANCELLED);
+            booking.getBookingSeats().forEach(bs -> bs.setStatus(SeatStatus.AVAILABLE));
+
+            // 4. Notify user
+            eventPublisher.publishEvent(new ShowtimeCancelledEvent(booking, reason));
+        } catch (Exception e) {
+            log.error("Refund failed for booking {}", booking.getBookingCode(), e);
+        }
+    }
+
+    log.info("Cancelled showtime {} with {} bookings refunded", id, activeBookings.size());
+}
+```
+
+### Endpoint
+```java
+@DeleteMapping("/admin/showtimes/{id}")
+@PreAuthorize("hasRole('ADMIN')")
+public ApiResponse<Void> cancel(@PathVariable Long id, @RequestParam String reason) {
+    showtimeService.cancelShowtime(id, reason);
+    return ApiResponse.success(null);
+}
+```
+
+### Listener gửi notification
+```java
+@Async
+@TransactionalEventListener(phase = AFTER_COMMIT)
+public void onShowtimeCancelled(ShowtimeCancelledEvent event) {
+    Booking booking = event.getBooking();
+    String message = String.format(
+        "Suất chiếu phim %s ngày %s đã bị hủy. Vé của bạn (%s) sẽ được hoàn tiền 100%%. Lý do: %s",
+        booking.getShowtime().getMovie().getTitle(),
+        booking.getShowtime().getStartTime().format(DT_FMT),
+        booking.getBookingCode(),
+        event.getReason()
+    );
+    notificationService.createNotification(booking.getUser().getId(), "Suất chiếu bị hủy", message, NotificationType.BOOKING);
+    emailService.sendShowtimeCancelledEmail(booking.getUser().getEmail(), booking, event.getReason());
+}
+```
+
+## 14. Cảnh báo về mất dấu tiếng Việt trong file gốc
+
+Phần lớn nội đúng mục 1-10 của file này (`08-showtime-explained.md`) đang **MẤT DẤU tiếng Việt** ("Tổng quan" thấy vì "Tổng quan", "Sơ đồ" thấy vì "Sơ đồ"). Đây là vì phạm rule trong `CLAUDE.md`.
+
+Phần bổ sung mục 11-13 (bạn đang đọc) tuân thủ rule có dấu. Khi rảnh, nên audit lại các mục 1-10 để khôi phục dấu cho consistent.

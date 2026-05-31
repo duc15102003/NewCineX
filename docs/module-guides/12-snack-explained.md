@@ -460,3 +460,177 @@ curl -X POST http://localhost:8088/api/snacks/1/restore \
 3. **User thấy đồ ăn admin đã xóa mềm không?** → Không, list filter `storageState IS NULL OR storageState != DELETED` kết hợp `available = true`.
 4. **Tại sao Specification inline trong service thay vì tạo class riêng?** → Vì điều kiện đơn giản và chỉ dùng 1 chỗ. Nếu dùng nhiều nơi hoặc phức tạp hơn → nên tách thành `SnackSpecification.java`.
 5. **Admin đổi giá snack từ 45k lên 50k. Đơn đặt vé cũ hiển thị giá bao nhiêu?** → Vẫn 45k, vì BookingSnack đã lưu snapshot price = 45k tại thời điểm đặt.
+
+---
+
+## 10. Bổ sung — Upload ảnh snack là action RIÊNG (theo CLAUDE.md)
+
+Quy ước CineX (CLAUDE.md): upload ảnh là action riêng, KHÔNG nhét trong form Tạo/Sửa.
+
+**Lý do**: nếu nhét trong form, user upload ảnh xong → bấm "Hủy" → ảnh đã lên Cloudinary, không hoàn tác → gây nhầm lẫn.
+
+### Endpoint riêng cho upload
+```java
+@PostMapping("/admin/snacks/{id}/image")
+@PreAuthorize("hasRole('ADMIN')")
+public ApiResponse<UploadResponse> uploadImage(
+    @PathVariable Long id,
+    @RequestParam("file") MultipartFile file
+) {
+    snackService.uploadImage(id, file);
+    return ApiResponse.success(new UploadResponse(/* url */));
+}
+```
+
+### Service
+```java
+@Transactional
+public void uploadImage(Long id, MultipartFile file) {
+    Snack snack = snackRepository.findById(id)
+        .orElseThrow(() -> new BusinessException(ErrorCode.SNACK_NOT_FOUND));
+
+    // Validate
+    if (!file.getContentType().startsWith("image/")) {
+        throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
+    }
+    if (file.getSize() > 5 * 1024 * 1024) {
+        throw new BusinessException(ErrorCode.FILE_TOO_LARGE);
+    }
+
+    // Delete ảnh cũ nếu có
+    if (snack.getCloudinaryPublicId() != null) {
+        cloudinaryService.delete(snack.getCloudinaryPublicId());
+    }
+
+    // Upload mới
+    CloudinaryUploadResult result = cloudinaryService.upload(file, "cinex/snacks");
+    snack.setImageUrl(result.url());
+    snack.setCloudinaryPublicId(result.publicId());
+    // Hibernate tự UPDATE khi method return
+}
+```
+
+### Schema bổ sung
+```sql
+ALTER TABLE snacks ADD cloudinary_public_id NVARCHAR(255);
+```
+
+Lưu `public_id` để delete đúng ảnh khi update sau này.
+
+### Frontend pattern
+Table snack có cột riêng "Upload":
+```tsx
+<TableRow>
+  <TableCell>{snack.name}</TableCell>
+  <TableCell>
+    {snack.imageUrl ? (
+      <img src={snack.imageUrl} className="w-12 h-12 rounded object-cover" />
+    ) : (
+      <span className="text-gray-500">—</span>
+    )}
+  </TableCell>
+  <TableCell>
+    <SnackUploadButton snackId={snack.id} />
+  </TableCell>
+  <TableCell>
+    <SnackActions snack={snack} />
+  </TableCell>
+</TableRow>
+```
+
+### SnackUploadButton component
+```tsx
+function SnackUploadButton({ snackId }: { snackId: number }) {
+  const queryClient = useQueryClient();
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      await api.post(`/api/admin/snacks/${snackId}/image`, formData);
+      toast.success("Tải lên thành công");
+      queryClient.invalidateQueries({ queryKey: ["admin-snacks"] });
+    } catch (err) {
+      toast.error("Tải lên thất bại");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <label className="cursor-pointer">
+      <input type="file" accept="image/*" hidden onChange={handleFile} disabled={uploading} />
+      <Button variant="ghost" size="sm" disabled={uploading}>
+        {uploading ? <Spinner /> : <UploadIcon />}
+        Upload
+      </Button>
+    </label>
+  );
+}
+```
+
+### Form Tạo/Sửa snack KHÔNG có input file
+```tsx
+<DialogContent>
+  <form onSubmit={form.handleSubmit(onSubmit)}>
+    <Input {...form.register("name")} placeholder="Tên" />
+    <PriceInput {...form.register("price", { valueAsNumber: true })} />
+    <Textarea {...form.register("description")} />
+    <Select {...form.register("category")}>...</Select>
+    {/* KHÔNG có input file ở đây */}
+    <Button type="submit">Lưu</Button>
+  </form>
+</DialogContent>
+```
+
+Sau khi save → table refresh → click nút "Upload" ở row mới → upload ảnh riêng.
+
+## 11. Bổ sung — Consistency Specification
+
+Audit phát hiện: 12-snack dùng Specification **inline** trong service, các module khác (Movie, Room) dùng **class riêng**. Không nhất quán.
+
+**Đề xuất**: tách `SnackSpecification.java`:
+
+```java
+public class SnackSpecification {
+
+    public static Specification<Snack> withFilter(SnackFilter f) {
+        return Specification.where(notDeleted())
+            .and(nameLike(f.getKeyword()))
+            .and(categoryEqual(f.getCategory()))
+            .and(availableOnly(f.getAvailableOnly()));
+    }
+
+    private static Specification<Snack> notDeleted() {
+        return (root, query, cb) -> cb.or(
+            cb.isNull(root.get("storageState")),
+            cb.notEqual(root.get("storageState"), StorageState.DELETED)
+        );
+    }
+
+    private static Specification<Snack> nameLike(String keyword) {
+        if (keyword == null || keyword.isBlank()) return null;
+        return (root, query, cb) -> cb.like(
+            cb.lower(root.get("name")),
+            "%" + keyword.toLowerCase() + "%"
+        );
+    }
+
+    // ... categoryEqual, availableOnly tương tự
+}
+```
+
+Service trở nên gọn:
+```java
+public Page<SnackResponse> list(SnackFilter filter, Pageable pageable) {
+    return snackRepository.findAll(SnackSpecification.withFilter(filter), pageable)
+        .map(snackMapper::toResponse);
+}
+```
+
+Lợi ích: consistent với Movie/Room/Booking pattern, tái sử dụng được, dễ test.

@@ -221,3 +221,285 @@ export function jwtDecode(token: string) {
 
 5. **JWT payload ai cũng đọc được — có an toàn không?**
    → Payload không mã hóa (chỉ Base64). Nhưng không ai SỬA được vì không có secret key tạo signature. FE chỉ đọc, không sửa.
+
+---
+
+## 6. Refresh Token Flow chi tiết
+
+### Vấn đề
+Access token expire 15 phút. User đang dùng app — không thể bắt họ login lại mỗi 15 phút.
+
+### Giải pháp
+Refresh token sống lâu hơn (7 ngày), dùng để xin access token mới khi cũ expire.
+
+### Axios interceptor xử lý 401
+```ts
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const original = error.config;
+
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+      try {
+        const refreshToken = localStorage.getItem("refreshToken");
+        const { data } = await axios.post(
+          `${API_URL}/api/auth/refresh`,
+          { refreshToken }
+        );  // ← dùng axios thẳng, KHÔNG dùng `api` (tránh infinite loop)
+
+        localStorage.setItem("accessToken", data.accessToken);
+        localStorage.setItem("refreshToken", data.refreshToken);
+
+        original.headers.Authorization = `Bearer ${data.accessToken}`;
+        return api(original);  // retry request gốc
+      } catch (refreshErr) {
+        // Refresh fail (token expired/revoked) → logout
+        localStorage.clear();
+        window.location.href = "/login";
+        return Promise.reject(refreshErr);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+```
+
+### Sơ đồ
+```
+Request → 401 → interceptor:
+  ├─ POST /auth/refresh (axios thẳng)
+  ├─ thành công → lưu token mới → retry request gốc
+  └─ thất bại → clear localStorage → redirect /login
+```
+
+---
+
+## 7. failedQueue — Race Condition khi nhiều request fail cùng lúc
+
+### Vấn đề
+User vào dashboard, 5 widget gọi 5 API song song → cả 5 fail 401 cùng lúc → 5 refresh request đồng thời → server overload.
+
+### Giải pháp queue
+```ts
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (err: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((p) => {
+    if (error) p.reject(error);
+    else if (token) p.resolve(token);
+  });
+  failedQueue = [];
+};
+
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const original = error.config;
+
+    if (error.response?.status === 401 && !original._retry) {
+      if (isRefreshing) {
+        // Đợi refresh đang chạy
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          original.headers.Authorization = `Bearer ${token}`;
+          return api(original);
+        });
+      }
+
+      original._retry = true;
+      isRefreshing = true;
+
+      try {
+        const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+        localStorage.setItem("accessToken", data.accessToken);
+        processQueue(null, data.accessToken);  // resolve tất cả request đang đợi
+        return api(original);
+      } catch (err) {
+        processQueue(err, null);  // reject tất cả
+        localStorage.clear();
+        window.location.href = "/login";
+        return Promise.reject(err);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+```
+
+Chỉ 1 refresh chạy, 4 request còn lại đợi → khi xong, retry tất cả với token mới.
+
+---
+
+## 8. XSS vs CSRF — Trade-off Storage
+
+### localStorage (CineX dùng)
+- ✅ Đơn giản, đa tab share
+- ❌ XSS đọc được: hacker inject `<script>` → đọc `localStorage.getItem('accessToken')` → gửi về server hacker
+
+### HttpOnly Cookie
+- ✅ XSS không đọc được (HttpOnly = chỉ HTTP, JS không truy cập)
+- ❌ CSRF risk: hacker dụ user click link → cookie tự gửi → action thực hiện
+- ❌ Phức tạp: cần backend set cookie + CORS cấu hình `credentials: include`
+
+### Vì sao CineX chọn localStorage
+- Đơn giản dev/setup
+- XSS phòng bằng CSP + sanitize input + React tự escape JSX
+- App SPA + JWT Bearer thay vì cookie session
+
+### Mitigation XSS
+- Content Security Policy header:
+  ```
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'
+  ```
+- KHÔNG render HTML từ user input bằng `dangerouslySetInnerHTML`
+- DOMPurify cho rich text editor
+- Validate input mọi nơi
+
+---
+
+## 9. Multi-tab Logout Sync
+
+### Vấn đề
+User mở 3 tab CineX. Logout ở tab 1 → tab 2, 3 không biết, vẫn login.
+
+### Fix: `storage` event
+```ts
+useEffect(() => {
+  const handler = (e: StorageEvent) => {
+    if (e.key === "accessToken" && e.newValue === null) {
+      // Tab khác đã logout
+      useAuthStore.getState().logout();
+      navigate("/login");
+    }
+  };
+  window.addEventListener("storage", handler);
+  return () => window.removeEventListener("storage", handler);
+}, []);
+```
+
+`storage` event chỉ fire ở tab KHÁC khi localStorage đổi. Tab nào logout → tab khác nhận event → tự sync logout.
+
+---
+
+## 10. Redirect After Login
+
+### Vấn đề
+User vào `/admin/movies` → chưa login → redirect `/login` → đăng nhập xong → trang chủ. Mất context.
+
+### Pattern lưu `from`
+```tsx
+// ProtectedRoute
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const isAuth = useAuthStore(s => !!s.token);
+  const location = useLocation();
+
+  if (!isAuth) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  return <>{children}</>;
+}
+
+// LoginPage
+function LoginPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as any)?.from?.pathname ?? "/";
+
+  const onSuccess = () => {
+    navigate(from, { replace: true });
+  };
+}
+```
+
+User đăng nhập xong sẽ về đúng trang ban đầu.
+
+---
+
+## 11. Token Expiration Pre-check
+
+### Thay vì đợi 401, check `exp` trước khi gọi API
+```ts
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+}
+
+api.interceptors.request.use(async (config) => {
+  const token = localStorage.getItem("accessToken");
+  if (token && isTokenExpired(token)) {
+    await refreshAccessToken();
+  }
+  config.headers.Authorization = `Bearer ${localStorage.getItem("accessToken")}`;
+  return config;
+});
+```
+
+Pros: tránh round-trip 401. Cons: clock skew giữa client và server → check không chính xác → vẫn cần handle 401 ở response.
+
+---
+
+## 12. State Diagram Auth
+
+```
+        ┌──────────────┐
+        │ LOGGED_OUT   │ ← khởi tạo, hoặc logout
+        └──────┬───────┘
+               │ login()
+               ▼
+        ┌──────────────┐
+        │ LOGGING_IN   │ ← đang gọi API /login
+        └──────┬───────┘
+               │ success
+               ▼
+        ┌──────────────┐
+        │  LOGGED_IN   │←─────┐
+        └──────┬───────┘      │
+               │ token expire │ refresh success
+               ▼              │
+        ┌──────────────┐      │
+        │  REFRESHING  │──────┘
+        └──────┬───────┘
+               │ refresh fail
+               ▼
+        ┌──────────────┐
+        │  LOGGED_OUT  │
+        └──────────────┘
+```
+
+---
+
+## 13. Câu hỏi tự kiểm tra mở rộng
+
+**Câu 6**: Tại sao refresh token interceptor PHẢI dùng `axios.post` thẳng thay vì instance `api`?
+
+→ Nếu dùng `api`, request `/auth/refresh` cũng đi qua interceptor → cũng có thể bị 401 (vd refresh token expired) → trigger refresh lại → infinite loop. Dùng axios thẳng để bypass interceptor.
+
+**Câu 7**: failedQueue giải quyết vấn đề gì? Không có failedQueue điều gì xảy ra?
+
+→ Race condition khi nhiều API call 401 cùng lúc. Không có queue → 5 request fail → 5 refresh song song → server xử lý 5 lần, có thể trả 5 token khác nhau (rotation) → conflict. Queue đảm bảo chỉ 1 refresh, 4 còn lại đợi.
+
+**Câu 8**: Logout ở tab 1, làm sao tab 2 biết để cũng logout?
+
+→ `window.storage` event. Khi localStorage đổi ở tab 1, tab 2 (3, 4...) nhận event → đọc state mới → tự logout. Tab gốc KHÔNG nhận event (chỉ tab khác).
+
+**Câu 9**: localStorage có rủi ro XSS. Vì sao CineX vẫn chọn?
+
+→ Trade-off với simplicity. Mitigation: CSP, sanitize input, React auto-escape, không `dangerouslySetInnerHTML`. HttpOnly cookie chống XSS nhưng tăng độ phức tạp + CSRF risk.
+
+**Câu 10**: User vào `/admin/movies` → chưa login → redirect /login → login xong cần về đâu?
+
+→ Về `/admin/movies`. Pattern: ProtectedRoute redirect kèm `state: { from: location }`. LoginPage đọc `state.from` → navigate sau login. Không có pattern này → user phải tự navigate lại → UX kém.

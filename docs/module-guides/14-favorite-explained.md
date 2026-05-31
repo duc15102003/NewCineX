@@ -442,4 +442,79 @@ curl -X GET "http://localhost:8088/api/users/me/favorites?page=0&size=20" \
 2. **Tại sao POST ở /api/movies/{id}/favorite mà GET ở /api/users/me/favorites?** → POST/DELETE là action trên movie resource. GET là data thuộc về user resource. Hai base path phản ánh đúng ownership của resource trong REST.
 3. **1 user thích 1 phim 2 lần thì sao?** → Lỗi 400 "Movie already in favorites" do service check trước khi insert. Nếu race condition qua check → DB UNIQUE constraint bắt lỗi → Spring trả lỗi 500 có thể catch và xử lý.
 4. **UNIQUE constraint nên đặt ở DB hay chỉ check trong code thôi?** → Nên đặt cả 2. Code check: UX tốt, error message thân thiện. DB constraint: bảo vệ khỏi race condition và code bug — lớp phòng thủ cuối cùng không thể bypass.
-5. **UserFavorite có extends BaseEntity không? Tại sao?** → Tùy design. Nếu extends BaseEntity thì có thêm version, storageState (không dùng), createdBy, updatedBy (thừa). Bảng join đơn giản có thể chỉ cần user_id, movie_id, created_at là đủ — giữ entity gọn nhẹ.
+5. **UserFavorite có extends BaseEntity không? Tại sao?** → Tùy design. Nếu extends BaseEntity thì có thêm version, storageState (không dùng), createdBy, updatedBy (thừa). Bảng join đơn giản có thể chỉ cần user_id, movie_id, created_at là đủ — giữ entity gọn nhẹ. **Trong CineX dự án này, UserFavorite KHÔNG extends BaseEntity** vì đây là bảng join thuần, không có nghiệp vụ riêng.
+
+---
+
+## 10. Bổ sung — Endpoint `isFavorited` cho Frontend
+
+### Vấn đề
+Trang detail phim cần hiển thị icon trái tim ❤️ (đã thích) hoặc 🤍 (chưa thích). FE cần biết status hiện tại.
+
+Cách SAI: query toàn bộ favorites list → check movie có trong list không. Tốn data.
+
+Cách ĐÚNG: endpoint nhẹ trả `{ isFavorited: boolean }`.
+
+### Endpoint
+```java
+@GetMapping("/movies/{id}/favorited")
+@PreAuthorize("isAuthenticated()")
+public ApiResponse<FavoriteStatusResponse> isFavorited(
+    @PathVariable Long id,
+    Authentication auth
+) {
+    Long userId = ((CustomUserDetails) auth.getPrincipal()).getId();
+    boolean favorited = favoriteRepository.existsByUserIdAndMovieId(userId, id);
+    return ApiResponse.success(new FavoriteStatusResponse(favorited));
+}
+```
+
+### Repository
+```java
+boolean existsByUserIdAndMovieId(Long userId, Long movieId);
+```
+
+Spring Data sinh: `SELECT COUNT(*) > 0 FROM user_favorites WHERE user_id = ? AND movie_id = ?`. Có index `(user_id, movie_id)` → cực nhanh.
+
+### Frontend
+```tsx
+const { data } = useQuery({
+  queryKey: ["favorite-status", movieId],
+  queryFn: () => api.get(`/api/movies/${movieId}/favorited`).then(r => r.data.data),
+  enabled: !!token,
+});
+
+<button onClick={() => toggle.mutate(data?.isFavorited)}>
+  {data?.isFavorited ? <HeartFilled /> : <Heart />}
+</button>
+```
+
+### Bulk check cho list page
+List phim hiển thị 20 card với icon yêu thích → KHÔNG gọi 20 endpoint riêng:
+
+```java
+@PostMapping("/me/favorites/check")
+public ApiResponse<Map<Long, Boolean>> checkBulk(
+    @RequestBody List<Long> movieIds,
+    Authentication auth
+) {
+    Long userId = ((CustomUserDetails) auth.getPrincipal()).getId();
+    Set<Long> favoritedIds = favoriteRepository.findFavoritedMovieIds(userId, movieIds);
+    Map<Long, Boolean> result = movieIds.stream()
+        .collect(Collectors.toMap(id -> id, favoritedIds::contains));
+    return ApiResponse.success(result);
+}
+
+@Query("SELECT f.movie.id FROM UserFavorite f WHERE f.user.id = :userId AND f.movie.id IN :movieIds")
+Set<Long> findFavoritedMovieIds(Long userId, List<Long> movieIds);
+```
+
+1 query thay vì N → giảm latency.
+
+### Invalidate sau toggle
+```tsx
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ["favorite-status", movieId] });
+  queryClient.invalidateQueries({ queryKey: ["favorites"] });
+}
+```

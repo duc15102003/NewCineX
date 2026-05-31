@@ -27,6 +27,10 @@
 | 9 | [backend/08-redis.md](backend/08-redis.md) | Cache, TTL, cache-aside pattern | Spring Boot |
 | 10 | [backend/09-email-cloudinary-qr.md](backend/09-email-cloudinary-qr.md) | Gửi email, upload ảnh, sinh QR code | Spring Boot |
 | 11 | [backend/10-websocket.md](backend/10-websocket.md) | WebSocket real-time: STOMP, SockJS, push ghế thay đổi | Spring Boot |
+| 12 | [backend/11-testing.md](backend/11-testing.md) | JUnit 5, Mockito, @WebMvcTest, @DataJpaTest, Testcontainers | Spring Boot |
+| 13 | [backend/13-deployment.md](backend/13-deployment.md) | Dockerfile production, Nginx, SSL, CI/CD, backup 3-2-1 | Docker + Spring |
+| 14 | [backend/14-observability.md](backend/14-observability.md) | Logging, MDC, Actuator, Prometheus, distributed tracing | Spring Boot |
+| 15 | [backend/15-common-pitfalls.md](backend/15-common-pitfalls.md) | Top 20 bug Spring (AOP proxy, N+1, LazyInit, circular dep) | JPA + Spring |
 
 **Database — đọc sau backend 02:**
 | # | File | Nội dung | Cần biết trước |
@@ -56,6 +60,7 @@
 | P1 | [frontend/pre-01-html-css-basics.md](frontend/pre-01-html-css-basics.md) | HTML thẻ, CSS box model, flexbox, responsive, Tailwind | — |
 | P2 | [frontend/pre-02-javascript-essentials.md](frontend/pre-02-javascript-essentials.md) | Biến, hàm, array (.map .filter), destructuring, spread, async/await | — |
 | P3 | [frontend/pre-03-http-api-basics.md](frontend/pre-03-http-api-basics.md) | HTTP request/response, REST API, JSON, status code, Axios | — |
+| P4 | [frontend/pre-04-typescript-utility-types.md](frontend/pre-04-typescript-utility-types.md) | Partial, Pick, Omit, Record, ReturnType + type narrowing | TypeScript cơ bản |
 
 **Kiến thức framework:**
 | # | File | Nội dung | Cần biết trước |
@@ -75,6 +80,10 @@
 | 13 | [frontend/12-auth-flow-explained.md](frontend/12-auth-flow-explained.md) | Auth flow: login → token → interceptor → ProtectedRoute | React + Axios + Zustand |
 | 14 | [frontend/13-movie-feature-explained.md](frontend/13-movie-feature-explained.md) | Movie pages: search debounce, MovieCard, cache, suất chiếu | TanStack Query |
 | 15 | [frontend/14-booking-websocket-explained.md](frontend/14-booking-websocket-explained.md) | Booking: sơ đồ ghế, WebSocket real-time, payment, QR code | Tất cả FE + WebSocket |
+| 16 | [frontend/15-react-pitfalls.md](frontend/15-react-pitfalls.md) | Top 18 bug React/TS/Tailwind (StrictMode, stale closure, dynamic class) | React |
+| 17 | [frontend/16-performance-optimization.md](frontend/16-performance-optimization.md) | memo, code split, virtualize, bundle size, Web Vitals | React + TanStack Query |
+| 18 | [frontend/17-testing-frontend.md](frontend/17-testing-frontend.md) | Vitest + React Testing Library + MSW + Playwright | React |
+| 19 | [frontend/18-cookbook.md](frontend/18-cookbook.md) | Recipes: debounce, infinite scroll, file upload, toast, confirm | React |
 
 ### Bước 3: Module guides (đọc khi làm từng task)
 
@@ -96,9 +105,12 @@
 | 12 | [module-guides/12-snack-explained.md](module-guides/12-snack-explained.md) | Đồ ăn kèm vé, snapshot price | Booking |
 | 13 | [module-guides/13-notification-explained.md](module-guides/13-notification-explained.md) | Thông báo, bulk JPQL, Observer integration | Payment |
 | 14 | [module-guides/14-favorite-explained.md](module-guides/14-favorite-explained.md) | Phim yêu thích, toggle pattern, hard delete | Movie + User |
+| 15 | [module-guides/15-statistics-explained.md](module-guides/15-statistics-explained.md) | Báo cáo, aggregate query, export PDF/Excel, Redis cache | Booking + Payment |
 
 ### Tham khảo thêm
 | File | Nội dung |
 |---|---|
 | [glossary.md](glossary.md) | Từ điển thuật ngữ kỹ thuật (50+ thuật ngữ) |
-| [common-mistakes.md](common-mistakes.md) | 10 lỗi hay gặp khi code + cách fix |
+| [common-mistakes.md](common-mistakes.md) | 30 lỗi hay gặp khi code + cách fix (mở rộng từ 10) |
+| [test-cases.md](test-cases.md) | Test cases cho 23 module |
+| [features-completed.md](features-completed.md) | Danh sách tính năng đã hoàn thành |

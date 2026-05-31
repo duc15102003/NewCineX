@@ -434,3 +434,471 @@ function LoginForm() {
    → Cleanup function trong useEffect chạy
    → VD: Rời trang chọn ghế → clearInterval countdown timer
 ```
+
+---
+
+## React Hooks nâng cao
+
+### useRef — Giữ giá trị qua render
+
+`useRef` tạo 1 "hộp" giữ value, KHÔNG trigger re-render khi đổi.
+
+**3 use case chính**:
+
+**1. Ref vào DOM**
+```tsx
+const inputRef = useRef<HTMLInputElement>(null);
+
+useEffect(() => {
+  inputRef.current?.focus();
+}, []);
+
+return <input ref={inputRef} />;
+```
+
+**2. Giữ value qua render mà không re-render**
+```tsx
+function Timer() {
+  const intervalRef = useRef<NodeJS.Timeout>();
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => setCount(c => c + 1), 1000);
+    return () => clearInterval(intervalRef.current);
+  }, []);
+
+  return <div>{count}</div>;
+}
+```
+
+intervalRef KHÔNG trigger re-render khi đổi (state thì có).
+
+**3. Lưu giá trị "trước" (previous value)**
+```tsx
+function PrevValueDemo({ value }: { value: number }) {
+  const prevRef = useRef(value);
+
+  useEffect(() => {
+    prevRef.current = value;
+  }, [value]);
+
+  return <div>Hiện tại: {value}, Trước đó: {prevRef.current}</div>;
+}
+```
+
+### useMemo — Cache giá trị tính toán
+
+```tsx
+function MovieList({ movies, query }: Props) {
+  // Mỗi render tính lại expensive — chậm
+  const filtered = movies.filter(m => m.title.toLowerCase().includes(query.toLowerCase()));
+
+  // Chỉ tính lại khi movies/query đổi
+  const filteredMemo = useMemo(
+    () => movies.filter(m => m.title.toLowerCase().includes(query.toLowerCase())),
+    [movies, query]
+  );
+
+  return <List items={filteredMemo} />;
+}
+```
+
+**Quy tắc**: KHÔNG dùng useMemo bừa bãi. Chỉ khi:
+- Tính toán thực sự đắt (lọc list lớn, parse JSON to)
+- Hoặc cần stable reference cho dependency của hook khác
+
+### useCallback — Cache function
+
+```tsx
+function Parent() {
+  const [count, setCount] = useState(0);
+
+  // SAI — function mới mỗi render → Child re-render thừa
+  const handleClick = () => setCount(c => c + 1);
+
+  // ĐÚNG — function stable, Child không re-render
+  const handleClickMemo = useCallback(() => setCount(c => c + 1), []);
+
+  return <Child onClick={handleClickMemo} />;
+}
+
+const Child = memo(({ onClick }: { onClick: () => void }) => {
+  console.log("Child render");
+  return <button onClick={onClick}>+</button>;
+});
+```
+
+Chỉ hữu ích khi Child được wrap `memo()` hoặc là deps của hook khác.
+
+### React.memo — Bỏ qua re-render nếu props không đổi
+
+```tsx
+const MovieCard = memo(function MovieCard({ movie }: { movie: Movie }) {
+  console.log("Render MovieCard", movie.id);
+  return <Card>...</Card>;
+});
+```
+
+Parent re-render → MovieCard chỉ re-render nếu `movie` đổi (shallow compare).
+
+**Cảnh báo**: shallow compare → nếu prop là object/array inline, mỗi render vẫn ref khác → memo không hiệu quả. Phải useMemo prop hoặc tách state.
+
+---
+
+## StrictMode — useEffect chạy 2 lần trong dev
+
+```tsx
+<StrictMode>
+  <App />
+</StrictMode>
+```
+
+React cố ý gọi `useEffect` 2 lần (mount → unmount → mount lại) trong dev để phát hiện effect không idempotent.
+
+### Triệu chứng
+```tsx
+useEffect(() => {
+  console.log("mount");
+  return () => console.log("unmount");
+}, []);
+
+// Console dev:
+// mount
+// unmount
+// mount  ← cố tình chạy lại
+```
+
+### Hệ quả
+- WebSocket connect 2 lần
+- API call 2 lần
+- Counter init 2 lần
+
+### Fix
+**Đảm bảo cleanup** đúng để effect 2 lần vẫn an toàn:
+```tsx
+useEffect(() => {
+  const client = createStompClient();
+  client.activate();
+  return () => client.deactivate();  // ← cleanup connection đầu trước khi tạo connection 2
+}, []);
+```
+
+Production KHÔNG có StrictMode → chỉ chạy 1 lần. Nên không cần worry, miễn cleanup đúng.
+
+---
+
+## Rules of Hooks
+
+### Quy tắc 1: CHỈ gọi ở top level
+```tsx
+// SAI — gọi conditional
+function MyComp({ user }: Props) {
+  if (user) {
+    const [name, setName] = useState(user.name);  // ❌
+  }
+}
+
+// ĐÚNG
+function MyComp({ user }: Props) {
+  const [name, setName] = useState(user?.name ?? "");  // ✅
+}
+```
+
+### Quy tắc 2: CHỈ gọi từ React function (hook hoặc component)
+```tsx
+// SAI — gọi từ helper function thường
+function helperFn() {
+  const [x, setX] = useState(0);  // ❌
+}
+
+// ĐÚNG — custom hook
+function useCustomHook() {
+  const [x, setX] = useState(0);  // ✅
+}
+```
+
+### Tại sao
+React giả định thứ tự hook CỐ ĐỊNH. Conditional hook → thứ tự đổi giữa các render → React track state sai → bug khó hiểu.
+
+---
+
+## Stale Closure — Bug Counter Timer
+
+### Reproduce
+```tsx
+function Timer() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      console.log("count:", count);  // luôn log 0!
+      setCount(count + 1);             // luôn set 1!
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);  // ← deps rỗng
+
+  return <div>{count}</div>;
+}
+```
+
+### Tại sao
+`useEffect` chạy 1 lần với deps rỗng. Function trong setInterval **capture biến `count` lúc đó** (= 0). Mỗi tick dùng `count = 0`, set thành 1, không tăng tiếp.
+
+### 3 cách fix
+
+**Fix 1: Functional update**
+```tsx
+setCount(c => c + 1);  // không phụ thuộc count
+```
+
+**Fix 2: Deps đầy đủ**
+```tsx
+useEffect(() => {
+  const id = setInterval(() => setCount(count + 1), 1000);
+  return () => clearInterval(id);
+}, [count]);  // chạy lại mỗi khi count đổi → re-create interval
+```
+
+Nhưng pattern này tạo + clear interval mỗi giây → tốn.
+
+**Fix 3: useRef giữ giá trị mới nhất**
+```tsx
+const countRef = useRef(count);
+useEffect(() => { countRef.current = count; }, [count]);
+
+useEffect(() => {
+  const id = setInterval(() => {
+    console.log(countRef.current);  // luôn mới nhất
+  }, 1000);
+  return () => clearInterval(id);
+}, []);
+```
+
+---
+
+## Functional State Update
+
+### Tại sao `setCount(count + 1)` 3 lần chỉ tăng 1
+```tsx
+const handler = () => {
+  setCount(count + 1);   // count = 0 + 1 = 1
+  setCount(count + 1);   // count = 0 + 1 = 1
+  setCount(count + 1);   // count = 0 + 1 = 1
+};
+```
+
+React batch state update. Trong handler, `count` vẫn là 0 (chưa re-render). 3 setCount cùng set 1 → cuối cùng 1.
+
+### Fix với functional
+```tsx
+const handler = () => {
+  setCount(c => c + 1);  // c = 0 → 1
+  setCount(c => c + 1);  // c = 1 → 2
+  setCount(c => c + 1);  // c = 2 → 3
+};
+```
+
+React queue function, áp dụng tuần tự với value mới nhất.
+
+---
+
+## React 18 Batching
+
+React 18+: **mọi** setState trong cùng tick được batch (kể cả trong setTimeout, Promise, event handler).
+
+```tsx
+setTimeout(() => {
+  setCount(c => c + 1);
+  setName("X");
+  // → 1 re-render duy nhất (React 18)
+  // React 17: 2 re-render
+}, 0);
+```
+
+---
+
+## Conditional Rendering Patterns
+
+### Pattern 1: Ternary
+```tsx
+{isLoading ? <Spinner /> : <List />}
+```
+
+### Pattern 2: Short-circuit `&&`
+```tsx
+{user && <Welcome name={user.name} />}
+```
+
+Cảnh báo: `&&` với 0 (number) render `0`:
+```tsx
+{count && <p>...</p>}  // count = 0 → render "0" chữ
+{count > 0 && <p>...</p>}  // ✅
+```
+
+### Pattern 3: Early return
+```tsx
+function MovieList({ data, isLoading, error }) {
+  if (isLoading) return <Skeleton />;
+  if (error) return <ErrorView e={error} />;
+  if (!data?.length) return <Empty />;
+  return <List items={data} />;
+}
+```
+
+---
+
+## Lists & Keys
+
+### Quy tắc key
+- Phải UNIQUE trong cùng list
+- STABLE — không thay đổi giữa render
+- KHÔNG dùng index trừ khi list không bao giờ đổi thứ tự
+
+### Tại sao không dùng index
+```tsx
+// Initial: [{name: "A"}, {name: "B"}]
+{items.map((item, i) => <Item key={i} value={item.name} defaultValue={item.name} />)}
+
+// User xóa A:
+// New: [{name: "B"}]
+// React: key=0 đổi từ "A" sang "B" → reuse component → defaultValue cũ giữ lại
+```
+
+Dùng `key={item.id}` → React track đúng identity.
+
+---
+
+## useId, useTransition, useDeferredValue (React 18)
+
+### useId — Sinh ID unique
+```tsx
+const id = useId();
+return (
+  <>
+    <label htmlFor={id}>Email</label>
+    <input id={id} />
+  </>
+);
+```
+
+SSR-safe, không cần Math.random().
+
+### useTransition — Mark update không gấp
+```tsx
+const [isPending, startTransition] = useTransition();
+
+const handleSearch = (q: string) => {
+  setQuery(q);  // urgent — type ngay
+  startTransition(() => {
+    setResults(filterLargeList(q));  // không urgent — có thể delay
+  });
+};
+```
+
+UI không freeze khi filter list lớn.
+
+### useDeferredValue — Lùi việc render value
+```tsx
+const deferredQuery = useDeferredValue(query);
+const results = useMemo(() => filterLargeList(deferredQuery), [deferredQuery]);
+```
+
+---
+
+## Fragment — Wrap không thêm DOM
+
+```tsx
+// JSX yêu cầu 1 root element
+return (
+  <>
+    <h1>Title</h1>
+    <p>Body</p>
+  </>
+);
+
+// Cú pháp dài (nếu cần key)
+return (
+  <Fragment key={id}>...</Fragment>
+);
+```
+
+---
+
+## Portal — Render escape parent
+
+Modal cần escape `overflow: hidden` của parent:
+```tsx
+import { createPortal } from "react-dom";
+
+function Modal({ children }: Props) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 ...">{children}</div>,
+    document.body
+  );
+}
+```
+
+Component sống trong React tree nhưng DOM render vào `body` → không bị clip.
+
+---
+
+## Error Boundaries
+
+```tsx
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, info) {
+    console.error(error, info);
+  }
+
+  render() {
+    if (this.state.hasError) return <Fallback />;
+    return this.props.children;
+  }
+}
+```
+
+Catch error trong children. App-level: bọc `<App />`, route-level: bọc từng route.
+
+---
+
+## Common Pitfalls
+
+1. **Dep array thiếu**: useEffect chạy với value cũ → stale closure
+2. **Dep array có object/array inline**: re-create mỗi render → useEffect chạy liên tục
+3. **Quên cleanup**: setTimeout/setInterval/WebSocket leak
+4. **State update sau unmount**: warning + memory leak
+5. **Mutate state trực tiếp**: `state.items.push(x); setState(state)` → React không detect change
+
+---
+
+## Câu hỏi tự kiểm tra
+
+**Câu 1**: Khi nào dùng useState vs useRef?
+
+→ useState: value cần trigger re-render khi đổi. useRef: value chỉ cần giữ lại, không trigger re-render (DOM ref, timer ID, previous value).
+
+**Câu 2**: Vì sao `setCount(count + 1)` 3 lần chỉ tăng 1?
+
+→ React batch state. Trong cùng handler, `count` vẫn là value cũ (chưa re-render). 3 lần setCount cùng set 1 value → cuối cùng 1. Fix bằng functional `setCount(c => c + 1)`.
+
+**Câu 3**: StrictMode chạy useEffect 2 lần — có cần fix code?
+
+→ Không cần "fix" — cần đảm bảo CLEANUP đúng. Production không có StrictMode. Nếu effect 2 lần gây bug → effect không idempotent → cần sửa cleanup.
+
+**Câu 4**: Khi nào dùng useMemo và useCallback?
+
+→ Chỉ khi (1) tính toán đắt, (2) cần stable reference cho deps hook khác, (3) prop cho component memo'd. KHÔNG dùng bừa bãi — overhead memo > saving.
+
+**Câu 5**: Vì sao key trong list không nên là index?
+
+→ Index không gắn với identity item. Khi item bị xóa/thêm/sort, key đổi → React track sai → state component sai, animation sai.
+
+**Câu 6**: stale closure trong setInterval xảy ra khi nào? 3 cách fix?
+
+→ useEffect deps rỗng, function bên trong capture biến lúc đó → tick sau dùng giá trị cũ. Fix: (1) functional update, (2) deps đầy đủ, (3) useRef giữ giá trị mới.

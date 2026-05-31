@@ -955,3 +955,158 @@ STOMP (Simple Text Oriented Messaging Protocol):
 
 7. **Tại sao sơ đồ ghế cần WebSocket? Polling có được không?**
    → Polling: FE gọi API mỗi 3s để check → 1000 user = 1000 × 20 req/phút = 20.000 req/phút → tốn server. WebSocket: 1 kết nối mở sẵn, server push khi có thay đổi → 0 req khi không có gì → hiệu quả hơn rất nhiều. Ngoài ra, trải nghiệm user tốt hơn: thấy ghế đổi màu ngay tức thì, không cần chờ 3s polling.
+
+---
+
+## 11. Bổ sung — UNIQUE Constraint chống race condition
+
+Code Service dùng check + insert pattern. Để defense in depth, bổ sung UNIQUE constraint DB. Liquibase changeset:
+
+```xml
+<changeSet id="add-booking-seats-unique" author="cinex">
+    <sql>
+        CREATE UNIQUE INDEX uk_booking_seat_active
+        ON booking_seats (showtime_id, seat_id)
+        WHERE status IN ('HELD', 'BOOKED');
+    </sql>
+    <rollback>
+        DROP INDEX uk_booking_seat_active ON booking_seats;
+    </rollback>
+</changeSet>
+```
+
+**Filtered index** chỉ apply cho row HELD/BOOKED → row EXPIRED/CANCELLED không bị block.
+
+Race condition kịch bản:
+```
+T1: SELECT seat A1 status → AVAILABLE
+T2: SELECT seat A1 status → AVAILABLE
+T1: INSERT booking_seats (showtime_id=10, seat_id=100, status=HELD) → OK
+T2: INSERT booking_seats (showtime_id=10, seat_id=100, status=HELD) → DataIntegrityViolationException
+```
+
+Code catch:
+```java
+@Transactional
+public Booking createBooking(BookingRequest req) {
+    try {
+        // ... check + save
+    } catch (DataIntegrityViolationException e) {
+        throw new BusinessException(ErrorCode.SEAT_TAKEN);
+    }
+}
+```
+
+DB cuối cùng quyết định → không có 2 booking cùng ghế dù race.
+
+## 12. Bổ sung — WebSocket Setup chi tiết
+
+### Server config
+```java
+@Configuration
+@EnableWebSocketMessageBroker
+public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        registry.addEndpoint("/ws-cinex")
+            .setAllowedOriginPatterns("http://localhost:5173", "https://app.cinex.vn")
+            .withSockJS();
+    }
+
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry registry) {
+        // In-memory broker (đơn giản cho single instance)
+        registry.enableSimpleBroker("/topic", "/queue");
+
+        // Client gửi tới /app/* → @MessageMapping handler
+        registry.setApplicationDestinationPrefixes("/app");
+
+        // User-specific destination
+        registry.setUserDestinationPrefix("/user");
+    }
+
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(jwtChannelInterceptor);
+    }
+}
+```
+
+### JWT Channel Interceptor (auth WebSocket)
+```java
+@Component
+@RequiredArgsConstructor
+public class JwtChannelInterceptor implements ChannelInterceptor {
+
+    private final JwtUtil jwtUtil;
+    private final CustomUserDetailsService userDetailsService;
+
+    @Override
+    public Message<?> preSend(Message<?> message, MessageChannel channel) {
+        StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
+
+        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+            String authHeader = accessor.getFirstNativeHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7);
+                String username = jwtUtil.extractUsername(token);
+                UserDetails user = userDetailsService.loadUserByUsername(username);
+
+                if (jwtUtil.isTokenValid(token, user)) {
+                    UsernamePasswordAuthenticationToken auth =
+                        new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+                    accessor.setUser(auth);
+                }
+            }
+        }
+        return message;
+    }
+}
+```
+
+### Service publish event
+```java
+@Service
+@RequiredArgsConstructor
+public class BookingService {
+    private final SimpMessagingTemplate messagingTemplate;
+
+    @Transactional
+    public Booking createBooking(BookingRequest req) {
+        Booking booking = doCreateBooking(req);
+
+        // Broadcast tới mọi user đang xem showtime này
+        SeatUpdateMessage msg = new SeatUpdateMessage(
+            booking.getShowtime().getId(),
+            booking.getBookingSeats().stream()
+                .map(bs -> Map.of("seatId", bs.getSeat().getId(), "status", "HELD"))
+                .toList()
+        );
+        messagingTemplate.convertAndSend(
+            "/topic/showtime/" + booking.getShowtime().getId() + "/seats",
+            msg
+        );
+
+        return booking;
+    }
+}
+```
+
+### FE subscribe
+```ts
+useEffect(() => {
+  const client = new Client({
+    webSocketFactory: () => new SockJS(`${API_URL}/ws-cinex`),
+    connectHeaders: { Authorization: `Bearer ${token}` },
+    onConnect: () => {
+      client.subscribe(`/topic/showtime/${showtimeId}/seats`, (msg) => {
+        const update: SeatUpdateMessage = JSON.parse(msg.body);
+        update.seats.forEach(s => setSeatStatus(s.seatId, s.status));
+      });
+    },
+  });
+  client.activate();
+  return () => client.deactivate();
+}, [showtimeId]);
+```

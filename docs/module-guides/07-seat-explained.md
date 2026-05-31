@@ -1,62 +1,62 @@
-# Module Seat -- Giai thich chi tiet
+# Module Seat -- Giải thích chi tiết
 
-## 1. Tong quan
+## 1. Tổng quan
 
-### Ghe la gi trong he thong rap phim?
+### Ghế là gì trong hệ thống rap phim?
 
-Trong doi thuc, moi phong chieu phim co mot **so do ghe** co dinh: ghe xep thanh hang (A, B, C...) va cot (1, 2, 3...). Khi ban mua ve, ban chon vi tri ghe cu the -- vi du "E5" nghia la hang E, cot 5.
+Trong đời thực, mới phòng chiếu phim co một **sơ đồ ghế** co dinh: ghế xep thanh hàng (A, B, C...) và cột (1, 2, 3...). Khi bạn mua về, bạn chon vị trí ghế cũ the -- ví dụ "E5" nghĩa là hàng E, cột 5.
 
-Trong CineX, **Seat** (ghe ngoi) la entity dai dien cho tung vi tri ngoi trong phong chieu. Moi ghe co:
-- **Vi tri**: hang nao, cot nao (VD: hang E, cot 5 = "E5")
-- **Loai ghe**: thuong (STANDARD), VIP, hoac ghe doi (COUPLE)
-- **Trang thai**: binh thuong (AVAILABLE) hay hong (BROKEN)
+Trong CineX, **Seat** (ghế ngoi) là entity đại diện cho tung vị trí ngoi trong phòng chiếu. Mới ghế co:
+- **Vì tri**: hàng nào, cột nào (VD: hàng E, cột 5 = "E5")
+- **Loại ghế**: thuong (STANDARD), VIP, hoặc ghế đôi (COUPLE)
+- **Trang thai**: bình thường (AVAILABLE) hay hong (BROKEN)
 
-### Tai sao tach Seat rieng khoi Room?
+### Tại sao tach Seat rieng khoi Room?
 
-Ban co the hoi: "Room da co `totalSeats`, sao khong luu luon thong tin ghe trong Room?"
+Bạn co the hỏi: "Room đã co `totalSeats`, sao không lưu luon thong tin ghế trong Room?"
 
-**Ly do quan trong:**
+**Lý đó quan trọng:**
 
-| Neu gop ghe vao Room | Neu tach Seat rieng |
+| Nếu ghép ghế vào Room | Nếu tach Seat rieng |
 |---|---|
-| Room entity cuc ky lon (chua 120+ ghe) | Room nhe, Seat quan ly doc lap |
-| Khong the danh dau ghe hong rieng le | Moi ghe co trang thai rieng (AVAILABLE/BROKEN) |
-| Khong the gan gia khac nhau theo loai ghe | SeatType quyet dinh gia ve (STANDARD/VIP/COUPLE) |
-| Khong the render so do ghe dang grid | Moi Seat co rowLabel + colNumber -> FE render grid |
-| Sua layout = sua ca Room entity | Sua layout chi anh huong bang seats |
+| Room entity cuc ky lớn (chua 120+ ghế) | Room nhe, Seat quản lý đọc lap |
+| Không the danh đầu ghế hỏng rieng le | Mới ghế co trạng thái rieng (AVAILABLE/BROKEN) |
+| Không the gắn giá khác nhau theo loại ghế | SeatType quyet dinh giá vé (STANDARD/VIP/COUPLE) |
+| Không the render sơ đồ ghế đang grid | Mới Seat co rowLabel + colNumber -> FE render grid |
+| Sửa layout = sửa cả Room entity | Sửa layout chi anh huong bảng seats |
 
-**Nguyen tac Single Responsibility (chu S trong SOLID):** Room chi quan ly thong tin phong (ten, loai, suc chua). Seat chi quan ly vi tri ngoi. Moi entity lam 1 viec.
+**Nguyên tắc Single Responsibility (chu S trong SOLID):** Room chi quản lý thong tin phòng (tên, loại, suc chua). Seat chi quản lý vị trí ngoi. Mới entity làm 1 viec.
 
-**Vi du doi thuong:** Phong hoc co ban ghe, nhung "phong hoc" va "ghe" la 2 thu rieng biet. Ban co the thay ghe ma khong can sua phong. Tuong tu, admin co the sinh lai so do ghe (doi tu 10x12 sang 8x15) ma khong can xoa phong.
+**Ví dụ đời thường:** Phòng hoc co bạn ghế, những "phòng hoc" và "ghế" là 2 thu rieng biết. Bạn co the thấy ghế ma không cần sửa phòng. Tuong tu, admin co the sinh lai sơ đồ ghế (đôi tu 10x12 sang 8x15) ma không cần xóa phòng.
 
 ---
 
-## 2. Danh sach files da tao/sua
+## 2. Danh sách files đã tạo/sửa
 
-| File | Tac dung | Design Pattern |
+| File | Tac đúng | Design Pattern |
 |---|---|---|
-| `entity/Seat.java` | Entity ghe, `@ManyToOne` voi Room. Chua rowLabel, colNumber, seatType, status | N:1 Relationship |
-| `entity/SeatType.java` | Enum 3 gia tri: STANDARD, VIP, COUPLE | Enum (type-safe) |
-| `entity/SeatStatus.java` | Enum 2 gia tri: AVAILABLE, BROKEN | Enum (type-safe) |
-| `dto/SeatGenerateRequest.java` | DTO config sinh ghe: totalRows, totalCols, vipRows, coupleRow | DTO + Validation |
-| `dto/SeatResponse.java` | DTO tra ve thong tin 1 ghe | DTO + Builder |
-| `dto/SeatMapResponse.java` | So do ghe nhom theo hang (Map<String, List<SeatResponse>>) | DTO + Builder |
-| `dto/UpdateSeatRequest.java` | DTO sua 1 ghe (doi type hoac status) | DTO |
-| `dto/BulkUpdateSeatRequest.java` | DTO sua nhieu ghe cung luc (bulk update) | DTO + Validation |
-| `repository/SeatRepository.java` | Query ghe theo roomId, soft delete ghe theo room | Repository |
+| `entity/Seat.java` | Entity ghế, `@ManyToOne` với Room. Chua rowLabel, colNumber, seatType, status | N:1 Relationship |
+| `entity/SeatType.java` | Enum 3 giá trị: STANDARD, VIP, COUPLE | Enum (type-safe) |
+| `entity/SeatStatus.java` | Enum 2 giá trị: AVAILABLE, BROKEN | Enum (type-safe) |
+| `dto/SeatGenerateRequest.java` | DTO config sinh ghế: totalRows, totalCols, vipRows, coupleRow | DTO + Validation |
+| `dto/SeatResponse.java` | DTO trả về thong tin 1 ghế | DTO + Builder |
+| `dto/SeatMapResponse.java` | Sơ đồ ghế nhom theo hàng (Map<String, List<SeatResponse>>) | DTO + Builder |
+| `dto/UpdateSeatRequest.java` | DTO sửa 1 ghế (đôi type hoặc status) | DTO |
+| `dto/BulkUpdateSeatRequest.java` | DTO sửa nhieu ghế cùng luc (bulk update) | DTO + Validation |
+| `repository/SeatRepository.java` | Query ghế theo roomId, soft delete ghế theo room | Repository |
 | `mapper/SeatMapper.java` | Chuyen Seat entity -> SeatResponse (MapStruct tu sinh code) | Mapper (MapStruct) |
-| `service/SeatService.java` | Business logic: sinh ghe, lay so do, cap nhat, xoa mem | Service |
-| `controller/SeatController.java` | 6 endpoint REST, phan quyen ADMIN cho write operations | Controller |
-| `009-create-seats-table.xml` | Liquibase changelog tao bang `seats` + FK + index | Database Migration |
+| `service/SeatService.java` | Business logic: sinh ghế, lay so đó, cấp nhất, xóa mem | Service |
+| `controller/SeatController.java` | 6 endpoint REST, phân quyền ADMIN cho write operations | Controller |
+| `009-create-seats-table.xml` | Liquibase changelog tạo bảng `seats` + FK + index | Database Migration |
 | **Frontend** | | |
 | `hooks/useAdminSeatMap.ts` | React Query hooks: `useSeatMap`, `useBulkUpdateSeats` | Custom Hook |
-| `features/admin/SeatMapEditorPage.tsx` | Trang editor so do ghe (drag-paint, bulk update) | Page Component |
-| `features/booking/SeatSelectionPage.tsx` | Trang user chon ghe khi dat ve | Page Component |
-| `features/admin/TicketPOSPage.tsx` | Trang POS (ban ve tai quay) cung render so do ghe | Page Component |
+| `features/admin/SeatMapEditorPage.tsx` | Trang editor sơ đồ ghế (drag-paint, bulk update) | Page Component |
+| `features/booking/SeatSelectionPage.tsx` | Trang user chon ghế khi đặt vé | Page Component |
+| `features/admin/TicketPOSPage.tsx` | Trang POS (bạn về tai quay) cùng render sơ đồ ghế | Page Component |
 
 ---
 
-## 3. SeatType -- 3 loai ghe
+## 3. SeatType -- 3 loại ghế
 
 ```java
 public enum SeatType {
@@ -66,34 +66,34 @@ public enum SeatType {
 }
 ```
 
-### Giai thich tung loai
+### Giải thích tung loại
 
-#### STANDARD -- Ghe thuong
-- **Vi tri:** Cac hang dau va hang sau (A, B, C, D, H, I)
-- **Dac diem:** Ghe don binh thuong, 1 ghe = 1 cot
-- **Gia:** Gia co ban (`basePrice` cua showtime)
-- **Mau hien thi:** Xanh la (`bg-green-600`)
-- **Doi tuong:** Phan lon khan gia
+#### STANDARD -- Ghế thuong
+- **Vì tri:** Cac hàng đầu và hàng sâu (A, B, C, D, H, I)
+- **Dac điểm:** Ghế don bình thường, 1 ghế = 1 cột
+- **Giá:** Giá co bạn (`basePrice` của showtime)
+- **Mau hiển thị:** Xanh là (`bg-green-600`)
+- **Doi tuong:** Phần lớn khan giá
 
-#### VIP -- Ghe VIP
-- **Vi tri:** Cac hang giua phong (E, F, G) -- vung "sweet spot" co goc nhin va am thanh tot nhat
-- **Dac diem:** Ghe don nhu STANDARD nhung gia cao hon
-- **Gia:** `vipPrice` cua showtime (thuong cao hon basePrice 20-50%)
-- **Mau hien thi:** Vang (`bg-yellow-600` / `bg-[#eab308]`)
-- **Doi tuong:** Khan gia muon trai nghiem tot hon, san sang tra them
+#### VIP -- Ghế VIP
+- **Vì tri:** Cac hàng giua phòng (E, F, G) -- vung "sweet spot" co goc nhin và am thanh tốt nhất
+- **Dac điểm:** Ghế don như STANDARD những giá cao hon
+- **Giá:** `vipPrice` của showtime (thuong cao hon basePrice 20-50%)
+- **Mau hiển thị:** Vang (`bg-yellow-600` / `bg-[#eab308]`)
+- **Doi tuong:** Khan giá muốn trai nghiem tốt hon, san sang tra thêm
 
-#### COUPLE -- Ghe doi
-- **Vi tri:** Hang cuoi cung (VD: hang J) -- rieng tu, thich hop cho cap doi
-- **Dac diem:**
-  - 1 ghe "logic" = 2 cot vat ly (colspan 2)
-  - Ghe duoc ghep cap: cot 1-2 la 1 doi, cot 3-4 la 1 doi, ...
-  - Click chon 1 ghe -> tu dong chon ca ghe con lai trong cap
-  - Neu tong so cot la so le (VD: 13 cot) -> ghe cuoi (cot 13) thanh STANDARD (khong the ghep doi)
-- **Gia:** `couplePrice` cua showtime (thuong = 2x basePrice hoac cao hon)
-- **Mau hien thi:** Tim (`bg-purple-500` / `bg-purple-600`)
-- **Doi tuong:** Cap doi muon ngoi canh nhau
+#### COUPLE -- Ghế đôi
+- **Vì tri:** Hang cuối cùng (VD: hàng J) -- rieng tu, thich hop cho cặp đôi
+- **Dac điểm:**
+  - 1 ghế "logic" = 2 cột vat ly (colspan 2)
+  - Ghế được ghép cấp: cột 1-2 là 1 đôi, cột 3-4 là 1 đôi, ...
+  - Click chon 1 ghế -> tu đồng chon cả ghế con lai trong cấp
+  - Nếu tong so cột là so le (VD: 13 cột) -> ghế cuối (cột 13) thanh STANDARD (không the ghép đôi)
+- **Giá:** `couplePrice` của showtime (thuong = 2x basePrice hoặc cao hon)
+- **Mau hiển thị:** Tim (`bg-purple-500` / `bg-purple-600`)
+- **Doi tuong:** Cap đôi muốn ngoi canh nhau
 
-### Gia ghe duoc tinh nhu the nao?
+### Giá ghế được tính như thế nào?
 
 ```
                     +-----------+
@@ -109,11 +109,11 @@ User chon ghe J1-J2 (COUPLE) -> gia = showtime.couplePrice
 User chon ghe A3 (STANDARD) -> gia = showtime.basePrice
 ```
 
-**Luu y:** Gia KHONG luu trong Seat entity. Gia luu trong Showtime. Ly do: cung 1 ghe VIP nhung suat chieu sang co the re hon suat chieu toi. Gia phu thuoc vao thoi gian, khong phu thuoc vao ghe.
+**Luu y:** Giá KHONG lưu trong Seat entity. Giá lưu trong Showtime. Lý đó: cùng 1 ghế VIP những suất chiếu sang co the re hon suất chiếu toi. Giá phu thuoc vào thời gian, không phu thuoc vào ghế.
 
 ---
 
-## 4. SeatStatus -- Trang thai ghe
+## 4. SeatStatus -- Trang thai ghế
 
 ```java
 public enum SeatStatus {
@@ -122,40 +122,40 @@ public enum SeatStatus {
 }
 ```
 
-### AVAILABLE -- Ghe hoat dong
-- Mac dinh khi sinh ghe moi
-- User co the chon ghe nay de dat ve
-- Hien thi mau binh thuong (theo SeatType)
+### AVAILABLE -- Ghế hoạt động
+- Mac dinh khi sinh ghế mới
+- User co the chon ghế này de đặt vé
+- Hiển thị mau bình thường (theo SeatType)
 
-### BROKEN -- Ghe hong
-- Admin danh dau khi ghe bi hu (gay, rach, hong...)
-- **User KHONG the dat ghe BROKEN** -- button bi disable, cursor `not-allowed`
-- Hien thi mau do (`bg-red-600`) bat ke loai ghe la gi
-- Khi ghe duoc sua xong, admin doi lai AVAILABLE
+### BROKEN -- Ghế hong
+- Admin danh đầu khi ghế bi hu (gay, rach, hong...)
+- **User KHONG the đặt ghế BROKEN** -- button bi disable, cursor `not-allowed`
+- Hiển thị mau đó (`bg-red-600`) bật ke loại ghế là gì
+- Khi ghế được sửa xong, admin đôi lai AVAILABLE
 
-**Tai sao can trang thai BROKEN?**
+**Tại sao cần trạng thái BROKEN?**
 
-Trong doi thuc, rap phim co hang tram ghe. Khi 1 ghe bi hong, nhan vien khong the thao ghe ngay (phai doi bao tri). Trong luc cho, ghe do van ton tai nhung khong duoc ban ve. Trang thai BROKEN giup:
-1. **User khong dat nham ghe hong** -> trai nghiem tot
-2. **Admin biet ghe nao can sua** -> quan ly tot
-3. **Khong mat du lieu** -> ghe van o do, chi doi trang thai (thay vi xoa roi tao lai)
+Trong đời thực, rap phim co hàng tram ghế. Khi 1 ghế bi hong, nhan vien không the thao ghế ngày (phải đôi bao tri). Trong luc cho, ghế đó van ton tai những không được bạn về. Trang thai BROKEN giup:
+1. **User không đặt nhằm ghế hỏng** -> trai nghiem tốt
+2. **Admin biết ghế nào cần sửa** -> quản lý tốt
+3. **Không mat dữ liệu** -> ghế van o đó, chi đôi trạng thái (thấy vì xóa roi tạo lai)
 
-**Luu y su khac biet:**
+**Luu y su khác biết:**
 
 | | SeatStatus (BROKEN) | StorageState (ARCHIVED) |
 |---|---|---|
-| Muc dich | Ghe hong tam thoi | Xoa mem vinh vien |
-| User thay khong? | CO -- thay ghe do | KHONG -- bi filter ra khoi query |
-| Co the phuc hoi? | Doi ve AVAILABLE | Doi ve ACTIVE |
-| Ai thay doi? | Admin qua bulk update | He thong khi generate lai ghe |
+| Mục dich | Ghế hong tám thoi | Xoa mem vinh vien |
+| User thấy không? | CO -- thấy ghế đó | KHONG -- bi filter ra khoi query |
+| Co the phuc hỏi? | Doi về AVAILABLE | Doi về ACTIVE |
+| Ai thấy đôi? | Admin qua bulk update | Hệ thống khi generate lai ghế |
 
 ---
 
-## 5. Thuat toan sinh ghe tu dong (Generate Seats)
+## 5. Thuật toán sinh ghế tu đồng (Generate Seats)
 
-Day la tinh nang quan trong nhat cua module Seat. Thay vi admin phai tao tung ghe mot (120 lan!), he thong **tu dong sinh toan bo so do ghe** tu config don gian.
+Day là tính năng quan trọng nhất của module Seat. Thay vì admin phải tạo tung ghế một (120 lan!), hệ thống **tu đồng sinh toan bộ sơ đồ ghế** tu config đơn giản.
 
-### Input cua admin
+### Input của admin
 
 ```json
 {
@@ -166,7 +166,7 @@ Day la tinh nang quan trong nhat cua module Seat. Thay vi admin phai tao tung gh
 }
 ```
 
-### Thuat toan chi tiet (dong code thuc te)
+### Thuật toán chi tiết (đồng code thực tế)
 
 ```
 Buoc 1: Validate input
@@ -205,7 +205,7 @@ Buoc 4: saveAll(seats) -> batch INSERT
 Buoc 5: Cap nhat room.totalSeats = seats.size()
 ```
 
-### Vi du cu the voi 10 hang x 12 cot
+### Ví dụ cũ the với 10 hàng x 12 cột
 
 ```
 Hang A: A1  A2  A3  A4  A5  A6  A7  A8  A9  A10 A11 A12  -> 12 STANDARD
@@ -222,9 +222,9 @@ Hang J: J1  J2  J3  J4  J5  J6  J7  J8  J9  J10 J11 J12  -> 12 COUPLE
 Tong: 10 x 12 = 120 ghe
 ```
 
-### Xu ly ghe le cuoi hang couple
+### Xử lý ghế le cuối hàng couple
 
-Khi `totalCols` la so le (VD: 13 cot), hang couple khong the ghep doi hoan hao:
+Khi `totalCols` là so le (VD: 13 cột), hàng couple không the ghép đôi hoan hao:
 
 ```
 Hang J (13 cot):
@@ -234,7 +234,7 @@ Hang J (13 cot):
                                               Ghe le -> doi thanh STANDARD
 ```
 
-Code xu ly:
+Code xử lý:
 ```java
 // Ghe doi ghep cap 1-2, 3-4, ... -- ghe le cuoi (khi totalCols le) -> STANDARD
 boolean isLastOddCol = (request.getTotalCols() % 2 != 0)
@@ -242,17 +242,17 @@ boolean isLastOddCol = (request.getTotalCols() % 2 != 0)
 seatType = isLastOddCol ? SeatType.STANDARD : SeatType.COUPLE;
 ```
 
-**Tai sao khong bo ghe le?** Vi layout can can doi. Neu hang khac co 13 cot ma hang couple chi co 12, grid se bi lech. Giu ghe le la STANDARD dam bao so cot dong deu moi hang.
+**Tại sao không bộ ghế le?** Vì layout cần cần đôi. Nếu hàng khác co 13 cột ma hàng couple chi co 12, grid sẽ bi lech. Giữ ghế le là STANDARD dam bao so cột đồng deu mới hàng.
 
 ---
 
-## 6. Ghe doi COUPLE -- Chi tiet ky thuat
+## 6. Ghế đôi COUPLE -- Chi tiết ky thuat
 
-Ghe doi la loai ghe phuc tap nhat vi no anh huong ca backend lan frontend.
+Ghế đôi là loại ghế phức tạp nhất vì no anh huong cả backend lan frontend.
 
 ### Backend: Luu tru
 
-Trong database, moi ghe COUPLE van la **1 record rieng**. 1 cap ghe doi = 2 records:
+Trong database, mới ghế COUPLE van là **1 record rieng**. 1 cấp ghế đôi = 2 records:
 
 ```
 id | room_id | row_label | col_number | seat_number | seat_type | status
@@ -263,14 +263,14 @@ id | room_id | row_label | col_number | seat_number | seat_type | status
 112|    1    |     J     |     4      |     J4      |  COUPLE   | AVAILABLE
 ```
 
-**Tai sao khong luu 1 record cho 1 cap?**
-- Don gian hoa: moi record = 1 vi tri = 1 ve. Khi dat ve, moi ve map voi 1 seat_id
-- Thong nhat: query `SELECT * FROM seats WHERE room_id = 1` tra ve du 120 record, khong can xu ly dac biet
-- Linh hoat: admin co the doi 1 ghe trong cap ve STANDARD (tach cap)
+**Tại sao không lưu 1 record cho 1 cấp?**
+- Don gian hoa: mới record = 1 vị trí = 1 về. Khi đặt vé, mới về map với 1 seat_id
+- Thong nhất: query `SELECT * FROM seats WHERE room_id = 1` trả về du 120 record, không cần xử lý đặc biệt
+- Linh hoat: admin co the đôi 1 ghế trong cấp về STANDARD (tach cấp)
 
-### Frontend: Ghep cap va colspan 2
+### Frontend: Ghép cấp và colspan 2
 
-FE dung quy tac **cot le ghep voi cot chan ke ben**:
+FE đúng quy tắc **cột le ghép với cột chan ke bên**:
 
 ```
 Quy tac ghep:
@@ -285,7 +285,7 @@ Code:
   const partner = seats.find(s => s.colNumber === partnerCol)
 ```
 
-### Render: 1 button rong 2 cot
+### Render: 1 button rộng 2 cột
 
 ```
 Ghe thuong:         [A1] [A2] [A3] [A4]     -- moi nut 1 cot
@@ -879,7 +879,7 @@ curl -X POST http://localhost:8088/api/rooms/1/seats/7/restore \
 private Room room;
 ```
 
-**Vi du doi thuong:** 1 lop hoc co 40 hoc sinh. Moi hoc sinh biet minh hoc lop nao (`classId`), nhung lop hoc KHONG can biet danh sach hoc sinh (truoc khi bi hoi).
+**Ví dụ đời thường:** 1 lop hoc co 40 hoc sinh. Moi hoc sinh biet minh hoc lop nao (`classId`), nhung lop hoc KHONG can biet danh sach hoc sinh (truoc khi bi hoi).
 
 **FetchType.LAZY quan trong:**
 
@@ -963,97 +963,80 @@ seatMap.get("A").add(seatMapper.toResponse(seat));
 
 ---
 
-## 14. Cau hoi tu kiem tra
+## 14. Câu hỏi tự kiểm tra
 
-### Cau 1: Tai sao generate seats xoa het ghe cu roi tao moi, thay vi chi sua ghe can thiet?
+**Câu 1: Tại sao generate seats xóa hết ghế cũ rồi tạo mới, thay vì chỉ sửa ghế cần thiết?**
 
-<details>
-<summary>Xem dap an</summary>
+→ Vì admin có thể đổi layout hoàn toàn (VD: từ 10×12 sang 8×15, đổi hàng VIP, thêm/bớt hàng couple). Việc so sánh "ghế nào giữ, ghế nào xóa, ghế nào thêm" phức tạp hơn nhiều so với "xóa hết + tạo mới". Ngoài ra, ghế cũ không bị mất vì dùng **soft delete** (`storage_state = ARCHIVED`), vẫn có thể truy vết.
 
-Vi admin co the doi layout hoan toan (VD: tu 10x12 sang 8x15, doi hang VIP, them/bot hang couple). Viec so sanh "ghe nao giu, ghe nao xoa, ghe nao them" phuc tap hon nhieu so voi "xoa het + tao moi". Ngoai ra, ghe cu khong bi mat vi dung **soft delete** (storage_state = ARCHIVED), van co the truy vet.
+**Lưu ý:** Nếu phòng đã có suất chiếu đang bán vé, cần check trước khi cho generate lại (để tránh mất vé đã bán). Logic này nằm ở module Showtime.
 
-**Luu y:** Neu phong da co suat chieu dang ban ve, can check truoc khi cho generate lai (de tranh mat ve da ban). Logic nay nam o module Showtime.
-</details>
+---
 
-### Cau 2: Neu bo `@Modifying` o method `softDeleteByRoomId` thi sao?
+**Câu 2: Nếu bỏ `@Modifying` ở method `softDeleteByRoomId` thì sao?**
 
-<details>
-<summary>Xem dap an</summary>
-
-Spring Data JPA mac dinh coi moi `@Query` la SELECT. Khi chay UPDATE ma khong co `@Modifying`, Spring se co map ket qua UPDATE (so dong bi anh huong) thanh entity -> loi runtime:
+→ Spring Data JPA mặc định coi mọi `@Query` là SELECT. Khi chạy UPDATE mà không có `@Modifying`, Spring sẽ cố map kết quả UPDATE (số dòng bị ảnh hưởng) thành entity → lỗi runtime:
 
 ```
 org.springframework.dao.InvalidDataAccessApiUsageException:
   Expecting a SELECT query : UPDATE Seat s SET ...
 ```
 
-`@Modifying` bao Spring: "Day la write query, dung co map ket qua."
-</details>
+`@Modifying` báo Spring: "Đây là write query, đừng cố map kết quả."
 
-### Cau 3: Tai sao ghe doi (COUPLE) luu 2 record rieng trong DB thay vi 1 record?
+---
 
-<details>
-<summary>Xem dap an</summary>
+**Câu 3: Tại sao ghế đôi (COUPLE) lưu 2 record riêng trong DB thay vì 1 record?**
 
-3 ly do chinh:
-1. **1 ve = 1 ghe:** Khi dat ve, moi BookingDetail map voi 1 seat_id. Ghe doi = 2 ve = 2 seat_id. Neu luu 1 record thi phai xu ly logic dac biet khi tao ve.
-2. **Query thong nhat:** `SELECT COUNT(*) FROM seats WHERE room_id = 1` tra dung tong so vi tri ngoi (ke ca ghe doi dem 2). Khong can xu ly dac biet.
-3. **Linh hoat:** Admin co the doi 1 ghe trong cap thanh STANDARD (tach cap) hoac BROKEN (chi 1 ghe hong) ma khong anh huong ghe con lai.
-</details>
+→ 3 lý do chính:
+1. **1 vé = 1 ghế:** Khi đặt vé, mỗi BookingDetail map với 1 `seat_id`. Ghế đôi = 2 vé = 2 `seat_id`. Nếu lưu 1 record thì phải xử lý logic đặc biệt khi tạo vé.
+2. **Query thống nhất:** `SELECT COUNT(*) FROM seats WHERE room_id = 1` trả đúng tổng số vị trí ngồi (kể cả ghế đôi đếm 2). Không cần xử lý đặc biệt.
+3. **Linh hoạt:** Admin có thể đổi 1 ghế trong cặp thành STANDARD (tách cặp) hoặc BROKEN (chỉ 1 ghế hỏng) mà không ảnh hưởng ghế còn lại.
 
-### Cau 4: `saveAll(120 seats)` nhanh hon `save()` 120 lan vi sao?
+---
 
-<details>
-<summary>Xem dap an</summary>
+**Câu 4: `saveAll(120 seats)` nhanh hơn `save()` 120 lần vì sao?**
 
-- `save()` 120 lan = 120 round-trip rieng le den database. Moi round-trip co overhead: mo connection, gui SQL, nhan ket qua, dong connection.
-- `saveAll()` = Hibernate gom nhieu INSERT thanh **1 batch**. Chi 1 round-trip (hoac vai round-trip neu batch size gioi han). Giam overhead mang va DB.
+→ `save()` 120 lần = 120 round-trip riêng lẻ đến database. Mỗi round-trip có overhead: mở connection, gửi SQL, nhận kết quả, đóng connection. Còn `saveAll()` = Hibernate gom nhiều INSERT thành **1 batch**. Chỉ 1 round-trip (hoặc vài round-trip nếu batch size giới hạn). Giảm overhead mạng và DB.
 
-Vi du: Gui 120 buc thu rieng le qua buu dien vs gom 120 buc vao 1 thung gui 1 lan. Cach 2 re va nhanh hon nhieu.
+Ví dụ: Gửi 120 bức thư riêng lẻ qua bưu điện vs gom 120 bức vào 1 thùng gửi 1 lần. Cách 2 rẻ và nhanh hơn nhiều.
 
-**Cau hinh batch size** trong `application.yml`:
+**Cấu hình batch size** trong `application.yml`:
 ```yaml
 spring.jpa.properties.hibernate.jdbc.batch_size: 50
 ```
--> Moi lan gui 50 INSERT, 120 ghe = 3 batch.
-</details>
+→ Mỗi lần gửi 50 INSERT, 120 ghế = 3 batch.
 
-### Cau 5: Khi admin danh dau ghe BROKEN, user dang o trang chon ghe co thay ngay khong?
+---
 
-<details>
-<summary>Xem dap an</summary>
+**Câu 5: Khi admin đánh dấu ghế BROKEN, user đang ở trang chọn ghế có thấy ngay không?**
 
-**Khong thay ngay** neu chi dung REST API (stateless). User phai refresh trang de thay ghe moi bi BROKEN.
+→ **Không thấy ngay** nếu chỉ dùng REST API (stateless). User phải refresh trang để thấy ghế mới bị BROKEN.
 
-**De thay ngay** can **WebSocket** (real-time). Trong CineX, module Booking da co WebSocket (`useSeatWebSocket`) de cap nhat trang thai ghe khi nguoi khac giu/huy ghe. Nhung hien tai WebSocket chi gui event khi dat ve (HOLDING/CONFIRMED/AVAILABLE), chua gui event khi admin doi BROKEN.
+**Để thấy ngay** cần **WebSocket** (real-time). Trong CineX, module Booking đã có WebSocket (`useSeatWebSocket`) để cập nhật trạng thái ghế khi người khác giữ/hủy ghế. Nhưng hiện tại WebSocket chỉ gửi event khi đặt vé (HOLDING/CONFIRMED/AVAILABLE), chưa gửi event khi admin đổi BROKEN.
 
-**Cai thien:** Khi admin bulk-update BROKEN, backend gui WebSocket event -> FE cap nhat real-time.
-</details>
+**Cải thiện:** Khi admin bulk-update BROKEN, backend gửi WebSocket event → FE cập nhật real-time.
 
-### Cau 6: Tai sao dung `LinkedHashMap` ma khong dung `TreeMap`?
+---
 
-<details>
-<summary>Xem dap an</summary>
+**Câu 6: Tại sao dùng `LinkedHashMap` mà không dùng `TreeMap`?**
 
-Ca hai deu giu thu tu, nhung khac nhau:
-- **TreeMap:** Sap xep theo key (alphabetical). Luon dung thu tu A, B, C... bat ke insert thu tu nao.
-- **LinkedHashMap:** Giu thu tu insert. Neu insert B truoc A -> B truoc A.
+→ Cả hai đều giữ thứ tự, nhưng khác nhau:
+- **TreeMap:** Sắp xếp theo key (alphabetical). Luôn đúng thứ tự A, B, C... bất kể insert thứ tự nào.
+- **LinkedHashMap:** Giữ thứ tự insert. Nếu insert B trước A → B trước A.
 
-Trong code, query da `ORDER BY row_label ASC` -> seats den theo thu tu A, B, C. LinkedHashMap giu dung thu tu nay.
+Trong code, query đã `ORDER BY row_label ASC` → seats đến theo thứ tự A, B, C. LinkedHashMap giữ đúng thứ tự này.
 
-TreeMap cung duoc nhung ton performance hon (O(log n) cho moi put, vs O(1) cua LinkedHashMap). Voi du lieu da sap xep san, LinkedHashMap la lua chon tot hon.
-</details>
+TreeMap cũng được nhưng tốn performance hơn (O(log n) cho mỗi put, vs O(1) của LinkedHashMap). Với dữ liệu đã sắp xếp sẵn, LinkedHashMap là lựa chọn tốt hơn.
 
-### Cau 7: Neu 2 admin cung generate ghe cho cung 1 phong cung luc, chuyen gi xay ra?
+---
 
-<details>
-<summary>Xem dap an</summary>
+**Câu 7: Nếu 2 admin cùng generate ghế cho cùng 1 phòng cùng lúc, chuyện gì xảy ra?**
 
-Nho co `@Transactional`, ca 2 generate chay trong transaction rieng. Co 2 kich ban:
+→ Nhờ có `@Transactional`, cả 2 generate chạy trong transaction riêng. Có 2 kịch bản:
 
-1. **Kich ban tot (mac dinh):** Admin A chay truoc -> soft delete ghe cu + tao ghe moi. Admin B chay sau -> soft delete ghe cua A + tao ghe moi. Ket qua: ghe cua B la phien ban cuoi cung.
+1. **Kịch bản tốt (mặc định):** Admin A chạy trước → soft delete ghế cũ + tạo ghế mới. Admin B chạy sau → soft delete ghế của A + tạo ghế mới. Kết quả: ghế của B là phiên bản cuối cùng.
 
-2. **Kich ban xau (race condition):** Ca 2 soft delete cung luc -> ca 2 deu tao ghe moi -> phong co 240 ghe (gap doi!).
+2. **Kịch bản xấu (race condition):** Cả 2 soft delete cùng lúc → cả 2 đều tạo ghế mới → phòng có 240 ghế (gấp đôi!).
 
-**Cach phong tranh:** Dung `@Version` (Optimistic Lock) tren Room entity. Khi ca 2 cung `room.setTotalSeats()` -> 1 trong 2 se gap `OptimisticLockException` -> retry hoac bao loi.
-</details>
+**Cách phòng tránh:** Dùng `@Version` (Optimistic Lock) trên Room entity. Khi cả 2 cùng `room.setTotalSeats()` → 1 trong 2 sẽ gặp `OptimisticLockException` → retry hoặc báo lỗi.
