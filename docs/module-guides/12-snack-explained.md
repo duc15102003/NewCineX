@@ -16,8 +16,10 @@ Module Snack quản lý **menu đồ ăn** rạp phim (bắp rang, nước, comb
 | `entity/BookingSnack.java` | Bảng liên kết (KHÔNG extends BaseEntity) — booking_id, snack_id, quantity, price | Join Table |
 | `dto/SnackRequest.java` | name, description, price, imageUrl, category | DTO Pattern |
 | `dto/SnackResponse.java` | Đầy đủ fields + storageState, createdAt, updatedAt | DTO Pattern |
+| `dto/SnackFilter.java` | keyword, includeDeleted — gom search params type-safe | Filter DTO |
 | `repository/SnackRepository.java` | JpaSpecificationExecutor | Repository Pattern |
 | `repository/BookingSnackRepository.java` | JpaRepository đơn giản | Repository Pattern |
+| `specification/SnackSpecification.java` | Class chứa `publicFilter()` + `fromFilter(SnackFilter)` — query động | Specification Pattern |
 | `mapper/SnackMapper.java` | MapStruct toResponse | Mapper Pattern |
 | `service/SnackService.java` | CRUD + list available only for users | Service Layer |
 | `controller/SnackController.java` | 5 endpoints (GET public, CUD admin) | MVC Controller |
@@ -26,25 +28,61 @@ Module Snack quản lý **menu đồ ăn** rạp phim (bắp rang, nước, comb
 
 ## 3. Design Patterns đã áp dụng
 
-### Specification Pattern — inline (Behavioral)
+### Specification Pattern — class riêng (Behavioral)
 **Giải thích đời thường:** Menu nhà hàng chỉ hiện món còn phục vụ — không hiện món đã ngừng bán hoặc hết hàng. Specification là bộ lọc làm điều này tự động.
 
+CineX **tách `SnackSpecification.java`** thành class riêng (xem `module/snack/specification/SnackSpecification.java`) với 2 method tĩnh:
+
+- `publicFilter()` — dùng cho user xem menu: `available = true AND storageState != 'ARCHIVED'`.
+- `fromFilter(SnackFilter)` — dùng cho admin: thêm điều kiện `keyword` (search theo `name` hoặc `category`) và toggle `includeDeleted`.
+
 ```java
-// Specification inline trong service — không cần class riêng vì đơn giản
-Specification<Snack> spec = (root, query, cb) -> cb.and(
-    // Điều kiện 1: available = true (còn bán)
-    cb.isTrue(root.get("available")),
-    // Điều kiện 2: storageState IS NULL hoặc khác 'DELETED' (chưa bị xóa mềm)
-    cb.or(
-        cb.isNull(root.get("storageState")),
-        cb.notEqual(root.get("storageState"), "DELETED")
-    )
-);
-return snackRepository.findAll(spec, pageable);
+public class SnackSpecification {
+
+    private SnackSpecification() {}
+
+    public static Specification<Snack> fromFilter(SnackFilter filter) {
+        Specification<Snack> spec = Specification.where(null);
+        if (!Boolean.TRUE.equals(filter.getIncludeDeleted())) {
+            spec = spec.and(notDeleted());
+        }
+        if (StringUtils.hasText(filter.getKeyword())) {
+            spec = spec.and(hasKeyword(filter.getKeyword()));
+        }
+        return spec;
+    }
+
+    public static Specification<Snack> publicFilter() {
+        return (root, query, cb) -> cb.and(
+            cb.isTrue(root.get("available")),
+            cb.or(
+                cb.isNull(root.get("storageState")),
+                cb.notEqual(root.get("storageState"), StorageState.ARCHIVED)
+            )
+        );
+    }
+
+    public static Specification<Snack> hasKeyword(String keyword) {
+        return (root, query, cb) -> {
+            String pattern = "%" + keyword.toLowerCase() + "%";
+            return cb.or(
+                cb.like(cb.lower(root.get("name")), pattern),
+                cb.like(cb.lower(root.get("category")), pattern)
+            );
+        };
+    }
+
+    public static Specification<Snack> notDeleted() {
+        return (root, query, cb) -> cb.or(
+            cb.isNull(root.get("storageState")),
+            cb.notEqual(root.get("storageState"), StorageState.ARCHIVED)
+        );
+    }
+}
 ```
 
-**Tại sao `storageState IS NULL OR storageState != 'DELETED'`?**
-Record mới tạo có `storageState = null` (chưa set), sau đó mới là "ACTIVE" hoặc "DELETED". Nếu chỉ check `!= 'DELETED'`, record có `storageState = null` vẫn pass — đúng nghiệp vụ.
+**Tại sao `storageState IS NULL OR storageState != 'ARCHIVED'`?**
+Record mới tạo có `storageState = null` (chưa set), sau đó mới là `ACTIVE` hoặc `ARCHIVED` (CineX dùng StorageState chỉ có 2 giá trị này, không có `DELETED`). Nếu chỉ check `!= 'ARCHIVED'`, record có `storageState = null` vẫn pass — đúng nghiệp vụ.
 
 ### Snapshot Price Pattern
 **Giải thích đời thường:** Bạn mua vé xe buýt tháng 5 giá 7.000đ. Tháng 6 xe tăng lên 9.000đ. Vé cũ của bạn vẫn ghi 7.000đ — đó là snapshot giá.
@@ -115,8 +153,8 @@ User gửi GET /api/snacks?page=0&size=20
     v
 [SnackService.getAvailableSnacks(pageable)]
     |
-    +---> Build Specification:
-    |     available = true AND storageState != 'DELETED'
+    +---> Build Specification (SnackSpecification.publicFilter()):
+    |     available = true AND storageState != 'ARCHIVED'
     |
     +---> snackRepository.findAll(spec, pageable)
     |     → Chỉ trả snack còn bán, chưa bị xóa
@@ -128,43 +166,55 @@ Page<SnackResponse> → PageResponse<SnackResponse>
 ApiResponse (200 OK)
 ```
 
-### Luồng User đặt vé + chọn combo
+### Luồng tích hợp Snack với Booking — TRẠNG THÁI HIỆN TẠI
+
+> **Cảnh báo về trạng thái code thực tế:** `BookingService` HIỆN TẠI **KHÔNG có method `createBooking()` nhận `snacks: [...]`**. Method có thật là `holdSeats(userId, HoldSeatsRequest)` và `holdSeats` KHÔNG nhận field snack nào. Entity `BookingSnack` đã được khai báo (xem `entity/BookingSnack.java`) nhưng **chưa có flow integrate** qua BookingService — tức là user đặt vé online HIỆN TẠI **không thể chọn combo cùng lúc**.
+>
+> Snack hiện chỉ được dùng qua flow **POS bán tại quầy** thông qua `SnackOrder` + `SnackOrderItem` (module riêng cho quầy bán). Đây là 2 flow tách biệt:
+> - **Online booking**: chỉ ghế, KHÔNG snack.
+> - **POS counter snack**: chỉ snack (qua `SnackOrder`), không gắn vào booking ghế.
+
+Sơ đồ flow POS (đang chạy thực tế):
 
 ```
-User đặt vé và gửi snacks kèm theo
+Staff tại quầy gọi POST /api/snack-orders
     |
     v
-[BookingService.createBooking(request)]
+[SnackOrderService.createOrder(request)]
     |
-    request.snacks = [
+    request.items = [
       {snackId: 1, quantity: 2},   // Bắp rang × 2
       {snackId: 2, quantity: 3}    // Coca × 3
     ]
     |
-    +---> Tạo Booking entity và lưu
+    +---> Tạo SnackOrder entity và lưu (orderCode, totalAmount, paid CASH)
     |
-    +---> Với mỗi snack trong request:
-    |     +---> Load Snack: snackRepository.findById(snackId)
-    |     |     └─ not found → throw ENTITY_NOT_FOUND
-    |     |
-    |     +---> Check available: snack.isAvailable()
-    |     |     └─ false → throw SNACK_NOT_AVAILABLE
-    |     |
-    |     +---> Tạo BookingSnack:
-    |           BookingSnack.builder()
-    |             .booking(booking)
-    |             .snack(snack)
-    |             .quantity(item.getQuantity())
-    |             .price(snack.getPrice())  // ← SNAPSHOT!
-    |             .build()
+    +---> Với mỗi item:
+    |     +---> snackRepository.findById(snackId)  → throw nếu không tồn tại
+    |     +---> Check snack.available — throw nếu hết
+    |     +---> Tạo SnackOrderItem(order, snack, quantity, price = snack.price)  ← SNAPSHOT
     |
-    +---> Tính tổng tiền:
-    |     totalAmount = seatTotal + snackTotal
-    |     snackTotal = Σ (quantity × price)
+    +---> totalAmount = Σ (quantity × price)
     |
     v
-Booking đã bao gồm snacks
+ApiResponse<SnackOrderResponse>
 ```
+
+### Đề xuất nâng cấp tương lai — Tích hợp snack vào booking online
+
+Khi cần cho phép user đặt vé online + combo cùng lúc, có thể nâng cấp `HoldSeatsRequest` thêm field `List<SnackItem> snacks`:
+
+```
+[BookingService.holdSeats(userId, request)]  // BỔ SUNG sau này
+    |
+    request.snacks = [{snackId: 1, quantity: 2}]
+    |
+    +---> Sau khi tạo Booking + BookingSeats:
+    +---> Với mỗi snack: load Snack → check available → tạo BookingSnack
+    +---> totalAmount += Σ (quantity × snack.price)
+```
+
+Hiện tại flow này CHƯA implement — entity `BookingSnack` đã chuẩn bị sẵn schema để dùng sau.
 
 ### Luồng Admin restore snack đã xóa
 
@@ -195,7 +245,7 @@ ApiResponse (200 OK, message: "Snack restored")
 SELECT *
 FROM snacks
 WHERE available = 1
-  AND (storage_state IS NULL OR storage_state <> 'DELETED')
+  AND (storage_state IS NULL OR storage_state <> 'ARCHIVED')
 ORDER BY category, name
 OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY
 ```
@@ -226,7 +276,7 @@ VALUES (101, 1, 2, 45000)
 ### UPDATE soft delete snack
 ```sql
 UPDATE snacks
-SET storage_state = 'DELETED', available = 0, updated_at = GETDATE(), version = version + 1
+SET storage_state = 'ARCHIVED', available = 0, updated_at = GETDATE(), version = version + 1
 WHERE id = 3
 ```
 
@@ -279,11 +329,14 @@ booking_snacks (đồ ăn kèm vé — user chọn khi đặt)
 
 ### List public chỉ hiện available + active
 ```java
-// User chỉ thấy đồ ăn còn bán
-Specification<Snack> spec = (root, query, cb) -> cb.and(
-    cb.isTrue(root.get("available")),
-    cb.or(cb.isNull(root.get("storageState")), cb.notEqual(root.get("storageState"), "DELETED"))
-);
+// User chỉ thấy đồ ăn còn bán — gọi qua SnackSpecification.publicFilter()
+Specification<Snack> spec = SnackSpecification.publicFilter();
+// Tương đương:
+// (root, query, cb) -> cb.and(
+//     cb.isTrue(root.get("available")),
+//     cb.or(cb.isNull(root.get("storageState")),
+//           cb.notEqual(root.get("storageState"), StorageState.ARCHIVED))
+// )
 ```
 
 ### Tại sao BookingSnack KHÔNG extends BaseEntity?
@@ -457,8 +510,8 @@ curl -X POST http://localhost:8088/api/snacks/1/restore \
 
 1. **BookingSnack extends BaseEntity không?** → Không, vì là bảng liên kết đơn giản — chỉ cần 4 field (booking_id, snack_id, quantity, price), không cần audit trail nặng.
 2. **Tại sao lưu price trong BookingSnack?** → Snapshot giá tại thời điểm đặt. Admin đổi giá sau không ảnh hưởng đơn cũ — đảm bảo tính toàn vẹn lịch sử giao dịch.
-3. **User thấy đồ ăn admin đã xóa mềm không?** → Không, list filter `storageState IS NULL OR storageState != DELETED` kết hợp `available = true`.
-4. **Tại sao Specification inline trong service thay vì tạo class riêng?** → Vì điều kiện đơn giản và chỉ dùng 1 chỗ. Nếu dùng nhiều nơi hoặc phức tạp hơn → nên tách thành `SnackSpecification.java`.
+3. **User thấy đồ ăn admin đã xóa mềm không?** → Không, list filter `storageState IS NULL OR storageState != ARCHIVED` kết hợp `available = true`.
+4. **CineX tách `SnackSpecification` thành class riêng có lợi gì?** → Consistent với Movie/Room/Booking; tái sử dụng `publicFilter()` (cho user) và `fromFilter()` (cho admin có keyword); dễ test riêng từng filter.
 5. **Admin đổi giá snack từ 45k lên 50k. Đơn đặt vé cũ hiển thị giá bao nhiêu?** → Vẫn 45k, vì BookingSnack đã lưu snapshot price = 45k tại thời điểm đặt.
 
 ---
@@ -589,48 +642,3 @@ function SnackUploadButton({ snackId }: { snackId: number }) {
 ```
 
 Sau khi save → table refresh → click nút "Upload" ở row mới → upload ảnh riêng.
-
-## 11. Bổ sung — Consistency Specification
-
-Audit phát hiện: 12-snack dùng Specification **inline** trong service, các module khác (Movie, Room) dùng **class riêng**. Không nhất quán.
-
-**Đề xuất**: tách `SnackSpecification.java`:
-
-```java
-public class SnackSpecification {
-
-    public static Specification<Snack> withFilter(SnackFilter f) {
-        return Specification.where(notDeleted())
-            .and(nameLike(f.getKeyword()))
-            .and(categoryEqual(f.getCategory()))
-            .and(availableOnly(f.getAvailableOnly()));
-    }
-
-    private static Specification<Snack> notDeleted() {
-        return (root, query, cb) -> cb.or(
-            cb.isNull(root.get("storageState")),
-            cb.notEqual(root.get("storageState"), StorageState.DELETED)
-        );
-    }
-
-    private static Specification<Snack> nameLike(String keyword) {
-        if (keyword == null || keyword.isBlank()) return null;
-        return (root, query, cb) -> cb.like(
-            cb.lower(root.get("name")),
-            "%" + keyword.toLowerCase() + "%"
-        );
-    }
-
-    // ... categoryEqual, availableOnly tương tự
-}
-```
-
-Service trở nên gọn:
-```java
-public Page<SnackResponse> list(SnackFilter filter, Pageable pageable) {
-    return snackRepository.findAll(SnackSpecification.withFilter(filter), pageable)
-        .map(snackMapper::toResponse);
-}
-```
-
-Lợi ích: consistent với Movie/Room/Booking pattern, tái sử dụng được, dễ test.

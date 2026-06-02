@@ -430,22 +430,55 @@ BookingService.cancelBooking(userId=5, bookingId=1) [@Transactional]
 │     Chỉ cho phép hủy: HOLDING hoặc CONFIRMED
 │     → EXPIRED, CANCELLED, CHECKED_IN → throw INVALID_REQUEST (400)
 │
-├── 4. Check suất chiếu chưa bắt đầu:
-│     booking.showtime.startTime < now()?
-│     → Đã bắt đầu → throw INVALID_REQUEST "Showtime has already started, cannot cancel"
+├── 4. Check thời hạn hủy (config-driven):
+│     cancelBeforeMinutes = systemConfigService.getInt("booking.cancel_before_minutes", 60)
+│     deadline = booking.showtime.startTime - cancelBeforeMinutes
+│     now() > deadline?
+│     → Quá hạn → throw INVALID_REQUEST
+│       "Chỉ được hủy vé trước 60 phút khi suất chiếu bắt đầu"
+│     (Rule: user phải hủy TRƯỚC X phút khi suất chiếu bắt đầu — mặc định 60 phút.
+│      Giá trị X đọc từ bảng system_config, có thể chỉnh runtime không cần deploy lại.)
 │
-├── 5. Đổi trạng thái:
+├── 5. Đổi trạng thái booking + seats:
 │     booking.status = CANCELLED
 │     booking.cancelledAt = now()
 │     booking.bookingSeats.forEach → status = CANCELLED
 │     bookingRepository.save(booking)
 │
-├── 6. Real-time: ghế trả lại
+├── 6. Refund Payment (nếu đã thanh toán):
+│     paymentRepository.findByBookingId(bookingId).ifPresent(payment -> {
+│         if (payment.status == COMPLETED) {
+│             payment.status = REFUNDED  // KHÔNG xóa, chỉ đổi trạng thái
+│             paymentRepository.save(payment)
+│         }
+│     })
+│     → UPDATE payments SET status='REFUNDED' WHERE booking_id=?
+│     → Doanh thu báo cáo loại bỏ vé đã hủy (chỉ tính COMPLETED, không tính REFUNDED).
+│
+├── 7. Trả lại voucher (nếu đã dùng):
+│     usages = voucherUsageRepository.findByBookingId(bookingId)
+│     foreach usage:
+│         voucher.usedCount -= 1   // giảm bộ đếm "đã dùng"
+│         voucherUsageRepository.delete(usage)  // xóa bản ghi sử dụng
+│     → User được dùng lại voucher đó cho lần đặt sau.
+│
+├── 8. Real-time: ghế trả lại
 │     seatWebSocketService.notifySeatChanged(showtimeId, seatIds, "AVAILABLE")
 │     → Tất cả user đang xem sơ đồ ghế thấy ghế trống lại
 │
-└── 7. Return BookingResponse (status = CANCELLED)
+├── 9. Gửi email thông báo hủy (async):
+│     emailService.sendCancellationEmail(
+│         email,
+│         booking.bookingCode,
+│         movieTitle,
+│         formattedTotalAmount  // VD "247.500đ"
+│     )
+│     → Mail nội dung: "Vé CX-... đã hủy thành công, hoàn tiền sẽ xử lý trong 3-5 ngày."
+│
+└── 10. Return BookingResponse (status = CANCELLED)
 ```
+
+**Các bước phụ (6, 7, 9) bắt buộc phải có** vì hủy vé KHÔNG chỉ là đổi status booking — còn liên quan tài chính (refund), khuyến mãi (voucher) và trải nghiệm user (email). Nếu bỏ bước 6 thì doanh thu hiển thị SAI (vẫn tính vé đã hủy). Bỏ bước 7 thì user dùng voucher 1 lần xong hủy → "mất" voucher mặc dù chưa thực sự dùng.
 
 ### 5.4 checkIn — Quét QR tại rạp
 
@@ -595,15 +628,15 @@ WHERE id = 1;
 SELECT b.*
 FROM bookings b
 WHERE b.user_id = 5
-  AND (b.storage_state IS NULL OR b.storage_state <> 'DELETED')
+  AND (b.storage_state IS NULL OR b.storage_state <> 'ARCHIVED')
   AND b.status = 'CONFIRMED'
-ORDER BY b.id
+ORDER BY b.created_at DESC
 OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY;
 
 -- Đếm tổng (cho phân trang)
 SELECT COUNT(*) FROM bookings b
 WHERE b.user_id = 5
-  AND (b.storage_state IS NULL OR b.storage_state <> 'DELETED')
+  AND (b.storage_state IS NULL OR b.storage_state <> 'ARCHIVED')
   AND b.status = 'CONFIRMED';
 ```
 

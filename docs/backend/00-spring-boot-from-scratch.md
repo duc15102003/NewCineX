@@ -170,22 +170,22 @@ backend/
 │       └── gradle-wrapper.properties  ← Phiên bản Gradle sẽ dùng
 └── src/
     ├── main/
-    │   ├── java/com/cinex/backend/
-    │   │   └── BackendApplication.java    ← Điểm khởi động của ứng dụng
+    │   ├── java/com/cinex/
+    │   │   └── CineXApplication.java      ← Điểm khởi động của ứng dụng
     │   └── resources/
     │       ├── application.properties     ← File cấu hình (ta đổi thành .yml)
     │       ├── static/                    ← File tĩnh (HTML, CSS, JS — ta không dùng)
     │       └── templates/                 ← Template engine (ta không dùng — dùng React)
     └── test/
-        └── java/com/cinex/backend/
-            └── BackendApplicationTests.java  ← Test tự động
+        └── java/com/cinex/
+            └── CineXApplicationTests.java  ← Test tự động
 ```
 
 **Giải thích:**
 
 - `build.gradle` — "danh sách nguyên liệu" của dự án. Khai báo dùng thư viện nào, phiên bản bao nhiêu.
 - `gradlew` — Tương tự `npx` của Node.js. Chạy `./gradlew build` sẽ tự tải Gradle về nếu chưa có.
-- `BackendApplication.java` — File `main()` của Java. Spring Boot khởi động từ đây.
+- `CineXApplication.java` — File `main()` của Java. Spring Boot khởi động từ đây.
 - `application.properties` — File cấu hình (URL database, port server, ...). Ta sẽ đổi thành `.yml` cho dễ đọc.
 
 ---
@@ -1214,8 +1214,8 @@ public interface UserRepository
     //  - count()             → SELECT COUNT(*)
 
     // Query method — Spring đọc tên method và tự sinh SQL
-    // findActiveByUsername → SELECT * FROM users WHERE username = ? AND storage_state != 'DELETED'
-    @Query("SELECT u FROM User u WHERE u.username = :username AND (u.storageState IS NULL OR u.storageState <> 'DELETED')")
+    // findActiveByUsername → SELECT * FROM users WHERE username = ? AND storage_state <> 'ARCHIVED'
+    @Query("SELECT u FROM User u WHERE u.username = :username AND (u.storageState IS NULL OR u.storageState <> 'ARCHIVED')")
     Optional<User> findActiveByUsername(String username);
 
     Optional<User> findByUsername(String username);
@@ -1378,11 +1378,11 @@ public class AuthService {
     /**
      * Đăng nhập.
      */
-    @Transactional(readOnly = true)
-    //              ^^^^^^^^^^^
-    //  readOnly = true: báo Hibernate rằng method này CHỈ ĐỌC, không ghi
-    //  → Hibernate tối ưu: không cần track thay đổi, không cần flush
-    //  → Nhanh hơn!
+    @Transactional
+    //  KHÔNG dùng readOnly = true vì login có ghi DB:
+    //  - revoke tất cả refresh token cũ của user (UPDATE)
+    //  - tạo refresh token mới (INSERT)
+    //  → Cần transaction read-write để đảm bảo ACID.
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findActiveByUsername(request.getUsername())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
@@ -1448,7 +1448,7 @@ import org.springframework.web.bind.annotation.RestController;
                            // Mọi method tự động trả JSON (không cần ghi @ResponseBody)
 @RequestMapping("/api/auth")  // Tất cả endpoint bắt đầu bằng /api/auth
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "Register, Login, Logout")  // Swagger: nhóm các API
+@Tag(name = "Auth", description = "Register, Login, Logout, Refresh, Reset Password")  // Swagger: nhóm các API
 public class AuthController {
 
     private final AuthService authService;
@@ -1614,7 +1614,7 @@ cd /Users/vutuongan/cinex/backend
 Khi thấy dòng này → server đã sẵn sàng:
 
 ```
-Started BackendApplication in 5.123 seconds (process running for 5.678)
+Started CineXApplication in 5.123 seconds (process running for 5.678)
 ```
 
 ### 9.3. Test bằng curl

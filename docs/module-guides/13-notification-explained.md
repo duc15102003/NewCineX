@@ -12,14 +12,16 @@ Module Notification gửi **thông báo** cho user khi có sự kiện: thanh to
 
 | File | Tác dụng | Design Pattern |
 |---|---|---|
-| `entity/Notification.java` | Entity — userId, title, content, type, isRead, createdAt | Inheritance (BaseEntity) |
-| `entity/NotificationType.java` | Constants: BOOKING, PROMOTION, SYSTEM | — |
-| `dto/NotificationResponse.java` | id, title, content, type, isRead, createdAt | DTO Pattern |
-| `repository/NotificationRepository.java` | findByUserId (sorted), countUnread, markAllAsRead (bulk JPQL) | Repository Pattern |
-| `service/NotificationService.java` | getMyNotifications, markAsRead, markAllAsRead, createNotification | Service Layer |
-| `controller/NotificationController.java` | 4 endpoints, @PreAuthorize("isAuthenticated()") trên class | MVC Controller |
-| `event/PaymentCompletedEvent.java` | Event object chứa thông tin payment | Observer Pattern |
-| `event/PaymentEventListener.java` | @EventListener nhận event → gọi createNotification | Observer Pattern |
+| `module/notification/entity/Notification.java` | Entity **standalone** — KHÔNG extends BaseEntity. Có `@Id` riêng, không có `version` / `storageState` / `updatedAt` audit. Field: `id`, `user`, `title`, `content`, `type` (String), `isRead`, `createdAt` (set thủ công). | Plain JPA Entity (không kế thừa) |
+| `module/notification/entity/NotificationType.java` | Constants: BOOKING, PROMOTION, SYSTEM (dùng dạng `String` chứ không phải enum) | — |
+| `module/notification/dto/NotificationResponse.java` | id, title, content, type, isRead, createdAt | DTO Pattern |
+| `module/notification/repository/NotificationRepository.java` | findByUserId (sorted), countUnread, markAllAsRead (bulk JPQL) | Repository Pattern |
+| `module/notification/service/NotificationService.java` | getMyNotifications, markAsRead, markAllAsRead, createNotification | Service Layer |
+| `module/notification/controller/NotificationController.java` | 4 endpoints, @PreAuthorize("isAuthenticated()") trên class | MVC Controller |
+| `module/payment/event/PaymentCompletedEvent.java` | Event object — extends `ApplicationEvent`, chỉ chứa field `Payment payment` (lấy mọi thông tin booking/user từ đây) | Observer Pattern |
+| `module/payment/listener/PaymentEventListener.java` | @Async @EventListener — nhận event → tạo notification + gửi email + sinh QR | Observer Pattern |
+
+> **Lưu ý kiến trúc:** `PaymentCompletedEvent` và `PaymentEventListener` THUỘC module `payment` (xem path `module/payment/event/` và `module/payment/listener/`), KHÔNG thuộc module `notification`. Lý do: event là "phát thanh viên" của module payment; module notification chỉ là 1 trong nhiều subscriber. Nếu để event trong module notification thì coupling ngược lại — payment phải import notification để publish event.
 
 ---
 
@@ -40,15 +42,25 @@ PaymentService (Publisher)      PaymentEventListener (Subscriber)
 
 ```java
 // PaymentService chỉ publish event — KHÔNG gọi NotificationService trực tiếp
-applicationEventPublisher.publishEvent(new PaymentCompletedEvent(booking));
+// Constructor: PaymentCompletedEvent(Object source, Payment payment)
+applicationEventPublisher.publishEvent(new PaymentCompletedEvent(this, payment));
 
 // PaymentEventListener lắng nghe và xử lý
+@Async
 @EventListener
 public void handlePaymentCompleted(PaymentCompletedEvent event) {
+    Payment payment = event.getPayment();
+    Booking booking = payment.getBooking();
+    String bookingCode = booking.getBookingCode();
+
+    // POS bán vé khách vãng lai: booking.user == null → skip
+    if (booking.getUser() == null) return;
+
+    Long userId = booking.getUser().getId();
     notificationService.createNotification(
-        event.getUserId(),
+        userId,
         "Thanh toán thành công",
-        "Vé " + event.getBookingCode() + " đã được xác nhận",
+        "Vé " + bookingCode + " đã được xác nhận. Chúc bạn xem phim vui vẻ!",
         NotificationType.BOOKING
     );
 }
@@ -99,27 +111,35 @@ public void markAsRead(Long notificationId, Long currentUserId) {
 ### Luồng tự động tạo notification sau payment
 
 ```
-[PaymentService.completePayment()]
+[PaymentService.handleCallback()]
     |
     +---> Cập nhật booking status → CONFIRMED
-    +---> Cập nhật payment status → SUCCESS
+    +---> Cập nhật payment status → COMPLETED
     |
     +---> applicationEventPublisher.publishEvent(
-    |         new PaymentCompletedEvent(
-    |           userId, bookingId, bookingCode, totalAmount
-    |         )
+    |         new PaymentCompletedEvent(this, payment)
+    |         // ApplicationEvent constructor: source + Payment object
+    |         // Mọi thông tin booking/user/showtime → đọc qua payment.getBooking()
     |     )
     |
     v (Spring Event Bus — bất đồng bộ qua @Async, chạy trên thread riêng)
     |
 [PaymentEventListener.handlePaymentCompleted(event)]
     |
+    +---> Payment payment = event.getPayment()
+    +---> Booking booking = payment.getBooking()
+    +---> if (booking.getUser() == null) return;  // POS khách vãng lai → skip
+    +---> Long userId = booking.getUser().getId()
+    |
     +---> notificationService.createNotification(
     |         userId,
     |         "Thanh toán thành công",
-    |         "Vé CX-20260524-001 trị giá 250.000đ đã được xác nhận",
+    |         "Vé " + booking.getBookingCode() + " đã được xác nhận",
     |         NotificationType.BOOKING
     |     )
+    |
+    +---> byte[] qrCode = qrCodeService.generateQrCode(bookingCode, 200)
+    +---> emailService.sendBookingConfirmationEmail(email, bookingCode, ...)
     |
     v
 [NotificationRepository.save(notification)]
@@ -127,7 +147,7 @@ public void markAsRead(Long notificationId, Long currentUserId) {
 INSERT INTO notifications (...) VALUES (...)
     |
     v
-Notification lưu DB, user có badge mới
+Notification lưu DB, user có badge mới + email vé có QR
 ```
 
 ### Luồng user đọc thông báo (GET /api/notifications/me)
@@ -201,14 +221,15 @@ ApiResponse (200 OK)
 
 ### INSERT notification (khi payment completed)
 ```sql
-INSERT INTO notifications (user_id, title, content, type, is_read, created_at, updated_at, version)
+-- Notification entity KHÔNG extends BaseEntity → KHÔNG có version / updated_at / storage_state
+INSERT INTO notifications (user_id, title, content, type, is_read, created_at)
 VALUES (
   10,
   N'Thanh toán thành công',
   N'Vé CX-20260524-001 trị giá 250.000đ đã được xác nhận',
   'BOOKING',
   0,
-  GETDATE(), GETDATE(), 0
+  GETDATE()
 )
 ```
 
@@ -232,8 +253,9 @@ WHERE user_id = 10 AND is_read = 0
 
 ### UPDATE đánh dấu 1 notification đã đọc
 ```sql
+-- Notification KHÔNG có version / updated_at → UPDATE chỉ field is_read
 UPDATE notifications
-SET is_read = 1, updated_at = GETDATE(), version = version + 1
+SET is_read = 1
 WHERE id = 5
 ```
 
@@ -332,12 +354,17 @@ public void createNotification(Long userId, String title, String content, String
 ### Tích hợp Observer Pattern
 ```java
 // PaymentEventListener tự động tạo notification khi payment thành công
+@Async
 @EventListener
 public void handlePaymentCompleted(PaymentCompletedEvent event) {
+    Payment payment = event.getPayment();
+    Booking booking = payment.getBooking();
+    if (booking.getUser() == null) return;  // skip POS khách vãng lai
+
     notificationService.createNotification(
-        event.getUserId(),
+        booking.getUser().getId(),
         "Thanh toán thành công",
-        "Vé " + event.getBookingCode() + " đã xác nhận",
+        "Vé " + booking.getBookingCode() + " đã xác nhận",
         NotificationType.BOOKING
     );
 }

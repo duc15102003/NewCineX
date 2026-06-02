@@ -304,15 +304,24 @@ Bước 3: Trình duyệt thấy được phép → gửi request thật
 ```java
 @Configuration
 public class CorsConfig {
+
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
+    // ↑ Đọc từ application.yml (app.frontend-url: http://localhost:5173)
+    //   Đổi env (dev/staging/prod) chỉ cần đổi config, KHÔNG sửa code.
+
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
-        // ↑ CHỈ cho FE ở port 5173. Web khác → bị chặn.
+        config.setAllowedOrigins(List.of(frontendUrl));
+        // ↑ CHỈ cho FE đã khai báo trong config. Web khác → bị chặn.
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));         // Cho phép header Authorization
         config.setAllowCredentials(true);                // Cho phép gửi token
-        // ...
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return new CorsFilter(source);
     }
 }
 ```
@@ -365,33 +374,92 @@ Client gửi request
 └─────────────────────────┘
 ```
 
-### Config SecurityFilterChain
+### Config SecurityFilterChain (full code thực tế)
+
+Đường dẫn: `backend/src/main/java/com/cinex/common/config/SecurityConfig.java`
 
 ```java
-@Bean
-public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    return http
-        .csrf(AbstractHttpConfigurer::disable)
-        // ↑ Tắt CSRF vì dùng JWT (stateless). CSRF chỉ cần cho cookie-based session.
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity         // Bật @PreAuthorize / @PostAuthorize (mặc định prePostEnabled = true)
+@RequiredArgsConstructor
+public class SecurityConfig {
 
-        .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        // ↑ Không tạo session trên server. Mỗi request mang token riêng.
+    private final JwtAuthFilter jwtAuthFilter;
 
-        .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/api/health", "/api/auth/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-            // ↑ Các URL public — không cần token
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .cors(cors -> {})
+                // ↑ BẬT CORS — sử dụng bean CorsFilter đã khai báo trong CorsConfig.
+                //   Không bật → mọi request từ FE (localhost:5173) bị block.
 
-            .anyRequest().authenticated()
-            // ↑ Tất cả URL khác — PHẢI có token hợp lệ
-        )
+                .csrf(AbstractHttpConfigurer::disable)
+                // ↑ Tắt CSRF vì dùng JWT (stateless). CSRF chỉ cần cho cookie-based session.
 
-        .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-        // ↑ Chèn JwtAuthFilter VÀO TRƯỚC filter mặc định
-        // → Request đi qua JwtAuthFilter trước
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // ↑ Không tạo session trên server. Mỗi request mang token riêng.
 
-        .build();
+                .authorizeHttpRequests(auth -> auth
+                        // === Luôn public ===
+                        .requestMatchers("/api/health").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+
+                        // === Chỉ GET public (xem phim, thể loại, phòng, ghế) — POST/PUT/DELETE cần auth ===
+                        .requestMatchers(HttpMethod.GET, "/api/movies/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/genres/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/rooms/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/showtimes/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/bookings/showtimes/*/occupied-seats").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/configs/public/**").permitAll()
+
+                        // === Payment callback — cổng thanh toán (MoMo, VNPay...) gọi trực tiếp, không có JWT ===
+                        .requestMatchers(HttpMethod.GET, "/api/payments/callback").permitAll()
+
+                        // === WebSocket — STOMP handshake không có header Authorization ===
+                        .requestMatchers("/ws/**").permitAll()
+
+                        // === Còn lại cần authenticated (POST, PUT, DELETE, /api/users/me, /api/bookings...) ===
+                        .anyRequest().authenticated()
+                )
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                        // ↑ Chưa đăng nhập / token hết hạn → trả 401 thay vì 403 mặc định.
+                        //   401 = "chưa xác định danh tính", 403 = "đã biết nhưng không có quyền".
+                        //   FE dựa vào 401 để tự gọi /api/auth/refresh.
+                )
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                // ↑ Chèn JwtAuthFilter VÀO TRƯỚC UsernamePasswordAuthenticationFilter mặc định.
+                //   → Request đi qua JwtAuthFilter trước → set Authentication từ JWT.
+
+                .build();
+    }
 }
 ```
+
+### Vì sao tách GET vs POST/PUT/DELETE?
+
+CineX cho phép **xem phim, lịch chiếu, ghế đã đặt** mà KHÔNG cần login (giống tinyvietnam, betacinemas). Nhưng **đặt vé, sửa profile, xóa** thì BẮT BUỘC phải có token.
+
+```
+GET  /api/movies               → public  (khách vãng lai xem được)
+POST /api/movies               → auth    (chỉ admin tạo phim)
+PUT  /api/movies/123           → auth    (chỉ admin sửa)
+
+GET  /api/bookings/showtimes/45/occupied-seats   → public (xem ghế nào đã đặt)
+POST /api/bookings                                → auth   (đặt vé phải login)
+```
+
+### Vì sao Payment callback phải permitAll?
+
+Khi user thanh toán MoMo, MoMo redirect về `GET /api/payments/callback?orderId=...&signature=...`. Request này KHÔNG có header `Authorization` (MoMo không biết JWT của user). Nếu để `.authenticated()` → 401 → user không bao giờ được redirect về trang success.
+
+**An toàn:** Backend verify chữ ký HMAC từ MoMo trong controller — hacker không tự gọi giả được vì không biết secret.
+
+### Vì sao WebSocket phải permitAll?
+
+STOMP handshake qua HTTP UPGRADE, browser KHÔNG đính kèm header `Authorization`. Auth phải làm ở tầng STOMP (CONNECT frame) chứ không qua SecurityFilterChain.
 
 ---
 
@@ -802,10 +870,10 @@ curl -X POST http://localhost:8088/api/auth/register \
 
 | Tình huống | File cần sửa |
 |---|---|
-| Thêm URL public mới (VD: `/api/movies` cho phép xem không cần login) | `SecurityConfig.java` → thêm vào `PUBLIC_URLS` |
-| Thêm role mới (VD: STAFF) | `Role.java` → thêm enum. `SecurityConfig.java` → thêm `@PreAuthorize` |
+| Thêm URL public mới (VD: thêm endpoint xem-thử không cần login) | `SecurityConfig.java` → thêm dòng `.requestMatchers(HttpMethod.GET, "/api/xxx/**").permitAll()` trong block `authorizeHttpRequests` |
+| Thêm role mới (VD: STAFF) | `Role.java` → thêm enum. Thêm `@PreAuthorize("hasRole('STAFF')")` ở Controller cần phân quyền |
 | Sửa thời gian hết hạn token | `application.yml` → `app.jwt.expiration-ms` |
-| Cho phép FE ở domain khác gọi API | `CorsConfig.java` → thêm vào `setAllowedOrigins` |
+| Cho phép FE ở domain khác gọi API | `application.yml` → đổi `app.frontend-url` (CorsConfig đọc qua `@Value`) |
 | Thêm loại lỗi mới | `ErrorCode.java` → thêm enum |
 | Thêm validation cho DTO mới | DTO class → thêm `@NotBlank`, `@Size`, ... |
 
@@ -1124,17 +1192,19 @@ URL-based không đủ → cần method-level.
 
 ### Bật `@PreAuthorize`
 
-Trong `SecurityConfig.java` thêm annotation:
+Trong `SecurityConfig.java` thêm annotation `@EnableMethodSecurity`. CineX đã bật sẵn:
 ```java
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true)   // BẬT @PreAuthorize / @PostAuthorize
+@EnableMethodSecurity   // BẬT @PreAuthorize / @PostAuthorize
 public class SecurityConfig {
     // ...
 }
 ```
 
-`prePostEnabled = true` → Spring Security wrap method bằng AOP proxy. Trước khi gọi method, nó eval biểu thức trong `@PreAuthorize`. Nếu false → ném `AccessDeniedException`.
+> **Lưu ý:** Từ Spring Security 5.6+, `@EnableMethodSecurity` mặc định đã có `prePostEnabled = true`. Không cần ghi `@EnableMethodSecurity(prePostEnabled = true)` (chỉ thừa). Cách viết cũ `@EnableGlobalMethodSecurity(prePostEnabled = true)` đã deprecated, đừng dùng.
+
+`@EnableMethodSecurity` → Spring Security wrap mỗi bean có `@PreAuthorize` bằng AOP proxy. Trước khi gọi method, nó eval biểu thức trong `@PreAuthorize`. Nếu false → ném `AccessDeniedException`.
 
 ### Cú pháp SpEL (Spring Expression Language)
 
@@ -1506,7 +1576,13 @@ Khi token hết hạn → server trả 401 → browser cache response. Lần sau
 
 ---
 
-## 16. AccessDeniedHandler + AuthenticationEntryPoint
+## 16. AccessDeniedHandler + AuthenticationEntryPoint (ĐỀ XUẤT NÂNG CẤP)
+
+> **⚠️ Lưu ý:** Section này là **ĐỀ XUẤT NÂNG CẤP**, KHÔNG phải code đang chạy trong CineX.
+>
+> Hiện tại CineX dùng `HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)` (xem Section 4) — trả về **status 401 với body rỗng**. FE tự hiển thị message "Phiên đăng nhập hết hạn" dựa vào status code.
+>
+> Nếu sau này muốn body JSON đẹp hơn (kèm `code`, `message` tiếng Việt), có thể nâng cấp theo pattern dưới đây. Hai file `CustomAuthenticationEntryPoint.java` và `CustomAccessDeniedHandler.java` **chưa tồn tại trong codebase**.
 
 ### Vấn đề
 
@@ -1870,7 +1946,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         // Dùng findActiveByUsername → user đã soft delete không qua được JWT filter
-        // Query: WHERE username = ? AND storage_state != 'DELETED'
+        // Query: WHERE username = ? AND storage_state <> 'ARCHIVED'
         User user = userRepository.findActiveByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
@@ -1911,7 +1987,7 @@ public class CustomUserDetailsService implements UserDetailsService {
        ↓
    CustomUserDetailsService.loadUserByUsername("vanan")
        → UserRepository.findActiveByUsername("vanan")
-       → SELECT * FROM users WHERE username='vanan' AND storage_state != 'DELETED'
+       → SELECT * FROM users WHERE username='vanan' AND storage_state <> 'ARCHIVED'
        → UserDetails với authority "ROLE_USER"
        ↓
    JwtUtil.isTokenValid(token, "vanan") → true

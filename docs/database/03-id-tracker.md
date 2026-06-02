@@ -13,7 +13,7 @@ Bảng id_tracker:
 ┌─────────────┬────────┬───────────────┐
 │ entity_type │ prefix │ current_value │
 ├─────────────┼────────┼───────────────┤
-│ BOOKING     │ VC     │ 42            │
+│ BOOKING     │ CX     │ 42            │
 │ USER        │ USR    │ 15            │
 │ MOVIE       │ MOV    │ 8             │
 └─────────────┴────────┴───────────────┘
@@ -22,8 +22,8 @@ Khi tạo booking mới:
   1. SELECT FROM id_tracker WHERE entity_type = 'BOOKING' FOR UPDATE (lock row)
   2. current_value: 42 → 43
   3. UPDATE id_tracker SET current_value = 43
-  4. Code = "VC" + "-" + "20260512" + "-" + "043"
-  → Kết quả: "VC-20260512-043"
+  4. Code = "CX" + "-" + "20260512" + "-" + "043"
+  → Kết quả: "CX-20260512-043"
 
 Khi tạo user mới:
   1. current_value: 15 → 16
@@ -36,7 +36,7 @@ Khi tạo user mới:
 ```java
 // Sinh code có ngày (booking, payment)
 String bookingCode = idTrackerService.nextCodeWithDate("BOOKING");
-// → "VC-20260512-043"
+// → "CX-20260512-043"
 
 // Sinh code không có ngày (user, movie, room)
 String userCode = idTrackerService.nextCode("USER");
@@ -59,7 +59,7 @@ User A tạo booking     User B tạo booking (cùng lúc)
     │                       ├─ Được vào: current: 43 → 44
     │                       ├─ COMMIT
     │                       │
-    Code: VC-043            Code: VC-044   ← KHÔNG TRÙNG
+    Code: CX-043            Code: CX-044   ← KHÔNG TRÙNG
 ```
 
 Nếu không lock → 2 request cùng đọc 42 → cùng +1 = 43 → **TRÙNG CODE**!
@@ -68,7 +68,7 @@ Nếu không lock → 2 request cùng đọc 42 → cùng +1 = 43 → **TRÙNG C
 
 | | UUID | IdTracker |
 |---|---|---|
-| Ví dụ | `550e8400-e29b-41d4-a716-446655440000` | `VC-20260512-043` |
+| Ví dụ | `550e8400-e29b-41d4-a716-446655440000` | `CX-20260512-043` |
 | Độ dài | 36 ký tự | 17 ký tự |
 | Đọc được | Không | Có (biết ngày đặt, số thứ tự) |
 | Sắp xếp | Ngẫu nhiên | Theo thứ tự |
@@ -78,62 +78,81 @@ Nếu không lock → 2 request cùng đọc 42 → cùng +1 = 43 → **TRÙNG C
 
 ## Schema DDL
 
+> Lưu ý: `IdTracker` KHÔNG extends `BaseEntity` — bảng này là hạ tầng nội bộ, không cần `version`, `storage_state`, `created_at`, `updated_at` như các entity nghiệp vụ. Chỉ giữ 5 cột tối thiểu.
+
 ```sql
 CREATE TABLE id_tracker (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     entity_type NVARCHAR(50) NOT NULL UNIQUE,
-    prefix NVARCHAR(20) NOT NULL,
+    prefix NVARCHAR(10) NOT NULL,
     current_value BIGINT NOT NULL DEFAULT 0,
-    last_reset_date DATE,
-    created_at DATETIME2 DEFAULT GETDATE(),
-    updated_at DATETIME2 DEFAULT GETDATE(),
-    version BIGINT NOT NULL DEFAULT 0
+    description NVARCHAR(100)
 );
 
-INSERT INTO id_tracker (entity_type, prefix, current_value) VALUES
-('BOOKING', 'CX', 0),
-('INVOICE', 'INV', 0),
-('USER', 'USR', 0);
+-- Seed data khi khởi tạo DB (changelog 003-create-id-tracker-table.xml)
+INSERT INTO id_tracker (entity_type, prefix, current_value, description) VALUES
+('BOOKING',  'CX',  0, 'Booking code: CX-20260510-001'),
+('PAYMENT',  'PAY', 0, 'Payment code: PAY-20260510-001'),
+('USER',     'USR', 0, 'User code: USR-001'),
+('MOVIE',    'MOV', 0, 'Movie code: MOV-001'),
+('ROOM',     'RM',  0, 'Room code: RM-001'),
+('GENRE',    'GNR', 0, 'Genre code: GNR-001'),
+('SHOWTIME', 'ST',  0, 'Showtime code: ST-20260515-001');
 ```
 
 ---
 
 ## Code IdTrackerService đầy đủ
 
+> Lưu ý: CineX format số thứ tự bằng `%03d` (3 chữ số, padding `0`) — VD `001`, `042`, `999`. Khi vượt 999 sẽ tự nới ra `1000`, `1001`... (định dạng `%03d` chỉ pad ở dưới ngưỡng, không chặn).
+>
+> Code KHÔNG có logic auto-reset theo ngày. Số `current_value` luôn tăng đơn điệu. Việc "có ngày" trong code chỉ là ghép chuỗi `yyyyMMdd` vào giữa prefix và số — không reset counter.
+
 ```java
 @Service
 @RequiredArgsConstructor
 public class IdTrackerService {
 
-    private final IdTrackerRepository repository;
+    private final IdTrackerRepository idTrackerRepository;
 
-    @Transactional
-    public String nextCode(String entityType) {
-        IdTracker tracker = repository.findByEntityTypeForUpdate(entityType)
-            .orElseThrow(() -> new BusinessException(ErrorCode.TRACKER_NOT_FOUND));
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
-        long next = tracker.getCurrentValue() + 1;
-        tracker.setCurrentValue(next);
-
-        return String.format("%s-%06d", tracker.getPrefix(), next);
-    }
-
+    /**
+     * Sinh code có ngày: VD "CX-20260510-001"
+     * Dùng cho: booking, payment
+     */
     @Transactional
     public String nextCodeWithDate(String entityType) {
-        IdTracker tracker = repository.findByEntityTypeForUpdate(entityType)
-            .orElseThrow(() -> new BusinessException(ErrorCode.TRACKER_NOT_FOUND));
+        IdTracker tracker = getAndIncrement(entityType);
+        String date = LocalDate.now().format(DATE_FMT);
+        return String.format("%s-%s-%03d", tracker.getPrefix(), date, tracker.getCurrentValue());
+    }
 
-        LocalDate today = LocalDate.now();
-        if (!today.equals(tracker.getLastResetDate())) {
-            tracker.setCurrentValue(0);
-            tracker.setLastResetDate(today);
-        }
+    /**
+     * Sinh code không có ngày: VD "USR-001", "MOV-001"
+     * Dùng cho: user, movie, room, ...
+     */
+    @Transactional
+    public String nextCode(String entityType) {
+        IdTracker tracker = getAndIncrement(entityType);
+        return String.format("%s-%03d", tracker.getPrefix(), tracker.getCurrentValue());
+    }
 
-        long next = tracker.getCurrentValue() + 1;
-        tracker.setCurrentValue(next);
+    /**
+     * Lấy số tiếp theo (không format): VD 1, 2, 3, ...
+     */
+    @Transactional
+    public long nextValue(String entityType) {
+        IdTracker tracker = getAndIncrement(entityType);
+        return tracker.getCurrentValue();
+    }
 
-        String dateStr = today.format(DateTimeFormatter.BASIC_ISO_DATE);
-        return String.format("%s-%s-%03d", tracker.getPrefix(), dateStr, next);
+    private IdTracker getAndIncrement(String entityType) {
+        IdTracker tracker = idTrackerRepository.findByEntityType(entityType)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "IdTracker not found for entity type: " + entityType));
+        tracker.setCurrentValue(tracker.getCurrentValue() + 1);
+        return idTrackerRepository.save(tracker);
     }
 }
 ```
@@ -144,11 +163,11 @@ public class IdTrackerService {
 public interface IdTrackerRepository extends JpaRepository<IdTracker, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @QueryHints({ @QueryHint(name = "javax.persistence.lock.timeout", value = "3000") })
-    @Query("SELECT t FROM IdTracker t WHERE t.entityType = :type")
-    Optional<IdTracker> findByEntityTypeForUpdate(@Param("type") String type);
+    Optional<IdTracker> findByEntityType(String entityType);
 }
 ```
+
+> Spring Data JPA tự sinh JPQL từ tên method `findByEntityType` (derived query). Annotation `@Lock(PESSIMISTIC_WRITE)` ép Hibernate thêm `FOR UPDATE` vào câu SELECT → row id_tracker bị khóa cho tới khi transaction commit. Không cần viết `@Query` hay `@QueryHints` thủ công.
 
 ---
 

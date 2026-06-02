@@ -179,7 +179,7 @@ export const useMovies = (params: MovieFilter) => {
 
 export const useMovie = (id: number) => {
   return useQuery({
-    queryKey: ["movies", id],
+    queryKey: ['movie', id],
     queryFn: async () => {
       const { data } = await api.get<ApiResponse<Movie>>(`/api/movies/${id}`);
       return data.data;
@@ -195,7 +195,7 @@ export const useGenres = () => {
       const { data } = await api.get<ApiResponse<Genre[]>>("/api/genres");
       return data.data;
     },
-    staleTime: 1000 * 60 * 60,  // 1 giờ — genres ít đổi
+    staleTime: 5 * 60 * 1000,  // 5 phút — genres ít đổi
   });
 };
 
@@ -434,9 +434,9 @@ function FavoritesPage() {
 
 → useSearchParams sync state với URL query. Refresh giữ filter. Share link giữ filter. useState mất hết khi refresh.
 
-**Câu 7**: Tại sao `staleTime: 1000 * 60 * 60` cho useGenres?
+**Câu 7**: Tại sao `staleTime: 5 * 60 * 1000` cho useGenres?
 
-→ Genres ít đổi (admin hiếm thêm). Cache 1 giờ → giảm gọi API liên tục.
+→ Genres ít đổi (admin hiếm thêm). Cache 5 phút → giảm gọi API liên tục.
 
 **Câu 8**: `enabled: !!movieId` — tại sao cần?
 

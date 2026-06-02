@@ -89,15 +89,19 @@ public PaymentResult process(String method, Booking booking) {
 ```java
 // Interface (đóng — không sửa)
 public interface PaymentProcessor {
-    PaymentResult process(Booking booking);
+    String createPayment(String transactionCode, BigDecimal amount, String description);
+    boolean verifyCallback(Map<String, String> params);
 }
 
-// Implementation (mở — thêm class mới)
+// Implementation (mở — thêm class mới, KHÔNG sửa interface và Service)
+// Các tên dưới đây là VÍ DỤ GIẢ ĐỊNH để minh họa khả năng mở rộng:
 public class VNPayProcessor implements PaymentProcessor { ... }
 public class MomoProcessor implements PaymentProcessor { ... }
 public class ZaloPayProcessor implements PaymentProcessor { ... }  // ← THÊM MỚI
 // PaymentService KHÔNG bị sửa
 ```
+
+> Trong CineX thực tế hiện chỉ có 2 implementation: `MoMoPaymentProcessor` (đăng ký bean tên `"VNPAY"` — giữ tên này do FE đang gửi `paymentMethod=VNPAY`) và `CashPaymentProcessor` (bean tên `"CASH"`). KHÔNG có class `ZaloPayProcessor`. Khi cần thêm cổng mới (ZaloPay, ngân hàng, ...) chỉ cần tạo class mới `implements PaymentProcessor` + `@Component("TÊN")` — `PaymentProcessorFactory` và `PaymentService` không phải sửa.
 
 ---
 
@@ -109,10 +113,12 @@ Class con có thể **thay thế** class cha mà chương trình vẫn chạy đ
 ### Trong CineX
 ```java
 // PaymentProcessor interface — class con thay thế được
-PaymentProcessor processor = new MockPaymentProcessor();   // OK
+PaymentProcessor processor = new MoMoPaymentProcessor();   // OK — bean "VNPAY" trong CineX
 PaymentProcessor processor = new CashPaymentProcessor();   // OK — thay thế, vẫn chạy đúng
-processor.createPayment(code, amount, desc);               // Cả 2 đều hoạt động
+processor.createPayment(code, amount, desc);               // Cả 2 đều hoạt động đúng hợp đồng
 ```
+
+> Trong context unit test, bạn cũng có thể tạo "test double" kiểu `MockPaymentProcessor implements PaymentProcessor` để test `PaymentService` không cần gọi MoMo thật. Đó là class test, không tồn tại trong code production của CineX. Điểm cốt lõi của LSP: bất kỳ class nào `implements PaymentProcessor` đều phải trả về kết quả hợp lệ theo hợp đồng (`createPayment` trả URL hoặc null cho cash; `verifyCallback` trả true/false) — không được throw exception bất ngờ phá vỡ `PaymentService`.
 
 ---
 

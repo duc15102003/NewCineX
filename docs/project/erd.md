@@ -555,6 +555,6 @@ public abstract class BaseEntity {
 | Field | Tác dụng |
 |---|---|
 | `version` | **Optimistic Locking:** mỗi lần save, version +1. Nếu 2 người sửa cùng lúc cùng record → người save sau sẽ bị lỗi `OptimisticLockException` thay vì ghi đè im lặng |
-| `storageState` | **Soft Delete:** xóa record = set `storageState = 'DELETED'`. Data vẫn còn trong DB, có thể khôi phục. Production không bao giờ DELETE thật |
+| `storageState` | **Soft Delete:** xóa record = set `storageState = 'ARCHIVED'`. Data vẫn còn trong DB, có thể khôi phục. Production không bao giờ DELETE thật. Enum chỉ có 2 giá trị: `ACTIVE` (mặc định) và `ARCHIVED` (đã xóa mềm) |
 
 Nhờ JPA Auditing + `AuditorAware`, 4 field `createdBy/updatedBy/createdAt/updatedAt` được **tự động điền** mỗi khi save entity, không cần code thủ công.

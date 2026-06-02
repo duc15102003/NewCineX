@@ -185,13 +185,18 @@ Vào sân bay: kiểm tra vé → kiểm tra hộ chiếu → kiểm tra hành l
 
 ### Trong CineX
 ```
-Request → CorsFilter (kiểm tra origin)
-       → JwtAuthFilter (kiểm tra token)
-       → AuthorizationFilter (kiểm tra quyền)
+Request → CORS (cấu hình qua CorsConfig bean → Spring Security áp dụng)
+       → JwtAuthFilter (file CineX viết — kiểm tra & parse JWT)
+       → AuthorizationFilter (filter mặc định của Spring Security — kiểm tra quyền theo @PreAuthorize / SecurityFilterChain)
        → Controller (xử lý)
 ```
 
-### Dùng ở đâu: Security (JwtAuthFilter)
+> Lưu ý:
+> - `JwtAuthFilter` là filter do CineX viết (file `security/JwtAuthFilter.java`).
+> - CORS không phải 1 filter riêng do CineX viết — CineX khai báo `CorsConfigurationSource` trong `CorsConfig`; Spring Security tự gắn `CorsFilter` vào chain dựa trên config đó.
+> - `AuthorizationFilter` là filter BUILT-IN của Spring Security, KHÔNG phải file CineX viết. Nó đứng cuối chain, đọc `Authentication` đã được `JwtAuthFilter` set vào `SecurityContext` để quyết định cho phép vào Controller hay trả 403.
+
+### Dùng ở đâu: Security (`JwtAuthFilter` + Spring Security built-in filters)
 
 ---
 
@@ -274,7 +279,7 @@ movie.setStatus(MovieStatus.NOW_SHIOWING); // LỖI COMPILE NGAY
 | `Role` | USER, ADMIN |
 | `MovieStatus` | COMING_SOON, NOW_SHOWING, ENDED |
 | `BookingStatus` | HOLDING, CONFIRMED, CHECKED_IN, CANCELLED, EXPIRED |
-| `PaymentMethod` | VNPAY, MOMO, CASH |
+| `PaymentMethod` | VNPAY, MOMO, CASH, TRANSFER |
 | `SeatType` | STANDARD, VIP, COUPLE |
 
 ### Luôn dùng `@Enumerated(EnumType.STRING)`, KHÔNG dùng `ORDINAL`

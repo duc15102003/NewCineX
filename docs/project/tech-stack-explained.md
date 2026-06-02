@@ -1042,22 +1042,28 @@ public abstract class BaseEntity {
 #### Thành phần 3: `AuditorAware` — Hỏi "ai đang thao tác?"
 
 ```java
-// File: common/config/AuditorAwareImpl.java
-@Component
-public class AuditorAwareImpl implements AuditorAware<String> {
+// File: common/config/JpaAuditingConfig.java
+@Configuration
+@EnableJpaAuditing(auditorAwareRef = "auditorProvider")
+public class JpaAuditingConfig {
 
-    @Override
-    public Optional<String> getCurrentAuditor() {
-        // Đọc JWT từ SecurityContext → lấy username
-        return Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-                .filter(Authentication::isAuthenticated)
-                .map(Authentication::getName);
-        // Trả về "admin@cinex.vn" hoặc username của người đang đăng nhập
+    @Bean
+    public AuditorAware<String> auditorProvider() {
+        return () -> {
+            // Đọc JWT từ SecurityContext → lấy username
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+                return Optional.of("system");
+            }
+            return Optional.of(auth.getName());
+            // Trả về "admin@cinex.vn" hoặc username của người đang đăng nhập
+            // Nếu chưa đăng nhập (vd: seed data lúc startup) → trả "system"
+        };
     }
 }
 ```
 
-Khi `AuditingEntityListener` cần điền `createdBy` / `updatedBy`, nó gọi `getCurrentAuditor()` để hỏi "ai đang thao tác?". Method này đọc **JWT token** từ `SecurityContext` (đã được `JwtAuthFilter` parse trước đó) và trả về username.
+Khi `AuditingEntityListener` cần điền `createdBy` / `updatedBy`, nó gọi `AuditorAware.getCurrentAuditor()` (lambda trong `@Bean auditorProvider`) để hỏi "ai đang thao tác?". Method này đọc **JWT token** từ `SecurityContext` (đã được `JwtAuthFilter` parse trước đó) và trả về username. Nếu chưa đăng nhập → fallback `"system"` (vd: lúc Liquibase seed data).
 
 ### 4 annotation audit trong BaseEntity
 

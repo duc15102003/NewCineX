@@ -52,12 +52,12 @@ CineX là hệ thống **đặt vé xem phim online**. Có 2 vai trò:
 │                                                                 │
 │  8. Nhận QR code                                                │
 │     └── Trang "Đặt vé thành công" hiện QR code                 │
-│     └── QR = bookingCode (VD: VC-20260515-001)                  │
+│     └── QR = bookingCode (VD: CX-20260515-001)                  │
 │     └── Vào "Vé của tôi" xem lại bất kỳ lúc nào               │
 │                                                                 │
 │  9. Đến rạp check-in                                            │
 │     └── Đưa QR cho nhân viên quét                               │
-│     └── POST /api/bookings/check-in?code=VC-20260515-001       │
+│     └── POST /api/bookings/check-in?code=CX-20260515-001       │
 │     └── Booking status=CHECKED_IN → phát vé cứng               │
 │                                                                 │
 │  Ngoài ra user có thể:                                          │
@@ -588,21 +588,24 @@ BE: tạo Booking với discountAmount = 40000
                ▼       ▼
         ┌──────────┐  ┌──────────┐
         │CONFIRMED │  │CANCELLED │ ← hoặc EXPIRED
-        └──┬───┬───┘  └──────────┘
-           │   │
-   check-in   cancel
-           │   │
-           ▼   ▼
-    ┌──────────┐  ┌──────────┐
-    │CHECKED_IN│  │ REFUNDED │
-    └──────────┘  └──────────┘
+        └────┬─────┘  └──────────┘
+             │
+          check-in
+             │
+             ▼
+        ┌──────────┐
+        │CHECKED_IN│
+        └──────────┘
 ```
+
+> **Lưu ý**: `BookingStatus` enum chỉ có 5 giá trị: HOLDING, CONFIRMED, CHECKED_IN, CANCELLED, EXPIRED. Việc hoàn tiền (refund) được track ở `PaymentStatus`, không phải BookingStatus.
 
 **Validation transition**:
 - HOLDING → CONFIRMED: chỉ khi payment SUCCESS
 - HOLDING → CANCELLED: user tự cancel hoặc scheduler expire
+- HOLDING → EXPIRED: scheduler dọn booking quá hạn
 - CONFIRMED → CHECKED_IN: NV quét QR, chưa quá 30' sau showtime
-- CONFIRMED → REFUNDED: cancel + refund qua API
+- CONFIRMED → CANCELLED: cancel sau khi đã thanh toán (refund track ở PaymentStatus)
 
 Code:
 ```java

@@ -272,14 +272,14 @@ Một số corporate network, browser cũ chặn WebSocket. Giải pháp: **Sock
 import SockJS from "sockjs-client";
 
 const client = new Client({
-  webSocketFactory: () => new SockJS("http://localhost:8088/ws-cinex"),
+  webSocketFactory: () => new SockJS("http://localhost:8088/ws"),
   // ↑ KHÔNG dùng ws:// URL trực tiếp, dùng http:// → SockJS xử lý
 });
 ```
 
 Server Spring bật SockJS endpoint:
 ```java
-registry.addEndpoint("/ws-cinex").withSockJS();
+registry.addEndpoint("/ws").withSockJS();
 ```
 
 Trade-off: SockJS chậm hơn raw WS một chút (frame overhead), nhưng tương thích rộng.
@@ -294,7 +294,7 @@ import SockJS from "sockjs-client";
 
 export function createStompClient(token: string) {
   return new Client({
-    webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL}/ws-cinex`),
+    webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_BASE_URL}/ws`),
 
     connectHeaders: {
       Authorization: `Bearer ${token}`,
@@ -388,7 +388,7 @@ Nếu 2 lần ping không response → connection coi như chết → client tri
 
 **Cảnh báo Nginx**: default `proxy_read_timeout: 60s`. Nếu WebSocket idle 60s → Nginx đóng → client mất kết nối ngẫu nhiên. Fix:
 ```nginx
-location /ws-cinex {
+location /ws {
     proxy_pass http://backend:8088;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;

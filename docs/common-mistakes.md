@@ -84,7 +84,7 @@ public List<Room> listRooms() {
 public Page<Room> listRooms(RoomFilter filter, Pageable pageable) {
     var spec = RoomSpecification.fromFilter(filter);
     return roomRepository.findAll(spec, pageable);
-    // SQL: WHERE storage_state <> 'DELETED' → DB trả 100 rows
+    // SQL: WHERE storage_state <> 'ARCHIVED' → DB trả 100 rows
 }
 ```
 

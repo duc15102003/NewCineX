@@ -218,53 +218,51 @@ movieRepository.save(movie);
 
 **Khó khăn:** Entity `Movie.genres = Set<Genre>`, nhưng:
 - `MovieResponse.genres = Set<GenreResponse>` (DTO đầy đủ)
-- `MovieListResponse.genres = Set<String>` (chỉ tên)
+- `MovieListResponse.genres = Set<GenreResponse>` (cũng trả `GenreResponse` kèm `storageState`, FE tự lọc)
 
-#### Trường hợp 1: Set\<Genre\> → Set\<GenreResponse\>
+#### Cách MovieMapper xử lý Genre
 
 ```java
-@Mapper(componentModel = "spring", uses = GenreMapper.class)
+@Mapper(componentModel = "spring")
 public interface MovieMapper {
+
+    @Mapping(source = "genres", target = "genres", qualifiedByName = "genreResponses")
     MovieResponse toResponse(Movie movie);
-}
-```
 
-`uses = GenreMapper.class` → MapStruct biết: khi cần chuyển Genre → GenreResponse, gọi `GenreMapper.toResponse()`. Code sinh ra:
+    @Mapping(source = "genres", target = "genres", qualifiedByName = "genreResponses")
+    MovieListResponse toListResponse(Movie movie);
 
-```java
-// MovieMapperImpl.java (auto-generated)
-@Autowired
-private GenreMapper genreMapper;
-
-protected Set<GenreResponse> genreSetToGenreResponseSet(Set<Genre> set) {
-    Set<GenreResponse> result = new LinkedHashSet<>();
-    for (Genre genre : set) {
-        result.add(genreMapper.toResponse(genre));  // Gọi GenreMapper
+    /** Set<Genre> → Set<GenreResponse>: trả TẤT CẢ kèm storageState (FE tự lọc). */
+    @Named("genreResponses")
+    default Set<GenreResponse> mapGenreResponses(Set<Genre> genres) {
+        if (genres == null) return Set.of();
+        return genres.stream()
+                .map(g -> GenreResponse.builder()
+                        .id(g.getId())
+                        .name(g.getName())
+                        .description(g.getDescription())
+                        .storageState(g.getStorageState() != null ? g.getStorageState().name() : null)
+                        .build())
+                .collect(Collectors.toSet());
     }
-    return result;
 }
 ```
 
-#### Trường hợp 2: Set\<Genre\> → Set\<String\>
+Giải thích:
 
-MapStruct KHÔNG tự biết cách chuyển Genre → String. Phải viết custom method:
+- `@Mapper(componentModel = "spring")` — KHÔNG dùng `uses = GenreMapper.class` vì MovieMapper tự
+  viết custom method `mapGenreResponses` để build `GenreResponse` thủ công (cần trả `storageState`
+  để FE phân biệt thể loại đã ARCHIVED). Đặt logic ngay trong MovieMapper giúp:
+  - Không phụ thuộc bean `GenreMapper` (giảm coupling)
+  - Tự do thêm field cho `GenreResponse` mà không ảnh hưởng nơi khác
 
-```java
-@Mapping(source = "genres", target = "genres", qualifiedByName = "genreNames")
-MovieListResponse toListResponse(Movie movie);
-
-@Named("genreNames")
-default Set<String> mapGenreNames(Set<Genre> genres) {
-    if (genres == null) return Set.of();
-    return genres.stream()
-        .map(Genre::getName)
-        .collect(Collectors.toSet());
-}
-```
-
-- `@Named("genreNames")` đánh dấu method này có tên "genreNames"
-- `qualifiedByName = "genreNames"` → khi map field genres, gọi method có tên đó
+- `@Named("genreResponses")` đánh dấu method này có tên `"genreResponses"`
+- `qualifiedByName = "genreResponses"` → khi map field `genres`, MapStruct gọi đúng method có tên đó
 - `default` method: Java cho phép viết method có body trong interface (từ Java 8)
+
+> Vì sao trả `Set<GenreResponse>` cho cả list lẫn detail (không phải `Set<String>` chỉ tên)?
+> — Admin muốn biết thể loại nào ARCHIVED (badge mờ), user muốn ẩn ARCHIVED. Trả full DTO + `storageState`
+> giúp FE tự quyết, BE không phải tạo 2 response khác nhau.
 
 ---
 
@@ -319,7 +317,7 @@ MovieService.listMovies(filter, pageable)
 MovieSpecification.fromFilter(filter)
 │
 ├── includeDeleted = null → spec.and(notDeleted())
-│     → WHERE (storage_state IS NULL OR storage_state <> 'DELETED')
+│     → WHERE (storage_state IS NULL OR storage_state <> 'ARCHIVED')
 │
 ├── keyword = "Avengers" → spec.and(hasTitle("Avengers"))
 │     → AND LOWER(title) LIKE '%avengers%'
@@ -336,11 +334,11 @@ movieRepository.findAll(spec, pageable)
 │  SQL sinh ra:
 │  SELECT m.* FROM movies m
 │  LEFT JOIN movie_genres mg ON m.id = mg.movie_id
-│  WHERE (m.storage_state IS NULL OR m.storage_state <> 'DELETED')
+│  WHERE (m.storage_state IS NULL OR m.storage_state <> 'ARCHIVED')
 │    AND LOWER(m.title) LIKE '%avengers%'
 │    AND m.status = 'NOW_SHOWING'
 │    AND mg.genre_id = 1
-│  ORDER BY m.id OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+│  ORDER BY m.created_at DESC OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
 │
 ▼
 .map(movieMapper::toListResponse)  → chuyển entity → DTO rút gọn
@@ -425,13 +423,14 @@ MovieService.createMovie(request)
 
 ```sql
 -- Danh sách phim (có filter)
+-- Controller dùng @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC)
 SELECT m.* FROM movies m
 LEFT JOIN movie_genres mg ON m.id = mg.movie_id
-WHERE (m.storage_state IS NULL OR m.storage_state <> 'DELETED')
+WHERE (m.storage_state IS NULL OR m.storage_state <> 'ARCHIVED')
   AND LOWER(m.title) LIKE '%avengers%'
   AND m.status = 'NOW_SHOWING'
   AND mg.genre_id = 1
-ORDER BY m.id OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY;
+ORDER BY m.created_at DESC OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY;
 
 -- Đếm tổng (phân trang)
 SELECT COUNT(*) FROM movies m
@@ -455,11 +454,11 @@ DELETE FROM movie_genres WHERE movie_id = 1;
 INSERT INTO movie_genres (movie_id, genre_id) VALUES (1, 1), (1, 3);
 UPDATE movies SET title = '...', status = '...', version = version + 1 WHERE id = 1;
 
--- Xóa mềm
-UPDATE movies SET storage_state = 'DELETED', version = version + 1 WHERE id = 1;
+-- Xóa mềm (StorageState enum chỉ có ACTIVE/ARCHIVED — không có DELETED)
+UPDATE movies SET storage_state = 'ARCHIVED', version = version + 1 WHERE id = 1;
 
 -- Danh sách thể loại
-SELECT * FROM genres WHERE (storage_state IS NULL OR storage_state <> 'DELETED');
+SELECT * FROM genres WHERE (storage_state IS NULL OR storage_state <> 'ARCHIVED');
 
 -- Tạo thể loại
 INSERT INTO genres (name, description, version, ...) VALUES ('Thriller', 'Phim giật gân', 0, ...);

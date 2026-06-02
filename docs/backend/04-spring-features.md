@@ -136,24 +136,42 @@ public class CineXApplication { }
 
 ```java
 @Component
+@RequiredArgsConstructor
 public class BookingCleanupScheduler {
 
+    private final BookingRepository bookingRepository;
+    private final SystemConfigService systemConfigService;
+    private final SeatWebSocketService seatWebSocketService;
+
     @Scheduled(fixedRate = 60000)  // 60000ms = 60 giây = 1 phút
-    public void releaseExpiredHolds() {
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(10);
-        List<Booking> expired = bookingRepo.findByStatusAndCreatedAtBefore("HOLDING", cutoff);
+    @Transactional
+    public void cleanupExpiredHolds() {
+        // KHÔNG hardcode 10 phút → đọc từ system_config (admin có thể đổi runtime)
+        int holdMinutes = systemConfigService.getInt("booking.hold_minutes", 10);
+        LocalDateTime expireBefore = LocalDateTime.now().minusMinutes(holdMinutes);
+
+        // Dùng enum BookingStatus.HOLDING, KHÔNG dùng string "HOLDING" (type-safe)
+        List<Booking> expired = bookingRepository.findByStatusAndCreatedAtBefore(
+                BookingStatus.HOLDING, expireBefore);
 
         for (Booking booking : expired) {
-            booking.setStatus("EXPIRED");
-            bookingSeatRepo.cancelByBookingId(booking.getId());
+            booking.setStatus(BookingStatus.EXPIRED);
+            booking.getBookingSeats().forEach(bs -> bs.setStatus(BookingSeatStatus.CANCELLED));
+            bookingRepository.save(booking);
+
+            // Real-time: ghế hết hạn → notify AVAILABLE cho tất cả user đang xem
+            List<Long> seatIds = booking.getBookingSeats().stream()
+                    .map(bs -> bs.getSeat().getId()).toList();
+            seatWebSocketService.notifySeatChanged(
+                    booking.getShowtime().getId(), seatIds, "AVAILABLE");
         }
 
         if (!expired.isEmpty()) {
-            log.info("Released {} expired holds", expired.size());
+            log.info("Cleaned up {} expired bookings", expired.size());
         }
     }
-    // Chạy mỗi phút, tìm booking HOLDING > 10 phút → hủy
-    // User bỏ đi không thanh toán → ghế tự trở lại trống
+    // Chạy mỗi phút, tìm booking HOLDING vượt quá hold_minutes phút → đánh dấu EXPIRED
+    // User bỏ đi không thanh toán → ghế tự trở lại trống (qua WebSocket realtime)
 }
 ```
 
@@ -266,60 +284,123 @@ public class EmailListener {
 
 ---
 
-## 4. Cache-aside Pattern — Đọc cache trước DB
+## 4. Eager Load + Read-through Cache — Pattern cho config
 
 ### Là gì?
-Đọc **cache (nhanh)** trước, không có → đọc **DB (chậm)** → ghi vào cache cho lần sau.
+**Eager load:** load TẤT CẢ data từ DB vào cache **1 lần duy nhất khi startup** (qua `@PostConstruct`).
+**Read-through:** mọi request về sau chỉ đọc từ cache trong RAM — KHÔNG bao giờ đụng tới DB nữa (trừ khi admin update + reload).
+
+So với **Cache-aside (lazy)** — đọc cache trước, miss thì đọc DB rồi ghi cache — pattern này KHÔNG có cache miss vì cache luôn đầy ngay từ giây đầu tiên.
 
 ### Ví dụ đời thường
-Tủ lạnh (cache) và chợ (DB):
-- Cần trứng → mở tủ lạnh → **có** → dùng luôn (**cache hit** — nhanh)
-- Cần thịt → mở tủ lạnh → **hết** → ra chợ mua → cất vào tủ lạnh (**cache miss** → DB → ghi cache)
+**Eager load** giống như bạn rang sẵn cả bịch hạt cà phê vào hộp khi mua về (1 lần). Mỗi lần pha cà phê chỉ múc từ hộp ra — không bao giờ phải mở bao bì lớn nữa. Khi hết → mở bao bì lớn 1 lần nữa (reload).
 
-### Trong CineX — System Config
+**Cache-aside (lazy)** thì khác: mỗi lần pha cà phê mới chạy ra cửa hàng mua 1 lần (lần đầu chậm), sau đó để vào hộp cho lần sau.
+
+### Khi nào dùng eager load?
+- Data **ít** (< 100 record) — load 1 lần không tốn RAM
+- Data **thay đổi hiếm** — không cần invalidate liên tục
+- Data **được đọc rất nhiều** — mỗi request đều đụng tới
+- → Cấu hình hệ thống (system_config) là use case kinh điển
+
+### Trong CineX — SystemConfigService
 
 ```java
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class SystemConfigService {
-    private final Map<String, String> cache = new ConcurrentHashMap<>();
-    // ↑ Cache trong memory (ConcurrentHashMap = thread-safe)
 
+    private final SystemConfigRepository systemConfigRepository;
+
+    // Cache in-memory: key → value (ConcurrentHashMap = thread-safe)
+    private final ConcurrentHashMap<String, String> cache = new ConcurrentHashMap<>();
+
+    /**
+     * EAGER LOAD: chạy NGAY khi bean được khởi tạo (sau khi DI xong).
+     * → Lúc app start, cache đã đầy đủ. Request đầu tiên KHÔNG cần đụng DB.
+     */
+    @PostConstruct
+    public void loadAll() {
+        List<SystemConfig> configs = systemConfigRepository.findAll();
+        cache.clear();
+        configs.forEach(c -> cache.put(c.getConfigKey(), c.getConfigValue()));
+        log.info("Loaded {} system configs into cache", configs.size());
+    }
+
+    // Tất cả method get chỉ đọc cache — KHÔNG bao giờ đụng DB nữa
     public String getString(String key, String defaultValue) {
-        // 1. Đọc cache trước (O(1), cực nhanh)
-        if (cache.containsKey(key)) {
-            return cache.get(key);            // ← CACHE HIT
-        }
-
-        // 2. Cache miss → đọc DB (chậm hơn)
-        SystemConfig config = configRepo.findByConfigKey(key).orElse(null);
-        if (config == null) return defaultValue;
-
-        // 3. Ghi vào cache cho lần sau
-        cache.put(key, config.getConfigValue());
-        return config.getConfigValue();
+        return cache.getOrDefault(key, defaultValue);
     }
 
     public int getInt(String key, int defaultValue) {
-        String value = getString(key, null);
-        return value != null ? Integer.parseInt(value) : defaultValue;
+        String value = cache.get(key);
+        if (value == null) return defaultValue;
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            log.warn("Config key '{}' value '{}' is not a valid integer, using default {}",
+                    key, value, defaultValue);
+            return defaultValue;
+        }
     }
 
-    // Admin sửa config → xóa cache → lần đọc tiếp sẽ đọc DB mới
+    public long getLong(String key, long defaultValue) {
+        String value = cache.get(key);
+        if (value == null) return defaultValue;
+        try { return Long.parseLong(value); }
+        catch (NumberFormatException e) { return defaultValue; }
+    }
+
+    public boolean getBoolean(String key, boolean defaultValue) {
+        String value = cache.get(key);
+        if (value == null) return defaultValue;
+        return "true".equalsIgnoreCase(value) || "1".equals(value);
+    }
+
+    /**
+     * Admin update config → vừa lưu DB vừa update cache ngay lập tức.
+     * Không cần xóa cache như cache-aside (vì cache luôn đầy).
+     */
+    @Transactional
     public void updateConfig(String key, String value) {
-        configRepo.save(new SystemConfig(key, value));
-        cache.remove(key);                    // ← CACHE INVALIDATION
+        SystemConfig config = systemConfigRepository.findByConfigKey(key)
+                .orElseGet(() -> SystemConfig.builder().configKey(key).build());
+        config.setConfigValue(value);
+        systemConfigRepository.save(config);
+        cache.put(key, value);                  // sync cache với DB
+        log.info("Config updated: {} = {}", key, value);
+    }
+
+    /**
+     * Reload toàn bộ cache từ DB — dùng khi nghi ngờ cache lệch DB (rare).
+     */
+    public void reload() {
+        loadAll();
     }
 }
 
 // Sử dụng
 int holdMinutes = configService.getInt("booking.hold_minutes", 10);
 int maxSeats = configService.getInt("booking.max_seats", 8);
-// Lần 1: đọc DB → cache. Lần 2+: đọc cache → nhanh ×1000
+// MỌI lần gọi: đọc thẳng RAM (~10ns), KHÔNG bao giờ đụng DB
 ```
 
-### Cache Invalidation — Khi nào xóa cache?
-- Admin sửa config → `cache.remove(key)`
-- Entity bị update/delete → xóa cache liên quan
+### So sánh: Eager load vs Cache-aside (lazy)
+
+| Tiêu chí | Eager load (CineX dùng) | Cache-aside (lazy) |
+|---|---|---|
+| Load DB | 1 lần lúc startup | Mỗi key load lần đầu khi cần |
+| Request đầu tiên | Nhanh (cache đã đầy) | Chậm (cache miss → DB) |
+| RAM tốn | Tốn từ giây đầu | Tăng dần theo lúc dùng |
+| Khi nào dùng | Data ít, đọc nhiều, ít sửa | Data nhiều, đọc rải rác |
+| Startup time | Lâu hơn (phải query DB) | Nhanh hơn (không query gì) |
+
+**Trade-off:** Eager load tốn thời gian khởi động (vì phải query DB lúc start) và tốn RAM ngay lập tức, NHƯNG request về sau cực nhanh và không có spike DB lúc cache miss.
+
+### Cache Invalidation — Khi nào sync lại?
+- Admin sửa config qua `updateConfig()` → tự động `cache.put(key, value)` đồng bộ ngay
+- Multi-instance deployment: cache mỗi instance riêng → cần gọi `reload()` thủ công hoặc dùng Redis Pub/Sub (xem §15)
 - **Khó nhất trong lập trình:** "Chỉ có 2 thứ khó: đặt tên biến và cache invalidation"
 
 ---

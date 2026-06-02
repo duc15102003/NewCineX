@@ -232,7 +232,9 @@ UPDATE users SET avatar_url = 'https://res.cloudinary.com/.../avatar.jpg',
 WHERE id = 1 AND version = 2
 
 -- listUsers (admin): phân trang
-SELECT u.* FROM users u ORDER BY u.id OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY
+-- Controller dùng @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC)
+-- → mới nhất ở đầu
+SELECT u.* FROM users u ORDER BY u.created_at DESC OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY
 SELECT COUNT(*) FROM users  -- đếm tổng để tính totalPages
 
 -- updateRole (admin): tìm user + cập nhật

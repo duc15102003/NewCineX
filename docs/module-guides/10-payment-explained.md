@@ -74,8 +74,14 @@ PaymentService.handleCallback(params)
     ├── 5. Booking → CONFIRMED, confirmedAt = now()
     ├── 6. BookingSeats → BOOKED
     ├── 7. Publish PaymentCompletedEvent (Observer)
-    │       └── PaymentEventListener (async):
-    │               → notificationService.createNotification(userId, "Thanh toán thành công", ...)
+    │       └── PaymentEventListener.handlePaymentCompleted() (@Async — thread riêng):
+    │               ├── Nếu booking.user == null (POS bán vé khách vãng lai) → skip toàn bộ, return
+    │               ├── notificationService.createNotification(userId, "Thanh toán thành công", ...)
+    │               ├── qrCodeService.generateQrCode(bookingCode, 200)  → byte[] QR PNG
+    │               └── emailService.sendBookingConfirmationEmail(
+    │                       email, bookingCode, movieTitle, roomName, startTime,
+    │                       seats, totalAmount, qrCode  // QR code đính kèm để check-in tại rạp
+    │                   )
     ├── 8. seatWebSocketService.notifySeatChanged(showtimeId, seatIds, "BOOKED")
     │       → Real-time: ghế từ HELD → BOOKED (đổi màu trên sơ đồ)
     └── 9. Return PaymentResponse { status: "COMPLETED" }
@@ -137,18 +143,20 @@ Khi Spring thấy `Map<String, PaymentProcessor>` trong constructor:
 
 ```
 Spring container:
-  Bean "MOMO" = MoMoPaymentProcessor instance
-  Bean "CASH" = CashPaymentProcessor instance
+  Bean "VNPAY" = MoMoPaymentProcessor instance  // (xem mục 4.2 — vì sao tên VNPAY mà class MoMo)
+  Bean "CASH"  = CashPaymentProcessor instance
 
 Map<String, PaymentProcessor> processors = {
-    "MOMO": MoMoPaymentProcessor,
-    "CASH": CashPaymentProcessor
+    "VNPAY": MoMoPaymentProcessor,
+    "CASH" : CashPaymentProcessor
 }
 
-processors.get("MOMO")  → MoMoPaymentProcessor
+processors.get("VNPAY") → MoMoPaymentProcessor  // FE gửi paymentMethod=VNPAY, factory lấy đúng processor
 processors.get("CASH")  → CashPaymentProcessor
-processors.get("VNPAY") → null → throw BusinessException (chưa implement)
+processors.get("MOMO")  → null → throw BusinessException (không có bean key "MOMO")
 ```
+
+**Lưu ý "MOMO" vs "VNPAY":** Enum `PaymentMethod` có cả `VNPAY`, `MOMO`, `CASH`, `TRANSFER`, nhưng hiện tại **chỉ có 2 bean processor là `VNPAY` và `CASH`**. Class `MoMoPaymentProcessor` cố tình đăng ký dưới tên `VNPAY` để khớp với giá trị FE gửi lên (lý do lịch sử — xem mục 4.2). Khi user chọn "MOMO" trên FE, FE vẫn gửi `paymentMethod=VNPAY` để factory tìm thấy processor.
 
 #### So sánh: if-else vs Factory
 
@@ -256,8 +264,12 @@ public interface PaymentProcessor {
 
 #### Implementation 1 — MoMoPaymentProcessor (MoMo sandbox)
 
+**Tại sao annotation lại là `@Component("VNPAY")` mà class lại tên `MoMo`?**
+
+Đây là **dấu vết refactor**: ban đầu CineX định tích hợp VNPay, FE đã code sẵn `paymentMethod="VNPAY"` ở khắp nơi. Sau đó đổi sang dùng sandbox MoMo (vì MoMo dễ test hơn) nhưng KHÔNG muốn refactor cả FE — nên class `MoMoPaymentProcessor` cố tình đăng ký bean dưới tên `"VNPAY"` để factory lookup vẫn khớp. Nhược điểm: tên annotation và tên class lệch nhau — dễ gây nhầm khi đọc code lần đầu. Thực tế production NÊN sửa cho đồng bộ, nhưng vì là đồ án nên giữ nguyên + comment giải thích trong file `MoMoPaymentProcessor.java:32`.
+
 ```java
-@Component("MOMO")  // Key trong Map của Factory
+@Component("VNPAY")  // Giữ tên VNPAY trong factory vì FE gửi paymentMethod=VNPAY
 @Slf4j
 @RequiredArgsConstructor
 public class MoMoPaymentProcessor implements PaymentProcessor {
@@ -617,7 +629,7 @@ PaymentService.createPayment(userId=5, request) [@Transactional]
 │
 ├── 5. Factory chọn processor:
 │     processorFactory.getProcessor(PaymentMethod.VNPAY)
-│     → processors.get("VNPAY") → MockPaymentProcessor
+│     → processors.get("VNPAY") → MoMoPaymentProcessor (đăng ký bean với tên "VNPAY")
 │
 ├── 6. Sinh transactionCode:
 │     idTrackerService.nextCodeWithDate("PAYMENT") → "PAY-20260520-001"
@@ -663,27 +675,41 @@ PaymentService.handleCallback(params) [@Transactional]
 │     → Mock: "SUCCESS".equals(params.get("status")) → true
 │     → VNPay thật: verify HMAC signature
 │
-├── 6. success = true:
-│     payment.status = COMPLETED, payment.paidAt = now()
-│     booking.status = CONFIRMED, booking.confirmedAt = now()
-│     booking.bookingSeats.forEach → status = BOOKED
-│     bookingRepository.save(booking)
-│     → UPDATE payments SET status='COMPLETED', paid_at=... WHERE id=?
-│     → UPDATE bookings SET status='CONFIRMED', confirmed_at=... WHERE id=?
-│     → UPDATE booking_seats SET status='BOOKED' WHERE id=? (× số ghế)
+├── 6a. NHÁNH success = true:
+│      payment.status = COMPLETED, payment.paidAt = now()
+│      booking.status = CONFIRMED, booking.confirmedAt = now()
+│      booking.bookingSeats.forEach → status = BOOKED
+│      bookingRepository.save(booking)
+│      → UPDATE payments SET status='COMPLETED', paid_at=... WHERE id=?
+│      → UPDATE bookings SET status='CONFIRMED', confirmed_at=... WHERE id=?
+│      → UPDATE booking_seats SET status='BOOKED' WHERE id=? (× số ghế)
 │
-├── 7. Publish event:
+├── 6b. NHÁNH success = false (MoMo trả resultCode != 0 hoặc signature sai):
+│      payment.status = FAILED
+│      booking.status = CANCELLED, booking.cancelledAt = now()
+│      booking.bookingSeats.forEach → status = CANCELLED
+│      bookingRepository.save(booking)
+│      seatWebSocketService.notifySeatChanged(showtimeId, seatIds, "AVAILABLE")
+│      → STOMP push: ghế HELD trở lại AVAILABLE (màu xanh) — user khác đặt được ngay
+│      → Không publish PaymentCompletedEvent (không gửi email/notification).
+│
+├── 7. Publish event (CHỈ khi success = true):
 │     eventPublisher.publishEvent(new PaymentCompletedEvent(this, payment))
-│     → PaymentEventListener nhận (async thread riêng):
-│         → notificationService.createNotification(userId, "Thanh toán thành công", ...)
+│     → PaymentEventListener (@Async — thread riêng) nhận event:
+│         ├── Nếu booking.user == null (POS) → skip, return ngay
+│         ├── notificationService.createNotification(userId, "Thanh toán thành công", ...)
+│         ├── qrCodeService.generateQrCode(bookingCode, 200) → byte[] QR PNG 200x200
+│         └── emailService.sendBookingConfirmationEmail(...)  // có QR đính kèm
 │
-├── 8. Real-time:
+├── 8. Real-time (CHỈ khi success = true):
 │     seatWebSocketService.notifySeatChanged(showtimeId, seatIds, "BOOKED")
 │     → STOMP push: ghế E1, E2, A1 → BOOKED (màu đỏ trên sơ đồ)
 │
 └── 9. paymentRepository.save(payment)
-    Return PaymentResponse { status: "COMPLETED" }
+    Return PaymentResponse { status: "COMPLETED" hoặc "FAILED" }
 ```
+
+**Vì sao nhánh failed phải đổi ghế về AVAILABLE?** Nếu user thanh toán fail mà ghế vẫn HELD → đến khi booking expire (10 phút) ghế mới được giải phóng. Trong khi đó user khác KHÔNG đặt được dù thực tế ghế "tự do". Trả ghế ngay khi biết payment fail là UX tốt + tăng throughput rạp.
 
 ### 5.3 generateTicket — Xuất vé điện tử
 
@@ -1095,7 +1121,7 @@ Template Method Pattern:
 |---|---|---|
 | `@OneToOne` | Quan hệ 1-1 giữa 2 entity | `Payment.booking` |
 | `@JoinColumn(unique=true)` | FK + UNIQUE constraint (1 booking 1 payment) | `payments.booking_id` |
-| `@Component("VNPAY")` | Đăng ký Bean với tên cụ thể vào Spring container | `MockPaymentProcessor` |
+| `@Component("VNPAY")` | Đăng ký Bean với tên cụ thể vào Spring container | `MoMoPaymentProcessor` (đăng ký bean tên "VNPAY" do FE gửi `paymentMethod=VNPAY`) |
 | `@EventListener` | Lắng nghe Spring Application Event | `handlePaymentCompleted()` |
 | `@Async` | Chạy method trên thread pool riêng (non-blocking) | `handlePaymentCompleted()` |
 | `@EnableAsync` | Bật tính năng @Async trên toàn app | `CineXApplication.java` |

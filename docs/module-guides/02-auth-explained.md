@@ -960,8 +960,11 @@ SELECT u.id, u.username, u.email, u.password, u.full_name,
        u.version, u.created_at, u.updated_at, u.created_by, u.updated_by
 FROM users u
 WHERE u.email = ?         -- 'student@gmail.com'
-  AND u.storage_state <> 'ARCHIVED'   -- tuỳ định nghĩa findByEmail
 ```
+
+> Lưu ý: `UserRepository.findByEmail(String email)` là method Spring Data tự sinh từ tên (không có `@Query`),
+> nên Hibernate CHỈ generate điều kiện `WHERE u.email = ?` — KHÔNG có filter `storage_state`.
+> Trường hợp cần lọc user đã ARCHIVED, dùng method khác như `findActiveByUsername` (có `@Query` viết tay).
 
 ### 13.2. `INSERT password_reset_tokens` (forgot-password)
 
@@ -1091,7 +1094,7 @@ curl -X POST http://localhost:8088/api/auth/reset-password \
 {
   "success": false,
   "message": "Token không hợp lệ hoặc đã được sử dụng",
-  "errorCode": "INVALID_REQUEST"
+  "timestamp": "2026-05-31T14:10:00"
 }
 ```
 
@@ -1101,7 +1104,7 @@ curl -X POST http://localhost:8088/api/auth/reset-password \
 {
   "success": false,
   "message": "Token đặt lại mật khẩu đã hết hạn",
-  "errorCode": "INVALID_REQUEST"
+  "timestamp": "2026-05-31T14:10:00"
 }
 ```
 
@@ -1111,7 +1114,7 @@ curl -X POST http://localhost:8088/api/auth/reset-password \
 {
   "success": false,
   "message": "Mật khẩu mới và xác nhận mật khẩu không khớp",
-  "errorCode": "INVALID_PASSWORD"
+  "timestamp": "2026-05-31T14:10:00"
 }
 ```
 
@@ -1121,9 +1124,13 @@ curl -X POST http://localhost:8088/api/auth/reset-password \
 {
   "success": false,
   "message": "Mật khẩu mới phải khác mật khẩu cũ",
-  "errorCode": "INVALID_PASSWORD"
+  "timestamp": "2026-05-31T14:10:00"
 }
 ```
+
+> Lưu ý: `GlobalExceptionHandler` trả response qua `ApiResponse.error(message)` chỉ có 3 field:
+> `success`, `message`, `timestamp` — KHÔNG có field `errorCode`. Mã `ErrorCode` (VD: `INVALID_REQUEST`)
+> chỉ dùng nội bộ ở backend để xác định HTTP status, không lộ ra response.
 
 ### 14.3. Logout
 

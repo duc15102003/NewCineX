@@ -34,42 +34,112 @@ spring:
 
 > **Lưu ý:** Gmail yêu cầu "App Password" (vào Google Account → Security → 2FA → App passwords). KHÔNG dùng password Gmail thường.
 
-### Cách dùng
+### Cách dùng trong CineX
+
+CineX dùng **HTML email + @Async** cho TẤT CẢ các method (không dùng `SimpleMailMessage` plain text — vì cần style đẹp + nhúng QR code).
+
+Có 3 method chính:
+- `sendResetPasswordEmail(to, token, expiryMinutes)` — link reset password
+- `sendBookingConfirmationEmail(to, bookingCode, movieTitle, room, startTime, seats, total, qrBytes)` — vé xác nhận + QR inline
+- `sendCancellationEmail(to, bookingCode, movieTitle, refundAmount)` — hủy vé
 
 ```java
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    public void sendBookingConfirmation(String to, String bookingCode, String movieTitle) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("CineX <cinex.noreply@gmail.com>");
-        message.setTo(to);
-        message.setSubject("Xac nhan dat ve - " + bookingCode);
-        message.setText("Chuc mung! Ban da dat ve thanh cong.\n"
-            + "Phim: " + movieTitle + "\n"
-            + "Ma ve: " + bookingCode + "\n"
-            + "Vui long den rap som 15 phut.");
-        mailSender.send(message);
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
+
+    @Value("${app.mail.from:noreply@cinex.vn}")
+    private String fromEmail;
+
+    /**
+     * @Async: chạy thread riêng → API gọi không bị block bởi SMTP (1-2 giây).
+     * User ấn "Quên mật khẩu" → server return 200 ngay, email gửi ngầm.
+     */
+    @Async
+    public void sendResetPasswordEmail(String to, String resetToken, int expiryMinutes) {
+        String resetLink = frontendUrl + "/reset-password?token=" + resetToken;
+        String subject = "CineX — Đặt lại mật khẩu";
+        String body = """
+                <html><body style="font-family: Inter, Arial, sans-serif; background: #051424; color: #e5e7eb;">
+                    <div style="max-width: 500px; margin: 0 auto; background: #0a1929; border-radius: 16px; padding: 32px;">
+                        <h2 style="color: #eab308;">Đặt lại mật khẩu</h2>
+                        <p>Bấm nút bên dưới để đặt lại mật khẩu:</p>
+                        <a href="%s" style="background: #eab308; color: #000; padding: 14px 32px; border-radius: 10px; text-decoration: none;">Đặt lại mật khẩu</a>
+                        <p style="font-size: 14px;">Link hết hạn sau %d phút.</p>
+                    </div>
+                </body></html>
+                """.formatted(resetLink, expiryMinutes);
+        sendHtmlEmail(to, subject, body);
+    }
+
+    /**
+     * Gửi email xác nhận vé + nhúng QR code inline (qua Content-ID "cid:qrcode").
+     */
+    @Async
+    public void sendBookingConfirmationEmail(String to, String bookingCode, String movieTitle,
+                                             String roomName, String startTime, String seats,
+                                             String totalAmount, byte[] qrCodeBytes) {
+        String subject = "CineX — Xác nhận đặt vé " + bookingCode;
+        String body = """
+                <html><body>
+                    <h2>Đặt vé thành công!</h2>
+                    <p>Mã vé: <b>%s</b></p>
+                    <p>Phim: %s | Phòng: %s | Suất: %s</p>
+                    <p>Ghế: %s | Tổng: %s</p>
+                    <img src="cid:qrcode" alt="QR Code" width="200" height="200" />
+                </body></html>
+                """.formatted(bookingCode, movieTitle, roomName, startTime, seats, totalAmount);
+        sendHtmlEmailWithInlineImage(to, subject, body, "qrcode", qrCodeBytes);
+    }
+
+    // Helper gửi HTML thuần
+    private void sendHtmlEmail(String to, String subject, String htmlBody) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(htmlBody, true);   // true = HTML
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            log.error("Failed to send email to {}", to, e);
+        }
+    }
+
+    // Helper gửi HTML + ảnh inline (Content-ID)
+    private void sendHtmlEmailWithInlineImage(String to, String subject, String htmlBody,
+                                              String contentId, byte[] imageBytes) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(htmlBody, true);
+            DataSource ds = new ByteArrayDataSource(imageBytes, "image/png");
+            helper.addInline(contentId, ds);   // QR ảnh nhúng theo cid:qrcode trong HTML
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            log.error("Failed to send email to {}", to, e);
+        }
     }
 }
 ```
 
-### Email HTML (đẹp hơn)
+### Tại sao dùng HTML + inline image cho QR?
 
-```java
-// Dùng MimeMessage để gửi HTML
-public void sendHtmlEmail(String to, String subject, String htmlContent) {
-    MimeMessage message = mailSender.createMimeMessage();
-    MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-    helper.setTo(to);
-    helper.setSubject(subject);
-    helper.setText(htmlContent, true); // true = HTML
-    mailSender.send(message);
-}
-```
+| Cách | Ưu | Nhược |
+|---|---|---|
+| Plain text (`SimpleMailMessage`) | Đơn giản | Không có style, không nhúng được QR |
+| HTML + base64 trực tiếp `<img src="data:image/png;base64,...">` | Không cần attach | Gmail/Outlook chặn → QR không hiển thị |
+| **HTML + Content-ID inline (CineX dùng)** | QR hiện ở mọi email client | Code phức tạp hơn 1 chút |
 
 ### Test không cần Gmail thật
 
@@ -161,25 +231,48 @@ public class FileUploadService {
     /**
      * Upload ảnh lên Cloudinary
      * @param file MultipartFile từ request
-     * @param folder thư mục trên cloud (VD: "movies", "avatars")
-     * @return URL ảnh đã upload
+     * @param folder thư mục ĐẦY ĐỦ trên cloud (caller truyền nguyên: "cinex/posters", "cinex/avatars", "cinex/snacks")
+     * @return URL ảnh đã upload (secure_url HTTPS)
      */
     public String uploadImage(MultipartFile file, String folder) {
         try {
-            Map<String, Object> options = Map.of(
-                "folder", "cinex/" + folder,       // Tổ chức thư mục: cinex/movies/, cinex/avatars/
+            Map<String, Object> options = ObjectUtils.asMap(
+                "folder", folder,                  // caller tự truyền "cinex/..." — service KHÔNG tự prefix
                 "resource_type", "image",
-                "overwrite", true
+                "quality", "auto",                 // Cloudinary tự chọn mức nén tốt nhất (giảm 60-80% dung lượng)
+                "fetch_format", "auto"             // Tự chọn format theo browser: WebP/AVIF/JPEG
             );
-            Map result = cloudinary.uploader().upload(file.getBytes(), options);
+            Map<?, ?> result = cloudinary.uploader().upload(file.getBytes(), options);
             return (String) result.get("secure_url");  // URL https://
         } catch (IOException e) {
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+            // CineX KHÔNG có ErrorCode.FILE_UPLOAD_FAILED — dùng UNCATEGORIZED + message tiếng Việt
+            throw new BusinessException(ErrorCode.UNCATEGORIZED, "Tải ảnh lên thất bại");
         }
     }
 
-    public void deleteImage(String publicId) {
-        cloudinary.uploader().destroy(publicId, Map.of());
+    /**
+     * Xóa ảnh trên Cloudinary.
+     * Nhận URL ĐẦY ĐỦ (VD: https://res.cloudinary.com/xxx/image/upload/v123/cinex/posters/abc.jpg)
+     * và TỰ parse public_id ra từ URL — caller không cần biết public_id.
+     */
+    public void deleteImage(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) return;
+        try {
+            // Tách phần sau "/upload/" → "v123/cinex/posters/abc.jpg"
+            String[] parts = imageUrl.split("/upload/");
+            if (parts.length < 2) return;
+
+            String pathWithVersion = parts[1];
+            // Bỏ version prefix (v123/) → "cinex/posters/abc.jpg"
+            String pathAfterVersion = pathWithVersion.substring(pathWithVersion.indexOf('/') + 1);
+            // Bỏ đuôi file (.jpg) → "cinex/posters/abc"
+            String publicId = pathAfterVersion.substring(0, pathAfterVersion.lastIndexOf('.'));
+
+            cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
+        } catch (Exception e) {
+            // Xóa thất bại KHÔNG nên crash request chính → chỉ log warning
+            log.warn("Failed to delete image: {}", imageUrl, e);
+        }
     }
 }
 ```
@@ -191,7 +284,7 @@ public class FileUploadService {
 @PreAuthorize("hasRole('ADMIN')")
 public ApiResponse<String> uploadImage(@RequestParam("file") MultipartFile file) {
     // Validate: chỉ cho phép image, max 5MB
-    String url = fileUploadService.uploadImage(file, "movies");
+    String url = fileUploadService.uploadImage(file, "cinex/posters");
     return ApiResponse.success(url);
 }
 ```
@@ -251,8 +344,10 @@ public class QrCodeService {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             MatrixToImageWriter.writeToStream(matrix, "PNG", outputStream);
             return outputStream.toByteArray();
-        } catch (Exception e) {
-            throw new BusinessException(ErrorCode.QR_GENERATION_FAILED);
+        } catch (WriterException | IOException e) {
+            // CineX KHÔNG có ErrorCode.QR_GENERATION_FAILED — QR fail là lỗi hệ thống,
+            // dùng RuntimeException để GlobalExceptionHandler bắt và trả 500.
+            throw new RuntimeException("Failed to generate QR code", e);
         }
     }
 

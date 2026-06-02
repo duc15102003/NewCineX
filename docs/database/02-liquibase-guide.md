@@ -228,7 +228,23 @@ db/changelog/
     ├── 012-create-payments-table.xml
     ├── 013-seed-default-data.xml        ← Admin account + 10 genres + IdTracker + SystemConfig
     ├── 014-create-vouchers-table.xml    + voucher_usages
-    └── 015-create-password-reset-tokens-table.xml
+    ├── 015-create-password-reset-tokens-table.xml
+    ├── 016-create-reviews-table.xml
+    ├── 017-create-snacks-table.xml
+    ├── 018-create-notifications-table.xml
+    ├── 019-create-user-favorites-table.xml
+    ├── 020-seed-movies-data.xml         ← Seed dữ liệu phim mẫu
+    ├── 021-seed-booking-data.xml        ← Seed booking mẫu
+    ├── 022-seed-more-bookings.xml
+    ├── 023-seed-vutuongan-bookings.xml
+    ├── 024-rename-deleted-to-archived.xml ← Đổi storage_state='DELETED' → 'ARCHIVED'
+    ├── 025-drop-review-unique-constraint.xml
+    ├── 026-create-snack-orders-table.xml
+    ├── 027-booking-user-nullable.xml    ← booking.user_id cho phép NULL (khách vãng lai)
+    ├── 028-seed-new-configs.xml         ← Thêm system_config mới
+    ├── 029-update-config-descriptions.xml
+    ├── 030-seed-demo-data.xml           ← Seed data demo
+    └── 031-fix-null-storage-state.xml   ← Backfill storage_state cho row cũ
 ```
 
 ---

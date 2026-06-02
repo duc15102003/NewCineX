@@ -183,7 +183,7 @@ File: `repository/ShowtimeRepository.java`
 ```java
 @Query("SELECT s FROM Showtime s WHERE s.room.id = :roomId " +
         "AND s.startTime < :endTime AND s.endTime > :startTime " +   // <-- Cong thuc A < D AND C < B
-        "AND (s.storageState IS NULL OR s.storageState <> 'DELETED') " +  // Bo qua suat da xoa
+        "AND (s.storageState IS NULL OR s.storageState <> 'ARCHIVED') " +  // Bo qua suat da xoa
         "AND s.status <> 'CANCELLED'")                                     // Bo qua suat da huy
 List<Showtime> findConflictingShowtimes(Long roomId, LocalDateTime startTime, LocalDateTime endTime);
 ```
@@ -192,7 +192,7 @@ Giải thích tung đồng:
 - `s.room.id = :roomId` -- Chi kiểm tra trong **cùng phòng** (phòng khác thì không cần check)
 - `s.startTime < :endTime` -- Suất cũ bắt đầu trước khi suất mới kết thúc (dieu kien A < D)
 - `s.endTime > :startTime` -- Suất cũ kết thúc sâu khi suất mới bắt đầu (dieu kien C < B)
-- `storageState <> 'DELETED'` -- Bỏ qua suất đã xóa mem
+- `storageState <> 'ARCHIVED'` -- Bỏ qua suất đã xóa mem (StorageState enum chỉ có ACTIVE/ARCHIVED)
 - `status <> 'CANCELLED'` -- Bỏ qua suất đã huy (phòng đã free)
 
 **Luu y quan trọng khi UPDATE:** Khi sửa suất chiếu, phải **loại tru chinh no** ra khoi danh sach conflict. Nếu không, suất chiếu sẽ tu "trung" với chinh mình:
@@ -702,7 +702,7 @@ SELECT s.* FROM showtimes s
 WHERE s.room_id = 2
   AND s.start_time < '2026-05-25 16:45:00'       -- Suat cu bat dau truoc khi suat moi ket thuc
   AND s.end_time > '2026-05-25 14:00:00'          -- Suat cu ket thuc sau khi suat moi bat dau
-  AND (s.storage_state IS NULL OR s.storage_state <> 'DELETED')
+  AND (s.storage_state IS NULL OR s.storage_state <> 'ARCHIVED')
   AND s.status <> 'CANCELLED';
 
 -- Neu tra ve 0 dong -> khong trung -> cho phep tao
@@ -959,7 +959,7 @@ curl -X POST "http://localhost:8088/api/showtimes" \
 {
   "success": false,
   "message": "Phong 'Room 2' da co suat chieu trong khung gio nay",
-  "errorCode": "SHOWTIME_CONFLICT"
+  "timestamp": "2026-06-01T15:00:00"
 }
 ```
 
@@ -969,7 +969,7 @@ curl -X POST "http://localhost:8088/api/showtimes" \
 {
   "success": false,
   "message": "Gia VIP phai lon hon hoac bang gia thuong",
-  "errorCode": "INVALID_REQUEST"
+  "timestamp": "2026-06-01T15:00:00"
 }
 ```
 
@@ -979,9 +979,13 @@ curl -X POST "http://localhost:8088/api/showtimes" \
 {
   "success": false,
   "message": "Khong the sua suat chieu da co 3 ve dat",
-  "errorCode": "INVALID_REQUEST"
+  "timestamp": "2026-06-01T15:00:00"
 }
 ```
+
+> Lưu ý: `GlobalExceptionHandler` trả response qua `ApiResponse.error(message)` chỉ có 3 field:
+> `success`, `message`, `timestamp` — KHÔNG có field `errorCode`. Mã `ErrorCode` (VD: `SHOWTIME_CONFLICT`,
+> `INVALID_REQUEST`) chỉ dùng nội bộ ở backend để xác định HTTP status, không lộ ra response.
 
 ### 8.7 Xoa mem (ADMIN)
 

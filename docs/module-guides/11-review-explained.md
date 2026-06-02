@@ -123,7 +123,7 @@ Client gửi DELETE /api/movies/1/reviews/5
     |                     ├─ CÓ (admin) → cho phép xóa
     |                     └─ KHÔNG → throw FORBIDDEN (403)
     |
-    +---> Soft delete: review.setStorageState("DELETED")
+    +---> Soft delete: review.setStorageState(StorageState.ARCHIVED)
     |
     +---> updateMovieRating(movieId)
     |         └─ Tính lại AVG sau khi review bị xóa
@@ -161,13 +161,13 @@ VALUES (?, ?, ?, ?, 'ACTIVE', GETDATE(), GETDATE(), 0)
 
 ### SELECT danh sách review của 1 phim
 ```sql
--- reviewRepository.findAll(spec, pageable) với spec: movieId = 1, storageState != DELETED
+-- reviewRepository.findAll(spec, pageable) với spec: movieId = 1, storageState != ARCHIVED
 SELECT r.*, u.username, u.avatar_url, m.title
 FROM reviews r
 JOIN users u ON r.user_id = u.id
 JOIN movies m ON r.movie_id = m.id
 WHERE r.movie_id = 1
-  AND (r.storage_state IS NULL OR r.storage_state <> 'DELETED')
+  AND (r.storage_state IS NULL OR r.storage_state <> 'ARCHIVED')
 ORDER BY r.created_at DESC
 OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
 ```
@@ -175,11 +175,11 @@ OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
 ### AVG rating — câu query quan trọng nhất
 ```sql
 -- ReviewRepository.getAverageRatingByMovieId(movieId)
--- JPQL: SELECT AVG(CAST(r.rating AS double)) FROM Review r WHERE r.movie.id = :movieId AND r.storageState <> 'DELETED'
+-- JPQL: SELECT AVG(CAST(r.rating AS double)) FROM Review r WHERE r.movie.id = :movieId AND r.storageState <> 'ARCHIVED'
 SELECT AVG(CAST(r.rating AS FLOAT))
 FROM reviews r
 WHERE r.movie_id = 1
-  AND (r.storage_state IS NULL OR r.storage_state <> 'DELETED')
+  AND (r.storage_state IS NULL OR r.storage_state <> 'ARCHIVED')
 ```
 
 Kết quả ví dụ: nếu có 3 review điểm 7, 8, 9 → AVG = 8.0 → `movies.rating` được cập nhật thành 8.0.
@@ -187,7 +187,7 @@ Kết quả ví dụ: nếu có 3 review điểm 7, 8, 9 → AVG = 8.0 → `movi
 ### UPDATE soft delete review
 ```sql
 UPDATE reviews
-SET storage_state = 'DELETED', updated_at = GETDATE(), version = version + 1
+SET storage_state = 'ARCHIVED', updated_at = GETDATE(), version = version + 1
 WHERE id = 5
 ```
 
@@ -204,7 +204,7 @@ WHERE id = 1
 SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
 FROM reviews
 WHERE user_id = 10 AND movie_id = 1
-  AND (storage_state IS NULL OR storage_state <> 'DELETED')
+  AND (storage_state IS NULL OR storage_state <> 'ARCHIVED')
 ```
 
 ---

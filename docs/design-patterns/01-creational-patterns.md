@@ -77,7 +77,7 @@ public PaymentResult processPayment(String method, Booking booking) {
 }
 ```
 
-### Dùng Factory (mở rộng dễ)
+### Dùng Factory (mở rộng dễ) — Cách "lý thuyết" với switch
 ```java
 // Interface chung — hợp đồng
 public interface PaymentProcessor {
@@ -85,12 +85,12 @@ public interface PaymentProcessor {
     boolean verify(Map<String, String> callback);
 }
 
-// Mỗi phương thức = 1 class riêng
+// Mỗi phương thức = 1 class riêng (tên dưới đây là ví dụ giả định để minh họa lý thuyết)
 public class VNPayProcessor implements PaymentProcessor { ... }
 public class MomoProcessor implements PaymentProcessor { ... }
 public class CashProcessor implements PaymentProcessor { ... }
 
-// Factory — trả đúng processor
+// Factory phiên bản "kinh điển" — dùng switch
 public class PaymentProcessorFactory {
     public PaymentProcessor getProcessor(String method) {
         return switch (method) {
@@ -102,18 +102,60 @@ public class PaymentProcessorFactory {
     }
 }
 
-// Service — gọi factory, 1 dòng sạch sẽ
-PaymentProcessor processor = factory.getProcessor(method);
-return processor.process(booking);
-
-// Thêm ZaloPay:
-// 1. Tạo class ZaloPayProcessor implements PaymentProcessor
-// 2. Thêm 1 case vào Factory
-// KHÔNG sửa PaymentService → Open/Closed Principle
+// Thêm phương thức mới:
+// 1. Tạo class mới implements PaymentProcessor
+// 2. Thêm 1 case vào Factory (vẫn phải sửa Factory — chưa thực sự Open/Closed 100%)
 ```
 
+> Lưu ý: các tên `VNPayProcessor`, `MomoProcessor`, `CashProcessor` ở trên CHỈ là tên giả định để minh họa khái niệm. CineX thực tế dùng tên khác (xem phần dưới).
+
+### CineX dùng cách khác — Spring Map injection (không switch)
+
+CineX không dùng `switch`. Thay vào đó, Spring tự inject `Map<String, PaymentProcessor>` — key là tên bean (qua `@Component("TÊN")`), value là instance.
+
+```java
+// File thực tế: module/payment/processor/PaymentProcessor.java
+public interface PaymentProcessor {
+    String createPayment(String transactionCode, BigDecimal amount, String description);
+    boolean verifyCallback(Map<String, String> params);
+}
+
+// File thực tế: module/payment/processor/MoMoPaymentProcessor.java
+// Đăng ký bean với tên "VNPAY" do FE đang gửi paymentMethod=VNPAY
+// (về kỹ thuật, processor này gọi MoMo API)
+@Component("VNPAY")
+public class MoMoPaymentProcessor implements PaymentProcessor { ... }
+
+// File thực tế: module/payment/processor/CashPaymentProcessor.java
+@Component("CASH")
+public class CashPaymentProcessor implements PaymentProcessor { ... }
+
+// File thực tế: module/payment/processor/PaymentProcessorFactory.java
+@Component
+@RequiredArgsConstructor
+public class PaymentProcessorFactory {
+
+    // Spring tự inject: {"VNPAY": MoMoPaymentProcessor, "CASH": CashPaymentProcessor}
+    private final Map<String, PaymentProcessor> processors;
+
+    public PaymentProcessor getProcessor(PaymentMethod method) {
+        PaymentProcessor processor = processors.get(method.name());
+        if (processor == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Phương thức thanh toán không được hỗ trợ: " + method);
+        }
+        return processor;
+    }
+}
+```
+
+Ưu điểm so với switch:
+- Thêm processor mới → tạo class mới với `@Component("TÊN")` → Spring tự thêm vào Map → KHÔNG sửa `PaymentProcessorFactory` (thật sự Open/Closed).
+- Không có khối switch dài, không lo quên `default`.
+
 ### Dùng ở đâu trong CineX
-- `PaymentProcessorFactory` — tạo processor theo phương thức thanh toán (task 010)
+- `PaymentProcessorFactory` — tạo processor theo phương thức thanh toán.
+- Hiện tại CineX có 2 implementation thực: `MoMoPaymentProcessor` (bean "VNPAY") và `CashPaymentProcessor` (bean "CASH"). Enum `PaymentMethod` còn 2 giá trị `MOMO` và `TRANSFER` chưa có processor riêng — có thể thêm sau mà không sửa Factory.
 
 ### Khi nào không cần?
 Chỉ có 1-2 loại cố định, không mở rộng → dùng if-else đơn giản hơn.

@@ -97,11 +97,13 @@ Thùng rác máy tính: xóa file → vào thùng rác (chưa mất hẳn).
 
 ```java
 // ĐÚNG
-movie.setStorageState("DELETED"); // data vẫn còn
+movie.setStorageState(StorageState.ARCHIVED); // data vẫn còn
 
 // SAI
 movieRepo.deleteById(id); // MẤT VĨNH VIỄN
 ```
+
+> Lưu ý: CineX dùng enum `StorageState` chỉ có 2 giá trị: `ACTIVE` (đang dùng) và `ARCHIVED` (đã "xóa" mềm). Không có `DELETED`.
 
 ---
 
