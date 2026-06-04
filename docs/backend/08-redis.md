@@ -67,11 +67,18 @@ User 100 → Cache HIT → đọc cache (0.5ms)
 
 ### Dùng Redis cho gì trong CineX?
 
-| Tính năng | Cách dùng | Lý do |
+| Tính năng | Cách dùng | Trạng thái |
 |---|---|---|
-| **Config cache** | Lưu `system_config` vào cache, không query DB mỗi lần | Config đọc cực thường xuyên, ít thay đổi |
-| **Trạng thái ghế** | Cache ghế đang HOLD → FE hiển thị ghế đỏ/xanh nhanh | 100 user cùng xem sơ đồ ghế |
-| **Rate limiting** | Đếm số request/giây từ mỗi IP | Chặn spam đặt vé |
+| **Rate limit login** | Counter `login:fail:{username}` đếm lần fail, TTL 15 phút, block sau 5 lần | ✅ Đã làm — `LoginRateLimitService` |
+| **System config cache** | Lưu config vào cache để đọc nhanh | ⚠️ Dùng `ConcurrentHashMap` (in-memory) — KHÔNG dùng Redis. Xem section 6. |
+| Cache movie list | Cache trang chủ (TTL 5 phút) | ❌ Chưa làm (có thể thêm khi traffic tăng) |
+| Hold seat qua Redis | Thay HELD trong DB | ❌ Chưa làm |
+
+> **Quan trọng để phân biệt:** CineX có 2 chỗ cache, dùng 2 công nghệ khác nhau:
+> - **SystemConfig** → `ConcurrentHashMap` (in-memory) — nhanh nhất nhưng KHÔNG share giữa nhiều instance backend.
+> - **LoginRateLimit** → Redis — chậm hơn HashMap chút (qua network), NHƯNG nhiều instance backend share chung counter → attacker không thể "vòng" qua các BE để vượt limit.
+>
+> Xem [Section 7](#7-hashmap-vs-redis--khi-nào-dùng-cái-nào) để hiểu **tại sao chọn HashMap cho config và Redis cho rate limit** — đây là kiến thức cốt lõi khi defend đồ án.
 
 ---
 
@@ -407,7 +414,358 @@ public void reload() {
 
 ---
 
-## 7. Cache Invalidation — Khi nào cache bị xóa?
+## 7. HashMap vs Redis — Khi nào dùng cái nào?
+
+> **Câu hỏi cốt lõi:** CineX có 2 chỗ cache. SystemConfig dùng `ConcurrentHashMap`. LoginRateLimit dùng Redis. Cùng là "cache" sao chọn 2 công nghệ khác nhau?
+
+Trước khi vào code Redis cụ thể, cần hiểu **tại sao chọn công nghệ này cho use case này** — đó mới là kiến thức quan trọng nhất khi defend đồ án.
+
+### Bản chất khác nhau ở đâu?
+
+```
+                  Backend Instance (JVM)
+                 ┌──────────────────────────┐
+                 │                          │
+                 │  ConcurrentHashMap       │  ← SystemConfig cache nằm Ở ĐÂY
+                 │  (RAM của Java process)  │     (trong cùng tiến trình với code)
+                 │                          │
+                 │  AuthService             │
+                 │  BookingService          │
+                 │  ...                     │
+                 └──────────┬───────────────┘
+                            │
+                            │ Network (TCP, port 6379)
+                            ▼
+                 ┌──────────────────────────┐
+                 │  Redis Server            │  ← LoginRateLimit cache nằm Ở ĐÂY
+                 │  (process khác)          │     (server riêng, ngoài JVM)
+                 └──────────────────────────┘
+```
+
+- **ConcurrentHashMap** = RAM của chính ứng dụng Java. Đọc/ghi = truy cập biến trong code → nano giây.
+- **Redis** = một server riêng biệt, giao tiếp qua mạng TCP → milli giây (chậm hơn HashMap ~1000 lần).
+
+### Ví dụ đời thường
+
+| | ConcurrentHashMap | Redis |
+|---|---|---|
+| Ví dụ | **Sổ tay trong túi áo** — luôn bên mình, lấy ra cực nhanh | **Tủ tài liệu chung của công ty** — phải đi tới mới lấy được |
+| Tốc độ | Nano giây | Milli giây |
+| Bị mất khi | App crash/restart → mất sạch (chỉ trong RAM) | Redis crash mới mất (có persistence option) |
+| 3 người chung dùng | Mỗi người 1 sổ tay → có thể lệch nhau | 1 tủ tài liệu chung → luôn đồng bộ |
+
+### So sánh chi tiết cho 2 use case CineX
+
+| Tiêu chí | SystemConfig (`HashMap`) | LoginRateLimit (`Redis`) |
+|---|---|---|
+| **Lượng data** | ~6 record, mỗi cái vài chục byte | Hàng nghìn key (mỗi user 1 key) |
+| **Read pattern** | RẤT NHIỀU (mọi request đặt vé, login, scheduler...) | Mỗi lần login thử (ít hơn nhiều) |
+| **Write pattern** | RẤT ÍT (admin sửa vài lần/tháng) | RẤT NHIỀU (mỗi fail là 1 INCR) |
+| **Cần TTL?** | Không (config sống mãi, admin sửa thì cache cập nhật ngay) | **CÓ BẮT BUỘC** (15 phút tự xóa, không cần scheduler dọn) |
+| **Cần atomic counter?** | Không (đọc/ghi đơn giản) | **CÓ BẮT BUỘC** (nhiều thread cùng INCR — HashMap phải `synchronized` thủ công → chậm) |
+| **Multi-instance share?** | Không critical (xem dưới) | **CRITICAL** (nếu mỗi BE 1 counter → attacker bypass) |
+
+### Phép thử: nếu CineX scale lên 3 BE instance
+
+Hãy tưởng tượng load balancer phân request ra 3 BE:
+
+#### Trường hợp 1: SystemConfig — không nghiêm trọng
+
+```
+Admin gọi PUT /api/configs/booking.max_seats → value=10
+
+Load balancer → BE1
+  → BE1.cache.put("booking.max_seats", "10")   ✅ BE1 thấy "10"
+  → BE2, BE3.cache vẫn giữ "8"                  ❌ Chưa biết
+
+3 user đặt 9 ghế:
+  User A → BE1 → max=10 → OK
+  User B → BE2 → max=8 → "Tối đa 8 ghế"  ⚠️ Lệch nhau
+  User C → BE3 → max=8 → "Tối đa 8 ghế"  ⚠️ Lệch nhau
+
+Hậu quả:
+  - User B/C bị "oan" trong vài phút
+  - KHÔNG ảnh hưởng bảo mật, chỉ UX
+  - Đợi BE2/3 restart hoặc gọi /reload → sync lại
+```
+
+→ **Lệch tạm vài phút, chấp nhận được** cho config rất hiếm thay đổi.
+
+#### Trường hợp 2: LoginRateLimit — bypass security
+
+```
+Attacker brute force username "vanan":
+
+Lần 1 → LB → BE1.counter("vanan") = 1
+Lần 2 → LB → BE2.counter("vanan") = 1   ❌ BE2 không biết BE1 đã đếm
+Lần 3 → LB → BE3.counter("vanan") = 1
+Lần 4 → LB → BE1.counter("vanan") = 2
+Lần 5 → LB → BE2.counter("vanan") = 2
+...
+Lần 15 → vẫn chưa BE nào counter = 5 → KHÔNG BLOCK
+→ Attacker brute force 15 lần × N BE → vẫn không bị chặn
+
+Hậu quả:
+  - Security mechanism BỊ BYPASS HOÀN TOÀN
+  - Càng scale nhiều BE → càng dễ brute force
+```
+
+→ **KHÔNG chấp nhận được**. Phải dùng cache chung (Redis).
+
+### Atomic operation — lý do thường bị bỏ qua
+
+Hãy thử implement rate limit BẰNG HashMap xem:
+
+```java
+// ❌ SAI — race condition
+public void recordFail(String username) {
+    Integer current = hashMap.get(username);
+    if (current == null) current = 0;
+    hashMap.put(username, current + 1);
+}
+```
+
+Khi 2 thread cùng `recordFail("vanan")` lúc counter = 3:
+- Thread A đọc `current = 3`
+- Thread B đọc `current = 3` (cùng lúc)
+- Thread A `put(3+1=4)`
+- Thread B `put(3+1=4)`
+- **Đáng lẽ counter phải = 5, nhưng chỉ = 4** → attacker fail thêm 1 lần "miễn phí"
+
+Phải `synchronized` để fix:
+```java
+public synchronized void recordFail(String username) { ... }
+```
+Nhưng `synchronized` block toàn bộ method → 1 lần chỉ 1 thread chạy → bottleneck. Khi 1000 user login/giây, đây là disaster.
+
+Trong khi đó **Redis `INCR` atomic ở tầng Redis server** — không cần `synchronized` Java, performance vẫn cao.
+
+### Tại sao SystemConfig không dùng Redis luôn?
+
+Có thể chứ. Nhưng tradeoff:
+
+| | HashMap (đang dùng) | Nếu chuyển sang Redis |
+|---|---|---|
+| Mỗi lần `getInt("booking.max_seats")` | ~0.001ms (đọc RAM) | ~1ms (qua network + serialize JSON) |
+| Multi-instance đồng bộ | Lệch tạm vài phút | Đồng bộ ngay |
+| Phụ thuộc Redis | Không | Redis down → toàn app không đọc được config |
+| Complexity | Đơn giản (HashMap thuần) | Phức tạp (serialize, network, error handling) |
+
+CineX hiện 1 BE → HashMap **đủ tốt** và **nhanh hơn**. Nếu lên 3 BE và admin sửa config thường xuyên → cân nhắc chuyển Redis.
+
+### Quy tắc thực dụng — chọn đúng tool cho đúng job
+
+> **Không phải Redis luôn tốt hơn HashMap.** Mỗi tool có sweet spot riêng.
+
+| Use case | Nên dùng |
+|---|---|
+| Config tĩnh, đọc nhiều, sửa hiếm | `ConcurrentHashMap` |
+| Enum metadata, lookup table | `ConcurrentHashMap` |
+| Rate limit, distributed lock | `Redis` |
+| Session (multi-instance) | `Redis` |
+| Counter increment đồng thời | `Redis` (INCR atomic) |
+| Cache với TTL ngắn (5-60 phút) | `Redis` |
+| Pub/Sub giữa các instance | `Redis` |
+| Queue task đơn giản | `Redis` (LPUSH/RPOP) |
+| Data lớn, persistent, complex query | **Database** (không phải cache) |
+
+### Bảng quyết định nhanh
+
+Khi gặp 1 yêu cầu mới, tự hỏi 3 câu:
+
+1. **Có cần share giữa nhiều instance không?** → Có = Redis, Không = HashMap OK
+2. **Có cần TTL tự động không?** → Có = Redis, Không = HashMap OK
+3. **Có cần atomic operation (counter, set-if-absent...) không?** → Có = Redis, Không = HashMap OK
+
+Nếu cả 3 đều **Không** → HashMap đủ và nhanh hơn.
+Nếu **Có** ít nhất 1 → Redis.
+
+→ SystemConfig: 3 lần "Không" → HashMap.
+→ LoginRateLimit: 3 lần "Có" → Redis.
+
+---
+
+## 8. Code thực tế (Redis): LoginRateLimitService
+
+Đây là **chỗ DUY NHẤT** trong CineX thực sự dùng Redis. Mọi đoạn code Redis ở các phần trên là minh họa pattern; phần này là code đang chạy production.
+
+### Bài toán: chống brute force password
+
+Attacker biết username `vanan` → dùng bot thử 1000 password phổ biến (`123456`, `password`, `vanan2003`...). Không có rate limit → sớm muộn cũng trúng 1 password yếu. Cần:
+- Đếm số lần login fail theo username
+- Sau 5 lần fail → block username 15 phút
+- Reset counter khi login thành công
+
+### Vì sao Redis thay vì HashMap?
+
+> Xem [Section 7](#7-hashmap-vs-redis--khi-nào-dùng-cái-nào) cho phân tích đầy đủ. Tóm tắt cho use case này:
+>
+> - **Multi-instance share**: nếu mỗi BE giữ counter riêng → attacker xoay 3 BE → mỗi BE đếm 5 lần → tổng 15 lần fail → **bypass security**.
+> - **TTL bắt buộc**: HashMap không có TTL, phải tự code scheduler dọn key cũ. Redis có sẵn `EXPIRE`.
+> - **Atomic INCR**: HashMap cần `synchronized` toàn method → bottleneck. Redis `INCR` atomic ở tầng server, không cần lock Java.
+
+→ Rate limit là use case **kinh điển** của Redis. Áp 3 câu hỏi ở Section 7: cần share (✓) + cần TTL (✓) + cần atomic (✓) → 3 lần "Có" → Redis. Dùng HashMap ở đây là sai pattern.
+
+### Code thực tế
+
+```
+File: backend/src/main/java/com/cinex/module/auth/service/LoginRateLimitService.java
+```
+
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class LoginRateLimitService {
+
+    private final StringRedisTemplate redis;   // Spring Boot auto-config khi có dependency
+    private final SystemConfigService systemConfigService;
+
+    private static final String KEY_PREFIX = "login:fail:";
+
+    /**
+     * Check trước khi xác thực — throw nếu đang bị block.
+     * Gọi đầu method login(), trước cả khi tìm user trong DB.
+     */
+    public void checkBlocked(String username) {
+        String key = KEY_PREFIX + username.toLowerCase();
+        String value = redis.opsForValue().get(key);
+        int attempts = (value == null) ? 0 : Integer.parseInt(value);
+        int maxAttempts = systemConfigService.getInt("auth.login_max_attempts", 5);
+
+        if (attempts >= maxAttempts) {
+            int blockMinutes = systemConfigService.getInt("auth.login_block_minutes", 15);
+            throw new BusinessException(ErrorCode.TOO_MANY_LOGIN_ATTEMPTS,
+                String.format("Tài khoản tạm khóa %d phút sau %d lần đăng nhập sai",
+                              blockMinutes, maxAttempts));
+        }
+    }
+
+    /**
+     * Ghi nhận 1 lần fail → INCR counter (atomic ở tầng Redis).
+     * Lần fail ĐẦU TIÊN set TTL — các lần sau KHÔNG reset TTL (nếu reset thì
+     * attacker spam fail vẫn không trigger expire).
+     */
+    public void recordFail(String username) {
+        String key = KEY_PREFIX + username.toLowerCase();
+        Long attempts = redis.opsForValue().increment(key);   // INCR atomic
+
+        if (attempts != null && attempts == 1L) {
+            int blockMinutes = systemConfigService.getInt("auth.login_block_minutes", 15);
+            redis.expire(key, Duration.ofMinutes(blockMinutes));
+        }
+    }
+
+    /**
+     * Xóa counter khi login thành công.
+     */
+    public void clearFails(String username) {
+        redis.delete(KEY_PREFIX + username.toLowerCase());
+    }
+}
+```
+
+### AuthService gọi vào đâu?
+
+```java
+@Transactional
+public AuthResponse login(LoginRequest request) {
+    String username = request.getUsername();
+
+    // 1. Check trước — nếu đang block thì throw 429 sớm, không tốn query DB
+    loginRateLimitService.checkBlocked(username);
+
+    // 2. Tìm user — username không tồn tại CŨNG tính fail (chống enum username)
+    User user = userRepository.findActiveByUsername(username)
+            .orElseThrow(() -> {
+                loginRateLimitService.recordFail(username);
+                return new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+            });
+
+    // 3. Verify password — sai cũng tính fail
+    if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        loginRateLimitService.recordFail(username);
+        throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    if (!user.isEnabled()) {
+        // Password đúng nhưng tài khoản disabled — KHÔNG tính fail (tránh oan)
+        throw new BusinessException(ErrorCode.FORBIDDEN, "Tài khoản đã bị vô hiệu hóa");
+    }
+
+    // 4. Login thành công → reset counter
+    loginRateLimitService.clearFails(username);
+
+    return buildAuthResponse(user);
+}
+```
+
+### Quan sát Redis khi chạy thực tế
+
+Sau khi user `vanan` nhập sai password 3 lần:
+
+```bash
+docker exec -it cinex-redis-1 redis-cli
+
+127.0.0.1:6379> KEYS login:*
+1) "login:fail:vanan"
+
+127.0.0.1:6379> GET login:fail:vanan
+"3"
+
+127.0.0.1:6379> TTL login:fail:vanan
+(integer) 847          # ← Còn 847 giây = ~14 phút nữa key tự xóa
+```
+
+Sau 5 lần fail, lần thứ 6 sẽ nhận response:
+```json
+HTTP 429 Too Many Requests
+{
+  "success": false,
+  "message": "Tài khoản tạm khóa 15 phút sau 5 lần đăng nhập sai",
+  "timestamp": "2026-06-04T..."
+}
+```
+
+### Config động (system_config)
+
+```sql
+SELECT * FROM system_config WHERE config_key LIKE 'auth.login%';
+-- auth.login_max_attempts  | 5  | Số lần đăng nhập sai tối đa...
+-- auth.login_block_minutes | 15 | Thời gian tạm khóa (phút)...
+```
+
+Admin có thể đổi qua API `PUT /api/configs/auth.login_max_attempts` mà không cần redeploy. VD đêm khuya bị spam → tăng `max_attempts` xuống `3` để khắt khe hơn.
+
+### Tại sao theo username chứ không theo IP?
+
+| | Theo username | Theo IP |
+|---|---|---|
+| Attacker thử nhiều username từ 1 IP | ❌ Không bắt được | ✅ Bắt được |
+| Nhiều user chung 1 IP (văn phòng, NAT) | ✅ Không ảnh hưởng nhau | ❌ Block hết cả văn phòng |
+| Attacker dùng botnet (1 IP/lần) | ✅ Vẫn bắt vì cùng username | ❌ Mỗi IP fail vài lần là OK |
+
+CineX chọn theo **username** vì khả năng false positive theo IP (NAT/proxy) lớn hơn rủi ro attacker phân tán botnet đánh nhiều username. Production scale có thể combine cả 2.
+
+### Threat coverage
+
+| Tấn công | Bị chặn? |
+|---|---|
+| Bot brute force password 1 username | ✅ 5 lần fail/15 phút |
+| Bot brute force nhiều username cùng IP | ⚠️ Chỉ chặn theo từng username (mỗi username 5 lần) |
+| Distributed (botnet) brute force 1 username | ✅ Vì counter theo username, không phụ thuộc IP |
+| Brute force qua API refresh token | ❌ Không cover (cần rate limit riêng cho /refresh) |
+
+### Mở rộng tương lai
+
+- Combine theo IP: thêm key `login:fail:ip:{ip}` với limit cao hơn (VD 30 lần/giờ)
+- Captcha sau 3 lần fail
+- Email user khi phát hiện brute force
+- Slack notify admin khi 1 username bị block
+
+---
+
+## 9. Cache Invalidation — Khi nào cache bị xóa?
 
 **"There are only two hard things in Computer Science: cache invalidation and naming things."**
 — Phil Karlton
@@ -444,7 +802,7 @@ Tình huống: Admin muốn tăng max_seats từ 8 lên 10
 
 ---
 
-## 8. TTL — Time To Live (Thời gian sống của cache)
+## 10. TTL — Time To Live (Thời gian sống của cache)
 
 ### TTL là gì?
 
@@ -475,14 +833,19 @@ redisTemplate.opsForValue().set(
 // Lần đọc tiếp → cache MISS → đọc DB → lưu cache lại (với TTL mới)
 ```
 
-### CineX hiện tại dùng TTL không?
+### CineX dùng TTL ở đâu?
 
-Hiện tại `SystemConfigService` dùng `ConcurrentHashMap` (in-memory cache) và **không có TTL**. Cache chỉ được cập nhật khi:
-- Admin gọi `updateConfig()` → cập nhật cache
-- Admin gọi `reload()` → load lại toàn bộ
-- Server restart → `@PostConstruct` load lại
+| Cache | Storage | TTL | Logic refresh |
+|---|---|---|---|
+| `SystemConfig` | ConcurrentHashMap | ❌ Không TTL | `updateConfig()` cập nhật cache + DB; `reload()` load lại; server restart load lại |
+| `login:fail:{username}` | Redis | ✅ 15 phút (config) | TTL tự xóa khi hết hạn; `clearFails()` xóa khi login OK |
 
-Đây là lựa chọn hợp lý vì config hiếm khi thay đổi. Nếu sau này cần TTL (ví dụ cache danh sách phim hot), sẽ dùng Redis với TTL.
+`SystemConfig` không TTL hợp lý vì config hiếm thay đổi + admin sửa qua API tự refresh cache.
+
+`LoginRateLimit` cần TTL **bắt buộc** vì:
+- Nếu không TTL → user fail 5 lần rồi quên đó → 1 năm sau mới login → vẫn bị block
+- TTL 15 phút → user đợi 15 phút thử lại, hợp lý cho UX và security
+- Redis TTL tự động, không cần scheduler dọn dẹp như HashMap
 
 ### Chọn TTL bao lâu?
 
@@ -497,7 +860,7 @@ Hiện tại `SystemConfigService` dùng `ConcurrentHashMap` (in-memory cache) v
 
 ---
 
-## 9. Ví dụ thực tế: 100 user đồng thời hold ghế
+## 11. Ví dụ thực tế: 100 user đồng thời hold ghế
 
 Hãy theo dõi điều gì xảy ra khi 100 user cùng lúc vào chọn ghế cho suất chiếu "Avengers" lúc 20:00.
 
@@ -544,7 +907,7 @@ Database: 0 query (tải = 0)
 
 ---
 
-## 10. Tổng hợp kiến thức
+## 12. Tổng hợp kiến thức
 
 ### Các lệnh Redis cơ bản (biết để debug)
 
@@ -571,7 +934,7 @@ FLUSHALL                   # Xóa hết tất cả key (NGUY HIỂM)
 
 ---
 
-## 11. Câu hỏi tự kiểm tra
+## 13. Câu hỏi tự kiểm tra
 
 **Câu 1:** Nếu admin sửa `max_seats` từ 8 thành 10 trực tiếp trong SQL Server (không qua API), user đặt 9 ghế sẽ bị từ chối hay thành công? Tại sao?
 
@@ -598,3 +961,21 @@ FLUSHALL                   # Xóa hết tất cả key (NGUY HIỂM)
 TTL = 0: trong Redis, key bị xóa ngay lập tức (không có ý nghĩa cache).
 
 Không set TTL: cache sống mãi mãi cho đến khi bị xóa thủ công (DEL) hoặc server restart. Rủi ro: nếu quên invalidate → dữ liệu cũ mãi.
+
+---
+
+**Câu 5:** Tại sao `LoginRateLimitService` chỉ set TTL ở lần fail ĐẦU TIÊN (khi `attempts == 1`), không reset TTL mỗi lần fail?
+
+→ Vì nếu reset TTL mỗi lần fail, attacker spam fail liên tục → TTL bị "đẩy" mãi mãi → key không bao giờ expire → block vĩnh viễn (UX tệ với user thật nhớ sai password). Set TTL 1 lần ở lần fail đầu = "đếm ngược 15 phút bắt đầu từ fail đầu tiên" → sau 15 phút key tự xóa bất kể có bao nhiêu lần fail.
+
+---
+
+**Câu 6:** Tại sao rate limit theo `username` chứ không theo `IP`?
+
+→ Vì nhiều user thật có thể chung 1 IP (văn phòng dùng NAT, ISP dùng CGNAT). Block theo IP có thể oan cả nhóm user. Theo username chỉ ảnh hưởng đúng tài khoản bị tấn công. Production scale lớn nên combine cả 2: counter theo username (chống brute force 1 user) + counter theo IP (chống enum nhiều user từ 1 IP) với threshold khác nhau.
+
+---
+
+**Câu 7:** Nếu một username đang bị block (counter = 5), user thật của tài khoản đó đăng nhập với password ĐÚNG, hệ thống xử lý thế nào? Đúng hay sai?
+
+→ HỆ THỐNG VẪN THROW 429 dù password đúng (vì `checkBlocked()` chạy TRƯỚC khi verify password). User thật buộc phải đợi 15 phút TTL hết. Đây là tradeoff: security thắng UX. Cách giảm tệ hơn cho UX: gửi email "tài khoản của bạn đang bị brute force" để user biết, hoặc cho user reset block bằng OTP qua email.

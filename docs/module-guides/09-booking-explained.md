@@ -285,19 +285,47 @@ String bookingCode = idTrackerService.nextCodeWithDate("BOOKING");
 
 ---
 
-### 4.5 QR Code (ZXing)
+### 4.5 QR Code (ZXing) + Bảo vệ check-in bằng `qrToken`
+
+#### Vấn đề bảo mật: `bookingCode` dễ đoán
+
+`bookingCode` có dạng `CX-YYYYMMDD-NNN` (sequence theo ngày). Nếu QR chỉ chứa `bookingCode`:
+1. Hacker biết hôm nay là `04/06/2026` → format mã: `CX-20260604-XXX`
+2. Hacker thử brute force 001 → 099 (rạp bán ~50 vé/ngày)
+3. Hacker tự tạo QR bằng app generator → encode chuỗi `CX-20260604-042`
+4. Đến rạp scan → nhân viên thấy CONFIRMED → cho vào ghế A5
+5. Chủ vé thật đến → "Vé đã sử dụng" → tranh cãi, kiện
+
+#### Giải pháp: Tách 2 mã riêng
+
+| Field | Format | Mục đích | Nằm trong QR? |
+|---|---|---|---|
+| `booking_code` | `CX-20260604-042` | Cho user xem, in vé, gọi hotline tra cứu | ❌ KHÔNG |
+| `qr_token` | `a8f3c2e9b4d7...` (32 ký tự hex random) | Bảo vệ check-in | ✅ CÓ |
+
+`qrToken` được sinh bằng `UUID.randomUUID().toString().replace("-", "")` → **16^32 ≈ 3.4 × 10³⁸ tổ hợp** → không thể brute force.
+
+#### Code thực tế (sinh QR)
 
 ```java
-// BookingController.java — endpoint /api/bookings/{id}/qr
-String qrBase64 = qrCodeService.generateQrCodeBase64(booking.getBookingCode(), 300);
-// bookingCode: "CX-20260520-001" → mã hóa thành QR 300x300 pixel
-// Trả về chuỗi Base64
-
-// Frontend hiển thị:
-// <img src="data:image/png;base64,iVBORw0KGgo..." />
+// BookingService.java — sinh QR base64 cho user
+@Transactional(readOnly = true)
+public String getBookingQrBase64(Long userId, Long bookingId) {
+    Booking booking = bookingRepository.findById(bookingId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.BOOKING_NOT_FOUND));
+    if (!booking.getUser().getId().equals(userId)) {
+        throw new BusinessException(ErrorCode.FORBIDDEN, "Đây không phải đơn đặt vé của bạn");
+    }
+    // QR chứa qrToken random — KHÔNG chứa bookingCode dễ đoán
+    return qrCodeService.generateQrCodeBase64(booking.getQrToken(), 300);
+}
 ```
 
-**Staff quét QR → lấy được bookingCode → gọi POST /api/bookings/check-in?code=CX-20260520-001**
+`qrToken` **không bao giờ lộ qua API response** — chỉ "ra ngoài" dưới dạng pixel QR (encode trong ảnh, OCR khó decode chính xác).
+
+#### Tại sao trả base64 ngay từ Service, không trả `qrToken`?
+
+Nếu Service trả `qrToken` string → Controller gen QR → có khả năng future code log/expose token vô tình. Trả base64 ngay tại Service = `qrToken` chỉ tồn tại trong RAM của 1 method → tightest scope.
 
 ---
 
@@ -483,27 +511,34 @@ BookingService.cancelBooking(userId=5, bookingId=1) [@Transactional]
 ### 5.4 checkIn — Quét QR tại rạp
 
 ```
-POST /api/bookings/check-in?code=CX-20260520-001
+POST /api/bookings/check-in?code=<qrToken hoặc bookingCode>
 Header: Authorization: Bearer <admin_token>
 Header: (yêu cầu ROLE_ADMIN — @PreAuthorize("hasRole('ADMIN')"))
 │
 ▼
-BookingService.checkIn("CX-20260520-001") [@Transactional]
+BookingService.checkIn(code) [@Transactional]
 │
-├── 1. bookingRepository.findByBookingCode("CX-20260520-001") → Booking
-│     SQL: SELECT * FROM bookings WHERE booking_code = 'CX-20260520-001'
-│     → Không tìm thấy → throw BOOKING_NOT_FOUND "Booking not found: CX-20260520-001"
+├── 1. Thử tìm qrToken trước (an toàn nhất):
+│     bookingRepository.findByQrToken(code)
+│     SQL: SELECT * FROM bookings WHERE qr_token = ?
+│     Nếu thấy → bypass step 2, sang step 3.
 │
-├── 2. Check đã check-in rồi chưa:
+├── 2. Fallback bookingCode (chỉ dùng khi nhân viên nhập tay vì QR hỏng):
+│     bookingRepository.findByBookingCode(code)
+│     SQL: SELECT * FROM bookings WHERE booking_code = ?
+│     Log warning: "Check-in fallback to bookingCode (manual mode)"
+│     → Không thấy → throw BOOKING_NOT_FOUND
+│
+├── 3. Check đã check-in rồi chưa:
 │     booking.status == CHECKED_IN?
-│     → Rồi → throw INVALID_REQUEST "Ticket already used"
+│     → Rồi → throw INVALID_REQUEST "Vé đã được sử dụng"
 │     (Tránh trường hợp scan QR 2 lần)
 │
-├── 3. Check đúng trạng thái:
+├── 4. Check đúng trạng thái:
 │     booking.status != CONFIRMED?
-│     → throw INVALID_REQUEST "Booking is not confirmed, status: HOLDING"
+│     → throw INVALID_REQUEST "Đơn đặt vé chưa được xác nhận, trạng thái: HOLDING"
 │
-├── 4. Đổi trạng thái:
+├── 5. Đổi trạng thái:
 │     booking.status = CHECKED_IN
 │     bookingRepository.save(booking)
 │     → UPDATE bookings SET status='CHECKED_IN', version=version+1 WHERE id=1
