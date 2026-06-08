@@ -298,6 +298,125 @@ movie.setStatus(MovieStatus.COMING_SOON);   // ✅ Đúng
 
 ---
 
+### 3.5 Vòng đời Movie — `releaseDate`, `endDate` + auto status
+
+#### Bài toán
+
+Phim không sống mãi ở rạp. Mỗi phim đi qua 3 giai đoạn:
+
+```
+        Quá khứ ◄─────────────────────────────────────────► Tương lai
+
+   ┌───────────────┐ releaseDate  ┌───────────────┐ endDate  ┌──────────┐
+   │ COMING_SOON   │─────────────►│  NOW_SHOWING  │─────────►│  ENDED   │
+   │ (sắp chiếu)   │              │ (đang chiếu)  │          │ (đã hết) │
+   ├───────────────┤              ├───────────────┤          ├──────────┤
+   │ Hiện trailer  │              │ Bán vé        │          │ Không    │
+   │ Hiện poster   │              │ Tạo showtime  │          │ bán vé   │
+   │ KHÔNG bán vé  │              │ Hiển thị "HOT"│          │ Lưu lịch │
+   │               │              │               │          │ sử       │
+   └───────────────┘              └───────────────┘          └──────────┘
+```
+
+Ví dụ "Avengers: Endgame":
+
+```
+releaseDate = 2026-07-01
+endDate     = 2026-09-15
+
+01/06/2026 → status = COMING_SOON     (hiện "Khởi chiếu 01/07")
+15/07/2026 → status = NOW_SHOWING     (đang bán vé)
+20/09/2026 → status = ENDED           (không bán vé nữa)
+```
+
+#### Vì sao cần CẢ `releaseDate/endDate` lẫn `status`?
+
+| Phương án | Lợi | Hại |
+|---|---|---|
+| Chỉ `status`, không date | Đơn giản | Không ai tự đổi status khi đến ngày → admin phải sửa thủ công mỗi ngày |
+| Chỉ date, không `status` | Derive được status từ date | Mất linh hoạt: không thể ENDED phim sớm hơn endDate (VD bị cấm chiếu) hoặc delay phim |
+| **Cả 3 (CineX)** | Date là tham chiếu cho scheduler tự đổi; status cho phép admin override | Hơi dư thừa nhưng đáng |
+
+#### Code thực tế: `MovieStatusScheduler`
+
+```
+File: backend/src/main/java/com/cinex/module/movie/service/MovieStatusScheduler.java
+```
+
+```java
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class MovieStatusScheduler {
+
+    private final MovieRepository movieRepository;
+
+    /**
+     * Chạy 00:01 mỗi ngày. Cron: "0 1 0 * * *" = 0 giây, 1 phút, 0 giờ.
+     * Tại sao 00:01 mà không 00:00? Tránh contention với scheduler khác
+     * thường chạy đúng nửa đêm. 1 phút trễ không ảnh hưởng UX.
+     */
+    @Scheduled(cron = "0 1 0 * * *")
+    @Transactional
+    public void updateMovieStatus() {
+        LocalDate today = LocalDate.now();
+
+        // COMING_SOON → NOW_SHOWING khi đã đến/qua releaseDate
+        List<Movie> toStart = movieRepository
+                .findByStatusAndReleaseDateLessThanEqual(MovieStatus.COMING_SOON, today);
+        toStart.forEach(m -> m.setStatus(MovieStatus.NOW_SHOWING));
+
+        // NOW_SHOWING → ENDED khi đã qua endDate
+        List<Movie> toEnd = movieRepository
+                .findByStatusAndEndDateLessThan(MovieStatus.NOW_SHOWING, today);
+        toEnd.forEach(m -> m.setStatus(MovieStatus.ENDED));
+    }
+}
+```
+
+#### Vì sao 1 ngày 1 lần, không phải mỗi phút?
+
+- `releaseDate` và `endDate` có độ phân giải **NGÀY** (`LocalDate`), không phải `LocalDateTime`
+- Chạy mỗi phút = 1440 lần/ngày để bắt đúng 1 thời điểm = lãng phí CPU
+- Trễ tối đa ~1 ngày là chấp nhận được với business cinema (user không quan tâm phim chuyển status đúng nửa đêm hay 9h sáng)
+
+#### Validate Showtime trong `[releaseDate, endDate]`
+
+`ShowtimeService.createShowtime` + `updateShowtime` gọi helper:
+
+```java
+private void validateShowtimeWithinMovieLifecycle(Movie movie, LocalDateTime startTime) {
+    LocalDate showtimeDate = startTime.toLocalDate();
+
+    if (movie.getReleaseDate() != null && showtimeDate.isBefore(movie.getReleaseDate())) {
+        throw new BusinessException(ErrorCode.INVALID_REQUEST,
+            String.format("Không tạo suất chiếu trước ngày khởi chiếu (%s) của phim '%s'",
+                movie.getReleaseDate(), movie.getTitle()));
+    }
+    if (movie.getEndDate() != null && showtimeDate.isAfter(movie.getEndDate())) {
+        throw new BusinessException(ErrorCode.INVALID_REQUEST,
+            String.format("Không tạo suất chiếu sau ngày kết thúc (%s) của phim '%s'",
+                movie.getEndDate(), movie.getTitle()));
+    }
+}
+```
+
+→ Admin không thể tạo nhầm "showtime ngày 30/06 cho phim khởi chiếu 01/07" hoặc "showtime sau khi phim đã ENDED".
+
+`null`-safe: nếu admin chưa nhập releaseDate/endDate → skip check tương ứng (business rule lỏng hơn).
+
+#### Tóm tắt
+
+| Thành phần | Mục đích |
+|---|---|
+| `Movie.releaseDate` | Mốc cứng: ngày phim ra rạp |
+| `Movie.endDate` | Mốc cứng: ngày phim rút khỏi rạp |
+| `Movie.status` (enum) | Trạng thái hiện tại — admin override được |
+| `MovieStatusScheduler` (00:01 daily) | Tự đồng bộ `status` theo date |
+| `validateShowtimeWithinMovieLifecycle` | Chặn admin tạo showtime ngoài vòng đời phim |
+
+---
+
 ## 4. Sơ đồ luồng xử lý
 
 ### Tìm kiếm phim (Filter DTO + Specification)

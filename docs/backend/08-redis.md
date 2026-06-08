@@ -29,7 +29,153 @@ Hãy tưởng tượng bạn nấu ăn:
 
 ---
 
-## 2. Tại sao CineX cần Redis?
+## 2. Redis lưu ở đâu? + TCP là gì?
+
+> **2 câu hỏi sinh viên hay nhầm:** "TCP có phải là nơi Redis lưu data không?" và "Redis nằm ở chỗ nào trong máy mình?". Phần này giải đáp luôn.
+
+### 2.1 TCP — chỉ là cách 2 chương trình nói chuyện
+
+**TCP** (Transmission Control Protocol) là **giao thức** truyền data qua mạng, KHÔNG phải nơi lưu trữ gì cả.
+
+#### Ví dụ đời thường
+
+TCP giống **gọi điện thoại có xác nhận**:
+- A gọi B → B nghe máy "alo" → A nói → B "ừ tôi nghe rồi" → A nói tiếp...
+- Nếu mất tín hiệu → 1 trong 2 phát hiện ngay
+- Đảm bảo data đến **đúng thứ tự, không mất gói**
+
+Đối lập: UDP giống **bắn loa thông báo** — bắn ra rồi thôi, không biết ai nghe được, không xác nhận.
+
+#### TCP trong CineX
+
+| Giao tiếp | Giao thức | Port |
+|---|---|---|
+| Browser ↔ Backend (HTTP/HTTPS) | TCP | 8088 |
+| Backend ↔ SQL Server | TCP | 1433 |
+| Backend ↔ Redis | TCP | **6379** |
+
+Khi `BookingService` gọi `redis.opsForValue().increment(key)`, behind the scenes:
+1. Spring tạo **TCP connection** đến Redis tại `localhost:6379`
+2. Gửi lệnh `INCR login:fail:vanan` qua connection đó
+3. Nhận kết quả về
+
+Không cần hiểu sâu TCP — chỉ cần biết "qua TCP" = "qua mạng" = chậm hơn truy cập biến trong RAM cùng tiến trình.
+
+### 2.2 Redis lưu data ở đâu?
+
+Có **3 tầng** cần phân biệt:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Tầng 1: Máy tính của bạn (MacBook / Windows)                   │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  Tầng 2: Docker container "cinex-redis-1"                 │  │
+│  │  ┌─────────────────────────────────────────────────────┐  │  │
+│  │  │  Tầng 3: Redis process (đang chạy)                  │  │  │
+│  │  │  ┌───────────────────────────────────────────────┐  │  │  │
+│  │  │  │  RAM của Redis process:                       │  │  │  │
+│  │  │  │  ┌───────────────────────────────────────┐    │  │  │  │
+│  │  │  │  │  login:fail:vanan = "3"  (TTL 847s)   │    │  │  │  │
+│  │  │  │  │  login:fail:thuy  = "1"  (TTL 600s)   │    │  │  │  │
+│  │  │  │  │  ...                                  │    │  │  │  │
+│  │  │  │  └───────────────────────────────────────┘    │  │  │  │
+│  │  │  │  ← Data thực tế NẰM Ở ĐÂY                     │  │  │  │
+│  │  │  └───────────────────────────────────────────────┘  │  │  │
+│  │  └─────────────────────────────────────────────────────┘  │  │
+│  │       ↑ Container lắng nghe port 6379                     │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│       ↑ Docker forward port 6379 ra ngoài (host)                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Giải thích từng tầng
+
+- **Tầng 1 — Máy tính**: máy host (MacBook / PC) chạy macOS/Windows/Linux. Docker Desktop được cài trên đó.
+- **Tầng 2 — Docker container `cinex-redis-1`**: "máy ảo siêu nhẹ" chứa 1 chương trình kèm môi trường (Linux Alpine + Redis binary). Khai báo trong `docker-compose.yml`:
+  ```yaml
+  redis:
+    image: redis:7-alpine     # Image (template) Redis v7 trên Alpine Linux
+    ports:
+      - "6379:6379"           # Cổng container 6379 → cổng máy host 6379
+  ```
+- **Tầng 3 — Redis process**: bên trong container có 1 chương trình `redis-server` đang chạy. Đây là "process" — giống Word/Chrome đang mở, nhưng là server không có UI.
+- **RAM của Redis process**: chỗ data thực sự lưu. `SET key value` ghi vào HashMap **trong RAM của chính process redis-server**, KHÔNG phải RAM của Java app.
+
+### 2.3 So sánh với ConcurrentHashMap
+
+```
+SystemConfig (HashMap) — CÙNG process với code:
+┌──────────────────────────────────────────┐
+│ Process 1: Java backend (port 8088)      │
+│   ┌──────────────────────────────────┐   │
+│   │  RAM của Java process            │   │
+│   │  ConcurrentHashMap cache:        │   │
+│   │    booking.max_seats → "8"       │   │
+│   │    booking.hold_minutes → "10"   │   │
+│   └──────────────────────────────────┘   │
+└──────────────────────────────────────────┘
+
+LoginRateLimit (Redis) — process KHÁC:
+┌──────────────────────────────────────────┐
+│ Process 1: Java backend (port 8088)      │
+│   AuthService gọi sang Redis qua TCP     │
+└──────────────────────────┬───────────────┘
+                           │ TCP port 6379
+                           ▼
+┌──────────────────────────────────────────┐
+│ Process 2: Redis server (port 6379)      │
+│   ┌──────────────────────────────────┐   │
+│   │  RAM của Redis process           │   │
+│   │  Key-value:                      │   │
+│   │    login:fail:vanan → "3"        │   │
+│   └──────────────────────────────────┘   │
+└──────────────────────────────────────────┘
+```
+
+→ Đây là **lý do Redis chậm hơn HashMap**: HashMap = đọc biến trong process Java (~0.001ms). Redis = đi qua mạng TCP sang process khác (~1ms), kèm chi phí serialize/deserialize data.
+
+### 2.4 Kiểm tra Redis trong máy bạn
+
+```bash
+# 1. Liệt kê container đang chạy
+docker ps
+# Sẽ thấy dòng tương tự:
+# CONTAINER ID   IMAGE              PORTS                    NAMES
+# abc123         redis:7-alpine     0.0.0.0:6379->6379/tcp   cinex-redis-1
+#                                   ↑ Forward port host:container
+
+# 2. Vào Redis CLI trong container
+docker exec -it cinex-redis-1 redis-cli
+
+# 3. Xem data thực tế
+127.0.0.1:6379> KEYS *              # Liệt kê tất cả key
+1) "login:fail:vanan"
+2) "login:fail:thuy"
+
+127.0.0.1:6379> GET login:fail:vanan
+"3"
+
+127.0.0.1:6379> TTL login:fail:vanan
+(integer) 847                       # Còn 847 giây = ~14 phút trước khi tự xóa
+
+# 4. Xem Redis đang dùng bao nhiêu RAM
+127.0.0.1:6379> INFO memory
+used_memory_human:1.20M             # Redis đang chiếm 1.2 MB RAM
+```
+
+### 2.5 Tóm tắt
+
+| Câu hỏi | Trả lời ngắn |
+|---|---|
+| **TCP** là gì? | Giao thức truyền data qua mạng có xác nhận, KHÔNG phải nơi lưu trữ |
+| **Redis** lưu ở đâu? | Trong **RAM** của 1 **process `redis-server`** chạy trong **Docker container** trên máy bạn (localhost) |
+| Có giống HashMap không? | Cùng nguyên lý "lưu key-value trong RAM", nhưng **khác process** → Java app phải gọi qua TCP để truy cập |
+| Tại sao chậm hơn HashMap? | Mỗi lần đọc/ghi phải đi qua TCP (dù localhost vẫn qua TCP stack) + serialize/deserialize |
+| Tắt máy thì data còn không? | Mặc định **mất hết** (RAM volatile). Redis có option `save to disk` (RDB/AOF) để persistent, nhưng CineX không bật |
+
+---
+
+## 3. Tại sao CineX cần Redis?
 
 ### Bài toán thực tế
 
@@ -78,11 +224,11 @@ User 100 → Cache HIT → đọc cache (0.5ms)
 > - **SystemConfig** → `ConcurrentHashMap` (in-memory) — nhanh nhất nhưng KHÔNG share giữa nhiều instance backend.
 > - **LoginRateLimit** → Redis — chậm hơn HashMap chút (qua network), NHƯNG nhiều instance backend share chung counter → attacker không thể "vòng" qua các BE để vượt limit.
 >
-> Xem [Section 7](#7-hashmap-vs-redis--khi-nào-dùng-cái-nào) để hiểu **tại sao chọn HashMap cho config và Redis cho rate limit** — đây là kiến thức cốt lõi khi defend đồ án.
+> Xem [Section 8](#8-hashmap-vs-redis--khi-nào-dùng-cái-nào) để hiểu **tại sao chọn HashMap cho config và Redis cho rate limit** — đây là kiến thức cốt lõi khi defend đồ án.
 
 ---
 
-## 3. Cài đặt Redis bằng Docker
+## 4. Cài đặt Redis bằng Docker
 
 CineX chạy Redis trong Docker container, không cần cài Redis trực tiếp lên máy.
 
@@ -127,7 +273,7 @@ OK
 
 ---
 
-## 4. Cấu hình Spring Data Redis
+## 5. Cấu hình Spring Data Redis
 
 ### Bước 1: Thêm dependency (build.gradle)
 
@@ -197,7 +343,7 @@ public class RedisConfig {
 
 ---
 
-## 5. Cache-aside Pattern — Chiến lược cache của CineX
+## 6. Cache-aside Pattern — Chiến lược cache của CineX
 
 ### Pattern là gì?
 
@@ -259,7 +405,7 @@ Giống **menu quán ăn dán trên tường**:
 
 ---
 
-## 6. Code thực tế: SystemConfigService
+## 7. Code thực tế: SystemConfigService
 
 ```
 File: backend/src/main/java/com/cinex/module/config/service/SystemConfigService.java
@@ -414,7 +560,7 @@ public void reload() {
 
 ---
 
-## 7. HashMap vs Redis — Khi nào dùng cái nào?
+## 8. HashMap vs Redis — Khi nào dùng cái nào?
 
 > **Câu hỏi cốt lõi:** CineX có 2 chỗ cache. SystemConfig dùng `ConcurrentHashMap`. LoginRateLimit dùng Redis. Cùng là "cache" sao chọn 2 công nghệ khác nhau?
 
@@ -585,7 +731,7 @@ Nếu **Có** ít nhất 1 → Redis.
 
 ---
 
-## 8. Code thực tế (Redis): LoginRateLimitService
+## 9. Code thực tế (Redis): LoginRateLimitService
 
 Đây là **chỗ DUY NHẤT** trong CineX thực sự dùng Redis. Mọi đoạn code Redis ở các phần trên là minh họa pattern; phần này là code đang chạy production.
 
@@ -598,13 +744,13 @@ Attacker biết username `vanan` → dùng bot thử 1000 password phổ biến 
 
 ### Vì sao Redis thay vì HashMap?
 
-> Xem [Section 7](#7-hashmap-vs-redis--khi-nào-dùng-cái-nào) cho phân tích đầy đủ. Tóm tắt cho use case này:
+> Xem [Section 8](#8-hashmap-vs-redis--khi-nào-dùng-cái-nào) cho phân tích đầy đủ. Tóm tắt cho use case này:
 >
 > - **Multi-instance share**: nếu mỗi BE giữ counter riêng → attacker xoay 3 BE → mỗi BE đếm 5 lần → tổng 15 lần fail → **bypass security**.
 > - **TTL bắt buộc**: HashMap không có TTL, phải tự code scheduler dọn key cũ. Redis có sẵn `EXPIRE`.
 > - **Atomic INCR**: HashMap cần `synchronized` toàn method → bottleneck. Redis `INCR` atomic ở tầng server, không cần lock Java.
 
-→ Rate limit là use case **kinh điển** của Redis. Áp 3 câu hỏi ở Section 7: cần share (✓) + cần TTL (✓) + cần atomic (✓) → 3 lần "Có" → Redis. Dùng HashMap ở đây là sai pattern.
+→ Rate limit là use case **kinh điển** của Redis. Áp 3 câu hỏi ở Section 8: cần share (✓) + cần TTL (✓) + cần atomic (✓) → 3 lần "Có" → Redis. Dùng HashMap ở đây là sai pattern.
 
 ### Code thực tế
 
@@ -765,7 +911,7 @@ CineX chọn theo **username** vì khả năng false positive theo IP (NAT/proxy
 
 ---
 
-## 9. Cache Invalidation — Khi nào cache bị xóa?
+## 10. Cache Invalidation — Khi nào cache bị xóa?
 
 **"There are only two hard things in Computer Science: cache invalidation and naming things."**
 — Phil Karlton
@@ -802,7 +948,7 @@ Tình huống: Admin muốn tăng max_seats từ 8 lên 10
 
 ---
 
-## 10. TTL — Time To Live (Thời gian sống của cache)
+## 11. TTL — Time To Live (Thời gian sống của cache)
 
 ### TTL là gì?
 
@@ -860,7 +1006,7 @@ redisTemplate.opsForValue().set(
 
 ---
 
-## 11. Ví dụ thực tế: 100 user đồng thời hold ghế
+## 12. Ví dụ thực tế: 100 user đồng thời hold ghế
 
 Hãy theo dõi điều gì xảy ra khi 100 user cùng lúc vào chọn ghế cho suất chiếu "Avengers" lúc 20:00.
 
@@ -907,7 +1053,7 @@ Database: 0 query (tải = 0)
 
 ---
 
-## 12. Tổng hợp kiến thức
+## 13. Tổng hợp kiến thức
 
 ### Các lệnh Redis cơ bản (biết để debug)
 
@@ -934,7 +1080,7 @@ FLUSHALL                   # Xóa hết tất cả key (NGUY HIỂM)
 
 ---
 
-## 13. Câu hỏi tự kiểm tra
+## 14. Câu hỏi tự kiểm tra
 
 **Câu 1:** Nếu admin sửa `max_seats` từ 8 thành 10 trực tiếp trong SQL Server (không qua API), user đặt 9 ghế sẽ bị từ chối hay thành công? Tại sao?
 
