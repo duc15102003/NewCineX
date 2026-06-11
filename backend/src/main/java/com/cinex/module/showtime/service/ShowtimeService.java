@@ -88,8 +88,10 @@ public class ShowtimeService {
     }
 
     /**
-     * Populate effectiveBasePrice/VipPrice/CouplePrice + appliedRules vào response.
-     * Tách method riêng để tái dùng cho cả listResponse và detail.
+     * Populate effective prices + appliedRules vào response.
+     * Dùng {@code .toBuilder()} để KHỎI quên copy field khi DTO mở rộng — chỉ
+     * override effective* và appliedRules, mọi field raw khác giữ nguyên.
+     * Tránh repeat bug: trước đây rebuild thủ công đã quên sweetbox/deluxe.
      */
     private ShowtimeListResponse enrichWithPricing(ShowtimeListResponse base, Showtime showtime) {
         Long theaterId = showtime.getRoom().getTheater().getId();
@@ -102,35 +104,24 @@ public class ShowtimeService {
                         .discountPercent(r.multiplierPercent().subtract(BigDecimal.valueOf(100)))
                         .build())
                 .toList();
-        return ShowtimeListResponse.builder()
-                .id(base.getId())
-                .storageState(base.getStorageState())
-                .movieId(base.getMovieId())
-                .movieTitle(base.getMovieTitle())
-                .moviePosterUrl(base.getMoviePosterUrl())
-                .movieRunId(base.getMovieRunId())
-                .runType(base.getRunType())
-                .runStartDate(base.getRunStartDate())
-                .runEndDate(base.getRunEndDate())
-                .roomId(base.getRoomId())
-                .roomName(base.getRoomName())
-                .roomType(base.getRoomType())
-                .theaterId(base.getTheaterId())
-                .theaterName(base.getTheaterName())
-                .theaterCity(base.getTheaterCity())
-                .startTime(base.getStartTime())
-                .endTime(base.getEndTime())
-                .basePrice(base.getBasePrice())
-                .vipPrice(base.getVipPrice())
-                .couplePrice(base.getCouplePrice())
-                .effectiveBasePrice(pricingEngine.applyModifiers(base.getBasePrice(), start, theaterId))
-                .effectiveVipPrice(pricingEngine.applyModifiers(base.getVipPrice(), start, theaterId))
-                .effectiveCouplePrice(pricingEngine.applyModifiers(base.getCouplePrice(), start, theaterId))
+        return base.toBuilder()
+                .effectiveBasePrice(applyModifiersNullable(base.getBasePrice(), start, theaterId))
+                .effectiveVipPrice(applyModifiersNullable(base.getVipPrice(), start, theaterId))
+                .effectiveCouplePrice(applyModifiersNullable(base.getCouplePrice(), start, theaterId))
+                .effectiveSweetboxPrice(applyModifiersNullable(base.getSweetboxPrice(), start, theaterId))
+                .effectiveDeluxePrice(applyModifiersNullable(base.getDeluxePrice(), start, theaterId))
                 .appliedRules(applied)
-                .status(base.getStatus())
-                .createdAt(base.getCreatedAt())
-                .updatedAt(base.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * Apply pricingEngine cho tier nullable — null in → null out (KHÔNG return 0
+     * như PricingEngine.applyModifiers mặc định, vì 0 sẽ hiện "VIP: 0đ" trên FE
+     * cho phòng không có VIP).
+     */
+    private BigDecimal applyModifiersNullable(BigDecimal price, LocalDateTime start, Long theaterId) {
+        if (price == null) return null;
+        return pricingEngine.applyModifiers(price, start, theaterId);
     }
 
     @Transactional(readOnly = true)
@@ -156,33 +147,16 @@ public class ShowtimeService {
                         .build())
                 .toList();
 
-        return ShowtimeResponse.builder()
-                .id(response.getId())
-                .storageState(response.getStorageState())
-                .movieId(response.getMovieId())
-                .movieTitle(response.getMovieTitle())
-                .moviePosterUrl(response.getMoviePosterUrl())
-                .movieDuration(response.getMovieDuration())
-                .movieAgeRating(response.getMovieAgeRating())
-                .roomId(response.getRoomId())
-                .roomName(response.getRoomName())
-                .roomType(response.getRoomType())
-                .theaterId(response.getTheaterId())
-                .theaterName(response.getTheaterName())
-                .theaterCity(response.getTheaterCity())
-                .startTime(response.getStartTime())
-                .endTime(response.getEndTime())
-                .basePrice(response.getBasePrice())
-                .vipPrice(response.getVipPrice())
-                .couplePrice(response.getCouplePrice())
-                .effectiveBasePrice(pricingEngine.applyModifiers(response.getBasePrice(), start, theaterId))
-                .effectiveVipPrice(pricingEngine.applyModifiers(response.getVipPrice(), start, theaterId))
-                .effectiveCouplePrice(pricingEngine.applyModifiers(response.getCouplePrice(), start, theaterId))
+        // toBuilder: giữ nguyên mọi raw field từ mapper, chỉ override effective* +
+        // availableSeats + appliedRules. Tránh repeat bug rebuild thủ công quên field.
+        return response.toBuilder()
+                .effectiveBasePrice(applyModifiersNullable(response.getBasePrice(), start, theaterId))
+                .effectiveVipPrice(applyModifiersNullable(response.getVipPrice(), start, theaterId))
+                .effectiveCouplePrice(applyModifiersNullable(response.getCouplePrice(), start, theaterId))
+                .effectiveSweetboxPrice(applyModifiersNullable(response.getSweetboxPrice(), start, theaterId))
+                .effectiveDeluxePrice(applyModifiersNullable(response.getDeluxePrice(), start, theaterId))
                 .appliedRules(applied)
-                .status(response.getStatus())
                 .availableSeats(availableSeats)
-                .createdAt(response.getCreatedAt())
-                .updatedAt(response.getUpdatedAt())
                 .build();
     }
 
