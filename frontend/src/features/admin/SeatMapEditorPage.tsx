@@ -27,6 +27,24 @@ function getDoublePartner(seat: SeatItem, seats: SeatItem[]): SeatItem | null {
   return seats.find(s => s.colNumber === partnerCol) ?? null
 }
 
+/**
+ * Trả về lý do tại sao ô không thể là 1 nửa của ghế đôi/sweetbox.
+ * null = OK để pair. String = mô tả ngắn để hiển thị toast.
+ *
+ * Ưu tiên: pending change (FE chưa lưu) > flag DB (aisle/status).
+ */
+function getBlockingState(seat: SeatItem, pending: Map<number, SeatTypeKey>): string | null {
+  const pendingType = pending.get(seat.id)
+  if (pendingType === 'AISLE') return 'lối đi'
+  if (pendingType === 'BROKEN') return 'ghế hỏng'
+  if (pendingType === 'BLOCKED') return 'ghế bị chặn'
+  if (pendingType) return null  // đang pending sang loại ghế khác → OK
+  if (seat.aisle) return 'lối đi'
+  if (seat.status === 'BROKEN') return 'ghế hỏng'
+  if (seat.status === 'BLOCKED') return 'ghế bị chặn'
+  return null
+}
+
 export default function SeatMapEditorPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const id = Number(roomId)
@@ -72,10 +90,19 @@ export default function SeatMapEditorPage() {
     // Check NGOÀI setState — tránh React StrictMode chạy updater 2 lần → toast 2 lần
     if (isDouble(activeTool)) {
       const partner = getDoublePartner(seat, seats)
+      const toolLabel = activeTool === 'SWEETBOX' ? 'Sweetbox' : 'ghế đôi'
       if (!partner) {
+        toast.warning(`${seat.seatNumber} không thể đặt ${toolLabel} — ghế lẻ cuối hàng không có cặp.`)
+        return
+      }
+      // Block ghế đôi vắt qua lối đi / ghế broken / blocked — chuẩn industry CGV/Lotte.
+      const seatBlocking = getBlockingState(seat, pendingChanges)
+      const partnerBlocking = getBlockingState(partner, pendingChanges)
+      if (seatBlocking || partnerBlocking) {
+        const reason = seatBlocking || partnerBlocking
         toast.warning(
-          `${seat.seatNumber} không thể đặt ${activeTool === 'SWEETBOX' ? 'Sweetbox' : 'ghế đôi'} ` +
-          `— ghế lẻ cuối hàng không có cặp.`
+          `Không đặt được ${toolLabel} ở ${seat.seatNumber}-${partner.seatNumber} — ` +
+          `${reason} chặn cặp ghế. Chuyển ô đó thành Thường trước.`
         )
         return
       }
