@@ -10,6 +10,12 @@ export interface AdminMovie {
   posterUrl: string | null
   duration: number
   rating: number | null
+  /** Đạo diễn — bổ sung từ BE MovieListResponse để hiển thị trên list. */
+  director: string | null
+  /** Phân loại tuổi (P/K/T13/T16/T18). */
+  ageRating: string | null
+  /** Ngôn ngữ phim. */
+  language: string | null
   status: string
   genres: string[]
   storageState: string

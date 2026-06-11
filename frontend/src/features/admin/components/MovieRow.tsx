@@ -1,9 +1,19 @@
 import { Button } from '@/components/ui/button'
 import { TableCell, TableRow } from '@/components/ui/table'
-import { ImagePlus, Star, CalendarDays } from 'lucide-react'
-import { fmtRating, label, MOVIE_STATUS_LABELS, STORAGE_STATE_LABELS } from '@/utils/labels'
-import { MOVIE_STATUS_COLORS as STATUS_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
+import { ImagePlus, Star, CalendarDays, Clock } from 'lucide-react'
+import { fmtRating, label, MOVIE_STATUS_LABELS, STORAGE_STATE_LABELS, AGE_RATING_SHORT } from '@/utils/labels'
+import { MOVIE_STATUS_COLORS as STATUS_COLORS, STORAGE_STATE_COLORS as STATE_COLORS, AGE_RATING_COLORS } from '@/utils/colors'
 import type { MovieListItem } from '@/types/movie'
+
+/** Format thời lượng từ phút → "1h 32p". Giúp scan nhanh hơn vs "92 phút". */
+function fmtDuration(minutes: number | null | undefined): string {
+  if (!minutes || minutes <= 0) return '—'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h === 0) return `${m}p`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}p`
+}
 
 export interface MovieRowProps {
   movie: MovieListItem
@@ -39,8 +49,26 @@ export default function MovieRow({
           <span className="text-[#ffc107] hover:underline font-medium">{m.title}</span>
         </div>
       </TableCell>
+      <TableCell className="whitespace-nowrap text-gray-300 text-sm">
+        {m.director ?? <span className="text-gray-600">—</span>}
+      </TableCell>
       <TableCell className="whitespace-nowrap">
         <GenreBadges genres={m.genres} />
+      </TableCell>
+      <TableCell className="whitespace-nowrap text-gray-300 text-sm">
+        <span className="inline-flex items-center gap-1">
+          <Clock size={12} className="text-gray-500" />
+          {fmtDuration(m.duration)}
+        </span>
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        {m.ageRating ? (
+          <span className={`text-xs px-2 py-1 rounded border font-mono ${AGE_RATING_COLORS[m.ageRating] ?? ''}`}>
+            {label(AGE_RATING_SHORT, m.ageRating)}
+          </span>
+        ) : (
+          <span className="text-gray-600">—</span>
+        )}
       </TableCell>
       <TableCell className="whitespace-nowrap">
         <div className="flex flex-col gap-1 items-start">

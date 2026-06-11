@@ -165,7 +165,10 @@ export default function AdminMoviePage() {
               </TableHead>
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Phim</TableHead>
+              <TableHead className="text-gray-400">Đạo diễn</TableHead>
               <TableHead className="text-gray-400">Thể loại</TableHead>
+              <TableHead className="text-gray-400">Thời lượng</TableHead>
+              <TableHead className="text-gray-400">Độ tuổi</TableHead>
               <TableHead className="text-gray-400">Trạng thái</TableHead>
               <TableHead className="text-gray-400">Điểm</TableHead>
               <TableHead className="text-gray-400 text-right">Thao tác</TableHead>
@@ -174,7 +177,7 @@ export default function AdminMoviePage() {
           <TableBody>
             {movies.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
+                <TableCell colSpan={10} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
               </TableRow>
             )}
             {movies.map((m, index) => (

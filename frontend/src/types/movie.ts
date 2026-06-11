@@ -13,6 +13,12 @@ export interface MovieListItem {
   posterUrl: string | null
   duration: number
   rating: number | null
+  /** Đạo diễn — hiển thị trên list để admin scan, lọc nhanh. */
+  director: string | null
+  /** Phân loại tuổi P/K/T13/T16/T18 — badge nhỏ. */
+  ageRating: string | null
+  /** Ngôn ngữ — VD "Tiếng Anh - Phụ đề Việt". */
+  language: string | null
   status: string
   /** Trước đây sai type string[]; thực ra BE trả Set<GenreResponse>. */
   genres: GenreResponse[]
