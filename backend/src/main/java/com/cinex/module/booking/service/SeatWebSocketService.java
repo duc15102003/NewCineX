@@ -40,7 +40,16 @@ public class SeatWebSocketService {
                 "timestamp", System.currentTimeMillis()
         );
 
-        messagingTemplate.convertAndSend(destination, message);
-        log.debug("WebSocket: sent seat update to {} — {} seats → {}", destination, seatIds.size(), status);
+        // Cô lập lỗi WS để KHÔNG phá vỡ business transaction.
+        // VD: payment đã commit DB nhưng broker lỗi → nếu propagate exception
+        // sẽ rollback payment → user mất tiền. FE fallback bằng polling
+        // getSeatMap mỗi 5s khi WS disconnect.
+        try {
+            messagingTemplate.convertAndSend(destination, message);
+            log.debug("WebSocket: sent seat update to {} — {} seats → {}", destination, seatIds.size(), status);
+        } catch (Exception e) {
+            log.error("WebSocket notify failed for showtime {} ({} seats → {}): {}",
+                    showtimeId, seatIds.size(), status, e.getMessage(), e);
+        }
     }
 }

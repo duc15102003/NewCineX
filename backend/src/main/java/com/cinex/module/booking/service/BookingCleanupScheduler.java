@@ -40,32 +40,48 @@ public class BookingCleanupScheduler {
         List<Booking> expiredBookings = bookingRepository.findByStatusAndCreatedAtBeforeAndStorageStateNot(
                 BookingStatus.HOLDING, expireBefore, StorageState.ARCHIVED);
 
+        int success = 0;
+        int failed = 0;
         for (Booking booking : expiredBookings) {
-            booking.setStatus(BookingStatus.EXPIRED);
-            booking.getBookingSeats().forEach(bs -> bs.setStatus(BookingSeatStatus.CANCELLED));
-            bookingRepository.save(booking);
-
-            // [G1] Trả lại voucher: decrement used_count atomic + xóa voucher_usage.
-            // Trước đây booking EXPIRED nhưng voucher_usages còn → user bị "khóa" 1 voucher
-            // (đụng partial unique uk_voucher_usages_active) dù chưa thật sự dùng.
-            List<VoucherUsage> usages = voucherUsageRepository.findByBookingId(booking.getId());
-            for (VoucherUsage usage : usages) {
-                voucherRepository.decrementUsedCount(usage.getVoucher().getId());
-                voucherUsageRepository.delete(usage);
-                log.info("Voucher {} returned for expired booking {}",
-                        usage.getVoucher().getCode(), booking.getBookingCode());
+            // Cô lập lỗi per-item: nếu 1 booking lỗi (DB constraint, lazy load, ...)
+            // → log + skip, các booking khác vẫn được cleanup. Trước đây 1 lỗi
+            // sẽ rollback cả loop → bookings sau bị stuck HOLDING vĩnh viễn.
+            try {
+                expireSingleBooking(booking, holdMinutes);
+                success++;
+            } catch (Exception e) {
+                failed++;
+                log.error("Cleanup failed for booking {}: {}",
+                        booking.getBookingCode(), e.getMessage(), e);
             }
-
-            // Real-time: ghế hết hạn → notify AVAILABLE cho tất cả user đang xem
-            List<Long> seatIds = booking.getBookingSeats().stream()
-                    .map(bs -> bs.getSeat().getId()).toList();
-            seatWebSocketService.notifySeatChanged(booking.getShowtime().getId(), seatIds, "AVAILABLE");
-
-            log.info("Expired booking {} (held for > {} minutes)", booking.getBookingCode(), holdMinutes);
         }
 
-        if (!expiredBookings.isEmpty()) {
-            log.info("Cleaned up {} expired bookings", expiredBookings.size());
+        if (success > 0 || failed > 0) {
+            log.info("Cleanup batch: {} expired OK, {} failed (will retry next tick)", success, failed);
         }
+    }
+
+    /** Tách method để try-catch per item gọn — vẫn cùng @Transactional outer. */
+    private void expireSingleBooking(Booking booking, int holdMinutes) {
+        booking.setStatus(BookingStatus.EXPIRED);
+        booking.getBookingSeats().forEach(bs -> bs.setStatus(BookingSeatStatus.CANCELLED));
+        bookingRepository.save(booking);
+
+        // [G1] Trả lại voucher: decrement used_count atomic + xóa voucher_usage.
+        List<VoucherUsage> usages = voucherUsageRepository.findByBookingId(booking.getId());
+        for (VoucherUsage usage : usages) {
+            voucherRepository.decrementUsedCount(usage.getVoucher().getId());
+            voucherUsageRepository.delete(usage);
+            log.info("Voucher {} returned for expired booking {}",
+                    usage.getVoucher().getCode(), booking.getBookingCode());
+        }
+
+        // Real-time: ghế hết hạn → notify AVAILABLE cho tất cả user đang xem.
+        // WS errors đã được isolate trong SeatWebSocketService.notifySeatChanged.
+        List<Long> seatIds = booking.getBookingSeats().stream()
+                .map(bs -> bs.getSeat().getId()).toList();
+        seatWebSocketService.notifySeatChanged(booking.getShowtime().getId(), seatIds, "AVAILABLE");
+
+        log.info("Expired booking {} (held for > {} minutes)", booking.getBookingCode(), holdMinutes);
     }
 }
