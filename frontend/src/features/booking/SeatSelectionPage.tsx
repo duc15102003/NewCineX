@@ -17,37 +17,7 @@ import AgeConfirmDialog from './components/AgeConfirmDialog'
 import type { SeatItem } from '@/types/booking'
 import { needsAgeConfirm } from '@/utils/labels'
 import type { AgeRating } from '@/types/movie'
-
-/**
- * Lấy giá ghế theo type — DÙNG effective price (sau PricingEngine) để khớp với BE tính tiền.
- * Chuẩn industry "What You See Is What You Pay": user thấy bao nhiêu trả bấy nhiêu.
- *
- * <p>Fallback về basePrice raw nếu BE chưa expose effective (backward-compat).
- */
-function getSeatPrice(seatType: string, showtime: {
-  basePrice: number
-  vipPrice?: number
-  couplePrice?: number
-  sweetboxPrice?: number | null
-  deluxePrice?: number | null
-  effectiveBasePrice?: number
-  effectiveVipPrice?: number | null
-  effectiveCouplePrice?: number | null
-  effectiveSweetboxPrice?: number | null
-  effectiveDeluxePrice?: number | null
-}): number {
-  const effBase = showtime.effectiveBasePrice ?? showtime.basePrice
-  const effVip = showtime.effectiveVipPrice ?? showtime.vipPrice ?? effBase
-  const effCouple = showtime.effectiveCouplePrice ?? showtime.couplePrice ?? effBase
-  switch (seatType) {
-    case 'VIP':      return effVip
-    case 'COUPLE':   return effCouple
-    case 'SWEETBOX': return showtime.effectiveSweetboxPrice ?? showtime.sweetboxPrice ?? effCouple * 2
-    case 'DELUXE':   return showtime.effectiveDeluxePrice ?? showtime.deluxePrice ?? Math.round(effVip * 1.5)
-    case 'HANDICAP': return effBase  // inclusive policy
-    default:         return effBase  // STANDARD
-  }
-}
+import { getSeatPrice } from '@/utils/pricing'
 
 export default function SeatSelectionPage() {
   const { showtimeId } = useParams<{ showtimeId: string }>()
@@ -221,7 +191,7 @@ export default function SeatSelectionPage() {
           roomName={seatMap.roomName}
           startTime={showtime.startTime}
           totalSeats={seatMap.totalSeats}
-          appliedRules={showtime.appliedRules}
+          appliedRules={showtime.appliedRules ?? undefined}
         />
 
         {/* Cảnh báo ghế chưa lock — user khác có thể giành mất nếu rời trang lâu */}

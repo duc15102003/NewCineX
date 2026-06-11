@@ -5,6 +5,7 @@ import { Tag, X } from 'lucide-react'
 
 import type { SeatItem } from '@/types/booking'
 import { label, SEAT_TYPE_LABELS, fmtVnd } from '@/utils/labels'
+import { getSeatPrice, type ShowtimePrices } from '@/utils/pricing'
 
 interface AvailableVoucher {
   code: string
@@ -20,19 +21,7 @@ interface VoucherResult {
   message: string
 }
 
-interface ShowtimePrices {
-  basePrice: number
-  vipPrice?: number
-  couplePrice?: number
-  sweetboxPrice?: number | null
-  deluxePrice?: number | null
-  /** Giá CUỐI sau PricingEngine — dùng cho display + tính total để khớp BE. */
-  effectiveBasePrice?: number
-  effectiveVipPrice?: number | null
-  effectiveCouplePrice?: number | null
-  effectiveSweetboxPrice?: number | null
-  effectiveDeluxePrice?: number | null
-}
+/* ShowtimePrices type tách sang utils/pricing.ts để dùng chung với SeatSelectionPage. */
 
 export interface BookingSummaryProps {
   selectedSeats: SeatItem[]
@@ -110,20 +99,6 @@ export default function BookingSummary(props: BookingSummaryProps) {
 // ============================================================
 //  Sub-components
 // ============================================================
-
-function getSeatPrice(seatType: string, showtime: ShowtimePrices): number {
-  const effBase = showtime.effectiveBasePrice ?? showtime.basePrice
-  const effVip = showtime.effectiveVipPrice ?? showtime.vipPrice ?? effBase
-  const effCouple = showtime.effectiveCouplePrice ?? showtime.couplePrice ?? effBase
-  switch (seatType) {
-    case 'VIP':      return effVip
-    case 'COUPLE':   return effCouple
-    case 'SWEETBOX': return showtime.effectiveSweetboxPrice ?? showtime.sweetboxPrice ?? effCouple * 2
-    case 'DELUXE':   return showtime.effectiveDeluxePrice ?? showtime.deluxePrice ?? Math.round(effVip * 1.5)
-    case 'HANDICAP': return effBase
-    default:         return effBase
-  }
-}
 
 interface SelectedSeatsListProps {
   seats: SeatItem[]

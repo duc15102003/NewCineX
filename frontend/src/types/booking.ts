@@ -16,6 +16,44 @@ export interface SeatMapData {
   seatMap: Record<string, SeatItem[]>
 }
 
+/**
+ * Showtime detail trả về từ GET /api/showtimes/{id} — dùng cho SeatSelectionPage
+ * + BookingSummary. Match BE ShowtimeResponse (xem mục pricing trong CLAUDE.md).
+ */
+export interface ShowtimeDetail {
+  id: number
+  movieId: number
+  movieTitle: string
+  moviePosterUrl: string | null
+  movieAgeRating: string | null
+  roomId: number
+  roomName: string
+  roomType: string
+  theaterId: number
+  theaterName: string | null
+  startTime: string
+  endTime: string
+  basePrice: number
+  vipPrice: number | null
+  couplePrice: number | null
+  sweetboxPrice: number | null
+  deluxePrice: number | null
+  effectiveBasePrice: number | null
+  effectiveVipPrice: number | null
+  effectiveCouplePrice: number | null
+  effectiveSweetboxPrice: number | null
+  effectiveDeluxePrice: number | null
+  appliedRules: AppliedPricingRule[] | null
+  availableSeats: number
+  status: string
+}
+
+export interface AppliedPricingRule {
+  code: string
+  name: string
+  discountPercent: number
+}
+
 export interface HoldSeatsRequest {
   showtimeId: number
   seatIds: number[]

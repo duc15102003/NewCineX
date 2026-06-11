@@ -90,10 +90,12 @@ export default function AdminPricingPage() {
   const scopedTheaterId = adminTheater?.id ?? (isBranchAdmin() ? userTheaterId : null)
   const branchLocked = isBranchAdmin()
 
+  // Dep stable: adminTheater?.id (number) thay vì adminTheater (object reference đổi
+  // mỗi render từ store) — tránh useMemo invalidate vô tận → infinite refetch.
   const queryParams = useMemo(() => ({
     size: ADMIN_LIST_PAGE_SIZE,
     theaterId: adminTheater?.id,
-  }), [adminTheater])
+  }), [adminTheater?.id])
 
   const { data: pageData } = useAdminPricingRules(queryParams)
   const allRules = pageData?.content ?? []

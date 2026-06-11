@@ -4,7 +4,7 @@ import api, { getErrorMessage } from '@/api/axios'
 import type { ApiResponse } from '@/types/auth'
 import type {
   BookingDetail, BookingListItem, HoldSeatsRequest, HoldSeatsResponse,
-  PaymentResponse, SeatMapData, TicketData, UserProfile,
+  PaymentResponse, SeatMapData, ShowtimeDetail, TicketData, UserProfile,
 } from '@/types/booking'
 import type { PageResponse } from '@/types/movie'
 
@@ -24,7 +24,7 @@ export function useShowtimeSeatMap(showtimeId: number) {
     queryKey: ['showtimeSeatMap', showtimeId],
     queryFn: async () => {
       // Lấy showtime detail → roomId → seat map
-      const stRes = await api.get<ApiResponse<any>>(`/api/showtimes/${showtimeId}`)
+      const stRes = await api.get<ApiResponse<ShowtimeDetail>>(`/api/showtimes/${showtimeId}`)
       const roomId = stRes.data.data.roomId
       const seatRes = await api.get<ApiResponse<SeatMapData>>(`/api/rooms/${roomId}/seats`)
       return { showtime: stRes.data.data, seatMap: seatRes.data.data }
