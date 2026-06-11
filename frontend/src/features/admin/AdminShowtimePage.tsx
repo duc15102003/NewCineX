@@ -229,7 +229,7 @@ export default function AdminShowtimePage() {
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Phim / Giờ chiếu</TableHead>
               <TableHead className="text-gray-400">Phòng</TableHead>
-              <TableHead className="text-gray-400">Giá (thường / VIP / đôi)</TableHead>
+              <TableHead className="text-gray-400">Giá</TableHead>
               <TableHead className="text-gray-400">Trạng thái</TableHead>
             </TableRow>
           </TableHeader>

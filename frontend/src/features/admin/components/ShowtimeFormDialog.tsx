@@ -379,6 +379,9 @@ interface TierConfig {
   suffix?: (counts: Record<SeatType, number>) => string | null
 }
 
+// Mọi tier đều BẮT BUỘC: tier nào hiển thị nghĩa là phòng có loại ghế đó,
+// nên admin phải set giá rõ ràng — không để BE auto-fill (giá hiển thị cho
+// khách hàng cần admin chủ động kiểm soát).
 const PRICE_TIERS: TierConfig[] = [
   {
     field: 'basePrice',
@@ -388,10 +391,10 @@ const PRICE_TIERS: TierConfig[] = [
     required: true,
     suffix: (counts) => counts.HANDICAP > 0 ? '· bao gồm ghế khuyết tật' : null,
   },
-  { field: 'vipPrice', matchTypes: ['VIP'], labelText: 'Giá VIP (đ)', placeholder: 'VD: 100.000', required: false },
-  { field: 'couplePrice', matchTypes: ['COUPLE'], labelText: 'Giá ghế đôi (đ)', placeholder: 'VD: 180.000', required: false },
-  { field: 'sweetboxPrice', matchTypes: ['SWEETBOX'], labelText: 'Giá Sweetbox (đ)', placeholder: 'VD: 350.000', required: false },
-  { field: 'deluxePrice', matchTypes: ['DELUXE'], labelText: 'Giá Deluxe (đ)', placeholder: 'VD: 250.000', required: false },
+  { field: 'vipPrice', matchTypes: ['VIP'], labelText: 'Giá VIP (đ)', placeholder: 'VD: 100.000', required: true },
+  { field: 'couplePrice', matchTypes: ['COUPLE'], labelText: 'Giá ghế đôi (đ)', placeholder: 'VD: 180.000', required: true },
+  { field: 'sweetboxPrice', matchTypes: ['SWEETBOX'], labelText: 'Giá Sweetbox (đ)', placeholder: 'VD: 350.000', required: true },
+  { field: 'deluxePrice', matchTypes: ['DELUXE'], labelText: 'Giá Deluxe (đ)', placeholder: 'VD: 250.000', required: true },
 ]
 
 /**
