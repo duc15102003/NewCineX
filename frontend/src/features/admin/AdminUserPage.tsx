@@ -11,8 +11,8 @@ import UserFilterDrawer from './components/UserFilterDrawer'
 
 import { useAdminUsers } from '@/hooks/useAdmin'
 import type { AdminUser, AdminUserFilter } from '@/hooks/useAdminUsers'
-import { label, ROLE_LABELS } from '@/utils/labels'
-import { ROLE_COLORS } from '@/utils/colors'
+import { label, ROLE_LABELS, STORAGE_STATE_LABELS } from '@/utils/labels'
+import { ROLE_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 
 const PAGE_SIZE = 15
 
@@ -118,8 +118,10 @@ export default function AdminUserPage() {
                 <TableCell colSpan={8} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
               </TableRow>
             )}
-            {users.map((u, index) => (
-              <TableRow key={u.id} className="border-white/5 hover:bg-white/5 group">
+            {users.map((u, index) => {
+              const isArchived = u.storageState === 'ARCHIVED'
+              return (
+              <TableRow key={u.id} className={`border-white/5 hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
                 <TableCell className="text-gray-500 text-sm whitespace-nowrap">{page * PAGE_SIZE + index + 1}</TableCell>
                 <TableCell className="whitespace-nowrap">
                   <span onClick={() => openEdit(u)}
@@ -139,14 +141,21 @@ export default function AdminUserPage() {
                   {u.theaterName ? <span>{u.theaterName}</span> : <span className="text-gray-600">—</span>}
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
-                  <span className={`text-xs px-2 py-1 rounded border ${u.enabled
-                    ? 'bg-green-500/10 text-green-400 border-green-500/30'
-                    : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
-                    {u.enabled ? 'Hoạt động' : 'Bị khóa'}
-                  </span>
+                  <div className="flex flex-col gap-1 items-start">
+                    <span className={`text-xs px-2 py-1 rounded border ${u.enabled
+                      ? 'bg-green-500/10 text-green-400 border-green-500/30'
+                      : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
+                      {u.enabled ? 'Hoạt động' : 'Bị khóa'}
+                    </span>
+                    {isArchived && u.storageState && (
+                      <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[u.storageState] ?? ''}`}>
+                        {label(STORAGE_STATE_LABELS, u.storageState)}
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
-            ))}
+            )})}
           </TableBody>
         </Table>
       </div>

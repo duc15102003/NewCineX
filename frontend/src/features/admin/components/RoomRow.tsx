@@ -2,8 +2,8 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { Settings, LayoutGrid } from 'lucide-react'
-import { label, ROOM_TYPE_LABELS, ROOM_STATUS_LABELS } from '@/utils/labels'
-import { ROOM_STATUS_COLORS as STATUS_COLORS, ROOM_TYPE_COLORS as TYPE_COLORS } from '@/utils/colors'
+import { label, ROOM_TYPE_LABELS, ROOM_STATUS_LABELS, STORAGE_STATE_LABELS } from '@/utils/labels'
+import { ROOM_STATUS_COLORS as STATUS_COLORS, ROOM_TYPE_COLORS as TYPE_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 import type { AdminRoom } from '@/hooks/useAdminRooms'
 
 export interface RoomRowProps {
@@ -20,8 +20,9 @@ export interface RoomRowProps {
 export default function RoomRow({
   room: r, index, indent, selected, onToggleSelect, onEdit, onGenerateSeats,
 }: RoomRowProps) {
+  const isArchived = r.storageState === 'ARCHIVED'
   return (
-    <TableRow className="border-white/5 hover:bg-white/5 group">
+    <TableRow className={`border-white/5 hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
       <TableCell className={`whitespace-nowrap ${indent ? 'pl-6' : ''}`}>
         <input type="checkbox" checked={selected}
           onChange={() => onToggleSelect(r.id)} className="accent-[#ffc107]" />
@@ -40,9 +41,16 @@ export default function RoomRow({
       </TableCell>
       <TableCell className="text-gray-300 whitespace-nowrap">{r.totalSeats}</TableCell>
       <TableCell className="whitespace-nowrap">
-        <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[r.status] ?? ''}`}>
-          {label(ROOM_STATUS_LABELS, r.status)}
-        </span>
+        <div className="flex flex-col gap-1 items-start">
+          <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[r.status] ?? ''}`}>
+            {label(ROOM_STATUS_LABELS, r.status)}
+          </span>
+          {isArchived && (
+            <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[r.storageState] ?? ''}`}>
+              {label(STORAGE_STATE_LABELS, r.storageState)}
+            </span>
+          )}
+        </div>
       </TableCell>
       <TableCell className="text-right whitespace-nowrap">
         <div className="flex items-center justify-end gap-1">

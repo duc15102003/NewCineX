@@ -19,6 +19,8 @@ export interface ShowtimeFilterDraft {
   startTimeTo: string
   minPrice: string
   maxPrice: string
+  /** '' = chỉ ACTIVE; 'true' = bao gồm ARCHIVED. String để khớp signature onSetDraft. */
+  includeDeleted: string
 }
 
 export interface ShowtimeFilterDrawerProps {
@@ -122,6 +124,18 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
           suffix="đ"
           step={1000}
         />
+      </FilterField>
+
+      <FilterField label="Bao gồm suất đã xóa" hint="Hiển thị cả suất chiếu đã bị xóa mềm (ARCHIVED).">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={draftFilter.includeDeleted === 'true'}
+            onChange={(e) => onSetDraft('includeDeleted', e.target.checked ? 'true' : '')}
+            className="accent-[#ffc107] w-4 h-4"
+          />
+          <span className="text-sm text-gray-300">Hiển thị suất đã xóa</span>
+        </label>
       </FilterField>
     </FilterDrawer>
   )

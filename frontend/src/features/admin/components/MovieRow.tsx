@@ -1,8 +1,8 @@
 import { Button } from '@/components/ui/button'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { ImagePlus, Star, CalendarDays } from 'lucide-react'
-import { fmtRating, label, MOVIE_STATUS_LABELS } from '@/utils/labels'
-import { MOVIE_STATUS_COLORS as STATUS_COLORS } from '@/utils/colors'
+import { fmtRating, label, MOVIE_STATUS_LABELS, STORAGE_STATE_LABELS } from '@/utils/labels'
+import { MOVIE_STATUS_COLORS as STATUS_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 import type { MovieListItem } from '@/types/movie'
 
 export interface MovieRowProps {
@@ -19,8 +19,9 @@ export interface MovieRowProps {
 export default function MovieRow({
   movie: m, index, selected, onToggleSelect, onEdit, onUpload, onOpenRuns,
 }: MovieRowProps) {
+  const isArchived = m.storageState === 'ARCHIVED'
   return (
-    <TableRow className="border-white/5 hover:bg-white/5 group">
+    <TableRow className={`border-white/5 hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
       <TableCell className="whitespace-nowrap">
         <input type="checkbox" checked={selected}
           onChange={() => onToggleSelect(m.id)} className="accent-[#ffc107]" />
@@ -42,9 +43,16 @@ export default function MovieRow({
         <GenreBadges genres={m.genres} />
       </TableCell>
       <TableCell className="whitespace-nowrap">
-        <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[m.status] ?? ''}`}>
-          {label(MOVIE_STATUS_LABELS, m.status)}
-        </span>
+        <div className="flex flex-col gap-1 items-start">
+          <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[m.status] ?? ''}`}>
+            {label(MOVIE_STATUS_LABELS, m.status)}
+          </span>
+          {isArchived && (
+            <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[m.storageState] ?? ''}`}>
+              {label(STORAGE_STATE_LABELS, m.storageState)}
+            </span>
+          )}
+        </div>
       </TableCell>
       <TableCell className="whitespace-nowrap">
         <span className={`inline-flex items-center gap-1 ${m.rating ? 'text-[#ffc107]' : 'text-gray-500'}`}>

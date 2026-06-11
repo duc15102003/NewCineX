@@ -29,6 +29,7 @@ const EMPTY_FILTER: ShowtimeFilterDraft = {
   movieId: '', roomId: '', status: '', roomType: '',
   startDate: '', startTimeFrom: '', startTimeTo: '',
   minPrice: '', maxPrice: '',
+  includeDeleted: '',
 }
 
 const LIST_PAGE_SIZE = 10
@@ -66,6 +67,7 @@ export default function AdminShowtimePage() {
     if (appliedFilter.startTimeTo) p.startTimeTo = appliedFilter.startTimeTo
     if (appliedFilter.minPrice) p.minPrice = Number(appliedFilter.minPrice)
     if (appliedFilter.maxPrice) p.maxPrice = Number(appliedFilter.maxPrice)
+    if (appliedFilter.includeDeleted === 'true') p.includeDeleted = true
     return p
   }, [keyword, page, appliedFilter, adminTheater])
 

@@ -17,8 +17,8 @@ import {
   useBulkArchiveTheaters, useBulkRestoreTheaters,
 } from '@/hooks/useAdminTheaters'
 import type { TheaterParams } from '@/hooks/useAdminTheaters'
-import { label } from '@/utils/labels'
-import { THEATER_STATUS_COLORS } from '@/utils/colors'
+import { label, STORAGE_STATE_LABELS } from '@/utils/labels'
+import { THEATER_STATUS_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 
 const THEATER_STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Hoạt động',
@@ -157,8 +157,10 @@ export default function AdminTheaterPage() {
                 <TableCell colSpan={7} className="text-center text-gray-500 py-10">Không có chi nhánh nào</TableCell>
               </TableRow>
             )}
-            {theaters.map((t, idx) => (
-              <TableRow key={t.id} className="border-[#3f382d] hover:bg-white/5">
+            {theaters.map((t, idx) => {
+              const isArchived = t.storageState === 'ARCHIVED'
+              return (
+              <TableRow key={t.id} className={`border-[#3f382d] hover:bg-white/5 ${isArchived ? 'opacity-50' : ''}`}>
                 <TableCell><input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} className="accent-[#ffc107]" /></TableCell>
                 <TableCell className="text-gray-500 text-sm">{idx + 1}</TableCell>
                 <TableCell>
@@ -188,12 +190,19 @@ export default function AdminTheaterPage() {
                   {t.email && <div className="text-xs text-gray-500">{t.email}</div>}
                 </TableCell>
                 <TableCell>
-                  <span className={`text-xs px-2 py-1 rounded-md border ${THEATER_STATUS_COLORS[t.status] ?? ''}`}>
-                    {label(THEATER_STATUS_LABELS, t.status)}
-                  </span>
+                  <div className="flex flex-col gap-1 items-start">
+                    <span className={`text-xs px-2 py-1 rounded-md border ${THEATER_STATUS_COLORS[t.status] ?? ''}`}>
+                      {label(THEATER_STATUS_LABELS, t.status)}
+                    </span>
+                    {isArchived && (
+                      <span className={`text-xs px-2 py-1 rounded-md border ${STATE_COLORS[t.storageState] ?? ''}`}>
+                        {label(STORAGE_STATE_LABELS, t.storageState)}
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
-            ))}
+            )})}
           </TableBody>
         </Table>
       </div>
