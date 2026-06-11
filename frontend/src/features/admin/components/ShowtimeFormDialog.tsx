@@ -441,14 +441,13 @@ function PriceTierInputs({ control, errors, seatTypes, hasRoomSelected }: PriceT
       {activeTiers.map((tier) => {
         const totalCount = tier.matchTypes.reduce((sum, mt) => sum + counts[mt], 0)
         const suffix = tier.suffix?.(counts)
+        // Label luôn 1 dòng (truncate) để các tier cùng chiều cao → input không lệch.
+        // Info số lượng + suffix xuống helper text dưới input.
         return (
           <div key={tier.field} className={colSpan}>
-            <label className="text-sm text-gray-400 mb-1.5 block">
+            <label className="text-sm text-gray-400 mb-1.5 block truncate">
               {tier.labelText}
               {tier.required && <span className="text-red-400"> *</span>}
-              <span className="text-gray-500 text-xs ml-2">
-                · {totalCount} ghế{suffix ? ` ${suffix}` : ''}
-              </span>
             </label>
             <Controller
               name={tier.field}
@@ -460,6 +459,9 @@ function PriceTierInputs({ control, errors, seatTypes, hasRoomSelected }: PriceT
                 <PriceInput value={field.value} onChange={field.onChange} placeholder={tier.placeholder} />
               )}
             />
+            <p className="text-gray-500 text-xs mt-1">
+              {totalCount} ghế{suffix ? ` ${suffix}` : ''}
+            </p>
             {errors[tier.field] && (
               <p className="text-red-400 text-xs mt-1">{String(errors[tier.field]?.message)}</p>
             )}
