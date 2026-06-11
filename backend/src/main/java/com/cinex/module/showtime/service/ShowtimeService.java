@@ -16,6 +16,7 @@ import com.cinex.module.room.repository.RoomRepository;
 import com.cinex.module.booking.entity.BookingStatus;
 import com.cinex.module.booking.repository.BookingRepository;
 import com.cinex.module.booking.repository.BookingSeatRepository;
+import com.cinex.module.seat.entity.SeatStatus;
 import com.cinex.module.seat.entity.SeatType;
 import com.cinex.module.seat.repository.SeatRepository;
 import com.cinex.module.showtime.dto.AppliedPricingRule;
@@ -538,7 +539,9 @@ public class ShowtimeService {
      * Dùng để biết có nên auto-fill giá cho tier nào không.
      */
     private Set<SeatType> fetchRoomSeatTypes(Long roomId) {
-        List<Object[]> rows = seatRepository.countSeatsByTypeInRoom(roomId, StorageState.ACTIVE);
+        // Chỉ tính ghế AVAILABLE — BROKEN/BLOCKED không bán được nên không
+        // cần auto-fill giá cho loại ghế đó.
+        List<Object[]> rows = seatRepository.countSeatsByTypeInRoom(roomId, StorageState.ACTIVE, SeatStatus.AVAILABLE);
         if (rows.isEmpty()) {
             return EnumSet.noneOf(SeatType.class);
         }

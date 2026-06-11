@@ -71,7 +71,9 @@ public class SeatService {
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
-        List<Object[]> rows = seatRepository.countSeatsByTypeInRoom(roomId, StorageState.ACTIVE);
+        // Chỉ count ghế AVAILABLE — BROKEN/BLOCKED không bán được nên không
+        // tính vào "phòng có loại ghế này" trong form Showtime.
+        List<Object[]> rows = seatRepository.countSeatsByTypeInRoom(roomId, StorageState.ACTIVE, SeatStatus.AVAILABLE);
         List<RoomSeatTypeSummaryResponse.SeatTypeCount> seatTypes = new ArrayList<>(rows.size());
         for (Object[] row : rows) {
             seatTypes.add(RoomSeatTypeSummaryResponse.SeatTypeCount.builder()
