@@ -5,6 +5,7 @@ import com.cinex.module.voucher.entity.Voucher;
 import com.cinex.module.voucher.repository.VoucherRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,7 @@ public class VoucherCleanupScheduler {
     private final VoucherRepository voucherRepository;
 
     @Scheduled(fixedRate = 300000) // 5 phút
+    @SchedulerLock(name = "voucherCleanup", lockAtLeastFor = "PT1M", lockAtMostFor = "PT5M")
     @Transactional
     public void archiveExpiredVouchers() {
         List<Voucher> expired = voucherRepository.findByStorageStateAndEndDateBefore(

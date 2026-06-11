@@ -558,3 +558,216 @@ public abstract class BaseEntity {
 | `storageState` | **Soft Delete:** xóa record = set `storageState = 'ARCHIVED'`. Data vẫn còn trong DB, có thể khôi phục. Production không bao giờ DELETE thật. Enum chỉ có 2 giá trị: `ACTIVE` (mặc định) và `ARCHIVED` (đã xóa mềm) |
 
 Nhờ JPA Auditing + `AuditorAware`, 4 field `createdBy/updatedBy/createdAt/updatedAt` được **tự động điền** mỗi khi save entity, không cần code thủ công.
+
+---
+
+## 6. Bổ sung 2026-06 — bảng mới sau refactor
+
+### `theaters` — Chi nhánh rạp
+
+Multi-tenant foundation. Mỗi rạp = 1 row.
+
+| Cột | Type | Ghi chú |
+|---|---|---|
+| id | BIGINT PK | |
+| code | NVARCHAR(20) | Unique, vd `CNX-HN-VINCOM` |
+| name | NVARCHAR(200) | Tên hiển thị |
+| address | NVARCHAR(500) | Địa chỉ |
+| city | NVARCHAR(100) | Thành phố |
+| phone | NVARCHAR(20) | |
+| email | NVARCHAR(100) | |
+| description | NVARCHAR(1000) | |
+| `+ BaseEntity` | | |
+
+**Quan hệ:**
+- 1 theater → N rooms
+- 1 theater → N movie_runs
+- 1 theater → N snacks
+- 1 theater → N combos
+- 1 theater → N pricing_rules (NULL = global)
+- 1 theater → N vouchers (NULL = global)
+
+### `movie_runs` — Đợt chiếu phim per-theater
+
+Vista FilmAtSite pattern. Mỗi (movie, theater) có thể có nhiều đợt chiếu (FIRST_RUN, REISSUE, FESTIVAL).
+
+| Cột | Type | Ghi chú |
+|---|---|---|
+| id | BIGINT PK | |
+| movie_id | FK → movies | |
+| theater_id | FK → theaters | NOT NULL — PER-THEATER |
+| run_type | NVARCHAR(20) | `FIRST_RUN` / `REISSUE` / `FESTIVAL` / `SPECIAL` |
+| start_date | DATE | Ngày bắt đầu chiếu |
+| end_date | DATE | NULL = open-ended (chiếu lâu dài, vd Doraemon) |
+| status | NVARCHAR(20) | `SCHEDULED` / `NOW_SHOWING` / `ENDED` — scheduler cron update |
+| notes | NVARCHAR(500) | |
+| `+ BaseEntity` | | |
+
+**CHECK constraint:**
+```sql
+ALTER TABLE movie_runs ADD CONSTRAINT CK_movie_runs_status
+CHECK (status IN ('SCHEDULED','NOW_SHOWING','ENDED'));
+
+ALTER TABLE movie_runs ADD CONSTRAINT CK_movie_runs_run_type
+CHECK (run_type IN ('FIRST_RUN','REISSUE','FESTIVAL','SPECIAL'));
+```
+
+**Quan hệ:**
+- N movie_runs → 1 movie
+- N movie_runs → 1 theater
+- 1 movie_run → N showtimes (showtime.movie_run_id mới)
+
+Xem [explainer/movie-run.md](../explainer/movie-run.md) cho 6 use case.
+
+### `pricing_rules` — Quy tắc điều chỉnh giá vé
+
+Strategy + Composite pattern cho engine pricing dynamic.
+
+| Cột | Type | Ghi chú |
+|---|---|---|
+| id | BIGINT PK | |
+| theater_id | FK → theaters | NULL = global rule |
+| code | NVARCHAR(50) | Unique trong scope (global vs per-theater) |
+| name | NVARCHAR(200) | Hiển thị FE, vd "Giảm 20% suất sáng" |
+| rule_type | NVARCHAR(30) | `DAY_OF_WEEK` / `HOUR_RANGE` / `DATE_RANGE` / `COMPOSITE` |
+| multiplier_percent | DECIMAL(6,2) | 80 = giảm 20%; 120 = phụ thu 20% |
+| day_of_week | NVARCHAR(100) | CSV `TUESDAY` hoặc `SAT,SUN` |
+| hour_start | INT | 0-23 |
+| hour_end | INT | 0-23 |
+| date_start | DATE | |
+| date_end | DATE | |
+| active | BIT | |
+| priority | INT | Higher → áp sau (override) |
+| `+ BaseEntity` | | |
+
+**Quan hệ:**
+- N pricing_rules → 1 theater (NULL OK)
+- Cùng `code` per-theater overrides global
+
+Xem [explainer/pricing-engine.md](../explainer/pricing-engine.md).
+
+### `combos` — Combo bắp nước
+
+| Cột | Type | Ghi chú |
+|---|---|---|
+| id | BIGINT PK | |
+| theater_id | FK → theaters | NOT NULL — PER-THEATER |
+| code | NVARCHAR(50) | Unique per-theater (vd `SOLO`, `COUPLE`, `FAMILY`) |
+| name | NVARCHAR(200) | |
+| description | NVARCHAR(500) | |
+| price | DECIMAL(12,0) | Snapshot price khi đặt |
+| image_url | NVARCHAR(500) | Cloudinary URL |
+| active | BIT | |
+| `+ BaseEntity` | | |
+
+### `combo_items` — Snack trong combo
+
+| Cột | Type | Ghi chú |
+|---|---|---|
+| id | BIGINT PK | |
+| combo_id | FK → combos | |
+| snack_id | FK → snacks | |
+| quantity | INT | Số lượng snack trong combo |
+
+CHECK: `snack.theater_id = combo.theater_id` (constraint app-level — service check).
+
+### `audit_logs` — V2 audit log với context đầy đủ
+
+| Cột | Type | Ghi chú |
+|---|---|---|
+| id | BIGINT PK | |
+| action | NVARCHAR(100) | Vd `CREATE_BOOKING`, `REJECT_CHECK_IN` |
+| entity_type | NVARCHAR(100) | Vd `Booking`, `Movie` |
+| entity_id | NVARCHAR(100) | ID record bị tác động |
+| user_id | BIGINT | Người gây action |
+| username | NVARCHAR(100) | Snapshot username |
+| ip_address | NVARCHAR(50) | |
+| user_agent | NVARCHAR(500) | |
+| request_path | NVARCHAR(500) | |
+| http_method | NVARCHAR(10) | |
+| status | NVARCHAR(20) | `SUCCESS` / `FAILED` |
+| error_message | NVARCHAR(MAX) | |
+| metadata | NVARCHAR(MAX) | JSON optional |
+| created_at | DATETIME2 | |
+
+Ghi qua `@Auditable` AOP aspect — không kế thừa BaseEntity (write-only, không soft delete).
+
+### `system_config` — Config động không cần redeploy
+
+| Cột | Type | Ghi chú |
+|---|---|---|
+| id | BIGINT PK | |
+| config_key | NVARCHAR(100) | Unique, vd `booking.hold_minutes` |
+| config_value | NVARCHAR(MAX) | Giá trị (parse runtime) |
+| description | NVARCHAR(500) | Tiếng Việt mô tả |
+| `+ BaseEntity` | | |
+
+Service `SystemConfigService` cache + provide typed accessor (`getInt`, `getDecimal`, `getString`).
+
+### `shedlock` — ShedLock distributed lock cho `@Scheduled`
+
+| Cột | Type | Ghi chú |
+|---|---|---|
+| name | VARCHAR(64) PK | Lock name unique |
+| lock_until | DATETIME2 | Hết hạn lock |
+| locked_at | DATETIME2 | Thời điểm acquire |
+| locked_by | VARCHAR(255) | Hostname instance giữ lock |
+
+KHÔNG extends BaseEntity (bảng kỹ thuật). Xem [backend/18-shedlock.md](../backend/18-shedlock.md).
+
+### `loyalty_*` — Hệ thống điểm thưởng
+
+#### `loyalty_tiers`
+| Cột | Type | Ghi chú |
+|---|---|---|
+| id | BIGINT PK | |
+| code | NVARCHAR(20) | `BRONZE` / `SILVER` / `GOLD` / `DIAMOND` |
+| name | NVARCHAR(100) | |
+| min_points | INT | Ngưỡng điểm để lên tier |
+| earn_rate | DECIMAL(4,2) | % điểm earn (vd 1.0 = 1%, 1.5 = 1.5%) |
+| benefits | NVARCHAR(MAX) | JSON mô tả quyền lợi |
+| `+ BaseEntity` | | |
+
+#### `loyalty_accounts`
+| Cột | Type | Ghi chú |
+|---|---|---|
+| id | BIGINT PK | |
+| user_id | FK → users | UNIQUE — mỗi user 1 account |
+| tier_id | FK → loyalty_tiers | |
+| current_points | INT | Điểm khả dụng |
+| lifetime_points | INT | Tổng điểm earn từ trước (cho tier) |
+| `+ BaseEntity` | | |
+
+#### `loyalty_transactions`
+| Cột | Type | Ghi chú |
+|---|---|---|
+| id | BIGINT PK | |
+| account_id | FK → loyalty_accounts | |
+| booking_id | FK → bookings | Nullable (cho EXPIRE/ADJUST) |
+| type | NVARCHAR(20) | `EARN` / `REDEEM` / `EXPIRE` / `ADJUST` |
+| points | INT | Dương cho EARN/ADJUST+; âm cho REDEEM/EXPIRE/ADJUST- |
+| expires_at | DATETIME2 | 12 tháng từ EARN |
+| reason | NVARCHAR(500) | |
+| `+ BaseEntity` | | |
+
+`LoyaltyExpirationScheduler` chạy 00:30 mỗi ngày — expire transaction quá hạn 12 tháng.
+
+---
+
+## 7. Sơ đồ quan hệ multi-tenant (2026-06 update)
+
+```
+theaters ─┬───< rooms ───< seats
+          ├───< movie_runs >──── movies
+          ├───< showtimes (qua rooms + movie_runs)
+          ├───< snacks
+          ├───< combos ───< combo_items >── snacks
+          ├───< pricing_rules (nullable — NULL = global)
+          ├───< vouchers (nullable — NULL = global)
+          └───< bookings.theater_id (snapshot — immutable)
+```
+
+**Pattern:**
+- `*.theater_id NOT NULL` → cứng per-theater (rooms/seats/snacks/combos/movie_runs)
+- `*.theater_id NULL` → global rule fallback (pricing_rules, vouchers)
+- `bookings.theater_id` → snapshot immutable (giữ origin nếu user di chuyển)

@@ -5,36 +5,39 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-    <include file="db/changelog/changes/001-create-users-table.xml"/>
-    <include file="db/changelog/changes/002-create-refresh-tokens-table.xml"/>
-    <include file="db/changelog/changes/003-create-id-tracker-table.xml"/>
-    <include file="db/changelog/changes/004-create-system-config-table.xml"/>
-    <include file="db/changelog/changes/005-create-audit-log-table.xml"/>
-    <include file="db/changelog/changes/006-create-genres-table.xml"/>
-    <include file="db/changelog/changes/007-create-movies-table.xml"/>
-    <include file="db/changelog/changes/008-create-rooms-table.xml"/>
-    <include file="db/changelog/changes/009-create-seats-table.xml"/>
-    <include file="db/changelog/changes/010-create-showtimes-table.xml"/>
-    <include file="db/changelog/changes/011-create-bookings-table.xml"/>
-    <include file="db/changelog/changes/012-create-payments-table.xml"/>
-    <include file="db/changelog/changes/013-seed-default-data.xml"/>
-    <include file="db/changelog/changes/014-create-vouchers-table.xml"/>
-    <include file="db/changelog/changes/015-create-password-reset-tokens-table.xml"/>
-    <include file="db/changelog/changes/016-create-reviews-table.xml"/>
-    <include file="db/changelog/changes/017-create-snacks-table.xml"/>
-    <include file="db/changelog/changes/018-create-notifications-table.xml"/>
-    <include file="db/changelog/changes/019-create-user-favorites-table.xml"/>
-    <include file="db/changelog/changes/020-seed-movies-data.xml"/>
-    <include file="db/changelog/changes/021-seed-booking-data.xml"/>
-    <include file="db/changelog/changes/022-seed-more-bookings.xml"/>
-    <include file="db/changelog/changes/023-seed-vutuongan-bookings.xml"/>
-    <include file="db/changelog/changes/024-rename-deleted-to-archived.xml"/>
-    <include file="db/changelog/changes/025-drop-review-unique-constraint.xml"/>
-    <include file="db/changelog/changes/026-create-snack-orders-table.xml"/>
-    <include file="db/changelog/changes/027-booking-user-nullable.xml"/>
-    <include file="db/changelog/changes/028-seed-new-configs.xml"/>
-    <include file="db/changelog/changes/029-update-config-descriptions.xml"/>
-    <include file="db/changelog/changes/030-seed-demo-data.xml"/>
-    <include file="db/changelog/changes/031-fix-null-storage-state.xml"/>
+    <!--
+        CineX Liquibase master changelog — schema + seed data fresh.
+
+        Schema (001-008): tạo toàn bộ 26 tables + indexes + FKs + CHECK constraints
+        Seed (009-016):   data mẫu cho 5 chi nhánh (HN/HP/QN/DN/HCM)
+
+        Đã consolidate từ 72 changesets evolution cũ → 16 file sạch theo domain.
+        Phù hợp wipe DB và init lại từ đầu.
+    -->
+
+    <!-- ====== SCHEMA ====== -->
+    <include file="db/changelog/changes/001-core-tables.xml"/>
+    <include file="db/changelog/changes/002-catalog-tables.xml"/>
+    <include file="db/changelog/changes/003-cinema-tables.xml"/>
+    <include file="db/changelog/changes/004-booking-tables.xml"/>
+    <include file="db/changelog/changes/005-pos-tables.xml"/>
+    <include file="db/changelog/changes/006-engagement-tables.xml"/>
+    <include file="db/changelog/changes/007-voucher-tables.xml"/>
+    <include file="db/changelog/changes/008-check-constraints.xml"/>
+
+    <!-- ====== SEED DATA ====== -->
+    <include file="db/changelog/changes/009-seed-system-config.xml"/>
+    <include file="db/changelog/changes/010-seed-theaters.xml"/>
+    <include file="db/changelog/changes/011-seed-users.xml"/>
+    <include file="db/changelog/changes/012-seed-genres.xml"/>
+    <include file="db/changelog/changes/013-seed-movies-and-runs.xml"/>
+    <include file="db/changelog/changes/014-seed-rooms-seats-pricing.xml"/>
+    <include file="db/changelog/changes/015-seed-snacks-combos.xml"/>
+    <include file="db/changelog/changes/016-seed-showtimes-vouchers.xml"/>
+    <include file="db/changelog/changes/017-fix-system-config-encoding.xml"/>
+    <include file="db/changelog/changes/018-update-movie-trailers.xml"/>
+    <include file="db/changelog/changes/019-seat-revamp-industry-standard.xml"/>
+    <include file="db/changelog/changes/020-fix-seat-check-constraints.xml"/>
+    <include file="db/changelog/changes/021-reseed-seats-industry-standard.xml"/>
 
 </databaseChangeLog>

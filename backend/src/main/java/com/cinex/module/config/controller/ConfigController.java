@@ -4,7 +4,6 @@ import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
 import com.cinex.common.response.ApiResponse;
 import com.cinex.module.config.entity.SystemConfig;
-import com.cinex.module.config.repository.SystemConfigRepository;
 import com.cinex.module.config.service.SystemConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,7 +16,10 @@ import java.util.Map;
 
 /**
  * [Facade Pattern] Controller chỉ nhận request, gọi Service, trả ApiResponse.
- * Logic cập nhật cache nằm trong SystemConfigService (Cache-aside Pattern).
+ *
+ * <p><b>SOLID/D — Dependency Inversion:</b> Controller chỉ depend vào abstraction (Service),
+ * KHÔNG inject Repository trực tiếp. Tất cả business logic (validate key, update + refresh
+ * cache, list) nằm trong {@link SystemConfigService}.
  */
 @RestController
 @RequestMapping("/api/configs")
@@ -26,13 +28,12 @@ import java.util.Map;
 @Tag(name = "Config", description = "System configuration management")
 public class ConfigController {
 
-    private final SystemConfigRepository configRepository;
     private final SystemConfigService systemConfigService;
 
     @GetMapping
     @Operation(summary = "(Admin) List all configs")
     public ApiResponse<List<SystemConfig>> listConfigs() {
-        return ApiResponse.ok(configRepository.findAll());
+        return ApiResponse.ok(systemConfigService.listAll());
     }
 
     @GetMapping("/public/{key}")
@@ -48,19 +49,12 @@ public class ConfigController {
             @PathVariable String key,
             @RequestBody Map<String, String> body) {
 
-        // Validate key tồn tại trước
-        configRepository.findByConfigKey(key)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Config not found: " + key));
-
         String newValue = body.get("value");
         if (newValue == null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Missing 'value' field");
         }
 
-        // [Cache-aside] updateConfig() lưu DB + refresh cache trong 1 lần gọi
-        systemConfigService.updateConfig(key, newValue);
-
-        SystemConfig updated = configRepository.findByConfigKey(key).orElseThrow();
+        SystemConfig updated = systemConfigService.updateConfig(key, newValue);
         return ApiResponse.ok("Config updated", updated);
     }
 }

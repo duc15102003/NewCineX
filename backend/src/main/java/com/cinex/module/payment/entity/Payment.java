@@ -42,6 +42,14 @@ public class Payment extends BaseEntity {
     @Column(name = "transaction_code", length = 100)
     private String transactionCode;
 
+    /**
+     * transId nội bộ của cổng thanh toán (vd: MoMo transId từ IPN response).
+     * Khác với {@code transactionCode}: đó là orderId của ta gửi cho MoMo,
+     * còn cái này là ID nội bộ MoMo gán cho giao dịch — bắt buộc khi gọi refund API.
+     */
+    @Column(name = "gateway_transaction_id", length = 100)
+    private String gatewayTransactionId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

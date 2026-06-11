@@ -1,6 +1,7 @@
 package com.cinex.module.booking.dto;
 
 import com.cinex.module.booking.entity.BookingStatus;
+import com.cinex.module.movie.entity.AgeRating;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -20,6 +21,8 @@ public class BookingResponse {
     // Movie info
     private String movieTitle;
     private String moviePosterUrl;
+    /** Phân loại độ tuổi — FE QR ticket hiện chip cảnh báo "Mang CCCD" cho T13+. */
+    private AgeRating movieAgeRating;
 
     // Showtime info
     private Long showtimeId;

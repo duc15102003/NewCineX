@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Cinema infra: rooms, seats, showtimes, pricing_rules -->
+
+    <changeSet id="003-create-rooms" author="cinex">
+        <createTable tableName="rooms">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="theater_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="NVARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="NVARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_seats" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="rooms" baseColumnNames="theater_id"
+                                 referencedTableName="theaters" referencedColumnNames="id"
+                                 constraintName="fk_rooms_theater"/>
+        <createIndex tableName="rooms" indexName="idx_rooms_theater_id">
+            <column name="theater_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="003-create-seats" author="cinex">
+        <createTable tableName="seats">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="room_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="row_label" type="NVARCHAR(5)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="col_number" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="seat_number" type="NVARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="seat_type" type="NVARCHAR(20)" defaultValue="STANDARD">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="NVARCHAR(20)" defaultValue="AVAILABLE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="seats" baseColumnNames="room_id"
+                                 referencedTableName="rooms" referencedColumnNames="id"
+                                 constraintName="fk_seats_room"/>
+        <createIndex tableName="seats" indexName="idx_seats_room_id">
+            <column name="room_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="003-create-showtimes" author="cinex">
+        <createTable tableName="showtimes">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="movie_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="movie_run_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="room_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="start_time" type="DATETIME2">
+                <constraints nullable="false"/>
+            </column>
+            <column name="end_time" type="DATETIME2">
+                <constraints nullable="false"/>
+            </column>
+            <column name="slot_end_time" type="DATETIME2">
+                <constraints nullable="false"/>
+            </column>
+            <column name="base_price" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="vip_price" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="couple_price" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="NVARCHAR(20)" defaultValue="SCHEDULED">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="showtimes" baseColumnNames="movie_id"
+                                 referencedTableName="movies" referencedColumnNames="id"
+                                 constraintName="fk_showtimes_movie"/>
+        <addForeignKeyConstraint baseTableName="showtimes" baseColumnNames="movie_run_id"
+                                 referencedTableName="movie_runs" referencedColumnNames="id"
+                                 constraintName="fk_showtimes_movie_run"/>
+        <addForeignKeyConstraint baseTableName="showtimes" baseColumnNames="room_id"
+                                 referencedTableName="rooms" referencedColumnNames="id"
+                                 constraintName="fk_showtimes_room"/>
+        <createIndex tableName="showtimes" indexName="idx_showtimes_movie_id">
+            <column name="movie_id"/>
+        </createIndex>
+        <createIndex tableName="showtimes" indexName="idx_showtimes_movie_run_id">
+            <column name="movie_run_id"/>
+        </createIndex>
+        <createIndex tableName="showtimes" indexName="idx_showtimes_room_id">
+            <column name="room_id"/>
+        </createIndex>
+        <createIndex tableName="showtimes" indexName="idx_showtimes_start_time">
+            <column name="start_time"/>
+        </createIndex>
+        <createIndex tableName="showtimes" indexName="idx_showtimes_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="003-create-pricing-rules" author="cinex">
+        <createTable tableName="pricing_rules">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="theater_id" type="BIGINT"/>
+            <column name="code" type="NVARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="NVARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="NVARCHAR(500)"/>
+            <column name="rule_type" type="NVARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="multiplier_percent" type="DECIMAL(6,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="day_of_week" type="NVARCHAR(100)"/>
+            <column name="hour_start" type="INT"/>
+            <column name="hour_end" type="INT"/>
+            <column name="date_start" type="DATE"/>
+            <column name="date_end" type="DATE"/>
+            <column name="active" type="BIT" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="priority" type="INT" defaultValueNumeric="100">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="pricing_rules" baseColumnNames="theater_id"
+                                 referencedTableName="theaters" referencedColumnNames="id"
+                                 constraintName="fk_pricing_rules_theater"/>
+        <createIndex tableName="pricing_rules" indexName="idx_pricing_rules_theater_id">
+            <column name="theater_id"/>
+        </createIndex>
+        <createIndex tableName="pricing_rules" indexName="idx_pricing_rules_active">
+            <column name="active"/>
+        </createIndex>
+        <createIndex tableName="pricing_rules" indexName="idx_pricing_rules_priority">
+            <column name="priority"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

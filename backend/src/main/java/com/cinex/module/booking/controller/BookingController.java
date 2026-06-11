@@ -2,7 +2,6 @@ package com.cinex.module.booking.controller;
 
 import com.cinex.common.response.ApiResponse;
 import com.cinex.common.response.PageResponse;
-import com.cinex.common.service.QrCodeService;
 import com.cinex.common.service.SecurityService;
 import com.cinex.module.booking.dto.BookingFilter;
 import com.cinex.module.booking.dto.BookingListResponse;
@@ -37,7 +36,6 @@ public class BookingController {
 
     private final BookingService bookingService;
     private final SecurityService securityService;
-    private final QrCodeService qrCodeService;
 
     @PostMapping("/hold")
     @Operation(summary = "Hold seats for a showtime (10 min)")
@@ -94,9 +92,25 @@ public class BookingController {
 
     @PostMapping("/check-in")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "(Admin/Staff) Check-in by booking code")
+    @Operation(summary = "(Admin/Staff) Check-in — nhận qrToken (quét QR) hoặc bookingCode (nhập tay)")
     public ApiResponse<BookingResponse> checkIn(@RequestParam String code) {
         return ApiResponse.ok("Checked in", bookingService.checkIn(code));
+    }
+
+    @GetMapping("/check-in/preview")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin/Staff) Preview booking info trước khi admit/reject — read-only")
+    public ApiResponse<BookingResponse> previewCheckIn(@RequestParam String code) {
+        return ApiResponse.ok(bookingService.previewCheckIn(code));
+    }
+
+    @PostMapping("/check-in/reject")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin/Staff) Từ chối check-in tại cổng — vd không đủ tuổi sau verify CCCD")
+    public ApiResponse<BookingResponse> rejectCheckIn(
+            @RequestParam String code,
+            @RequestParam(defaultValue = "UNDER_AGE") String reason) {
+        return ApiResponse.ok("Vé đã bị từ chối", bookingService.rejectCheckIn(code, reason));
     }
 
     @GetMapping("/showtimes/{showtimeId}/occupied-seats")
@@ -107,12 +121,10 @@ public class BookingController {
     }
 
     @GetMapping("/{id}/qr")
-    @Operation(summary = "Get QR code for booking (base64)")
+    @Operation(summary = "Get QR code for booking (base64) — QR chứa qrToken random, không phải bookingCode")
     public ApiResponse<String> getQrCode(@PathVariable Long id) {
         Long userId = securityService.getCurrentUserId();
-        BookingResponse booking = bookingService.getBookingDetail(userId, id);
-        String qrBase64 = qrCodeService.generateQrCodeBase64(booking.getBookingCode(), 300);
-        return ApiResponse.ok(qrBase64);
+        return ApiResponse.ok(bookingService.getBookingQrBase64(userId, id));
     }
 
 }

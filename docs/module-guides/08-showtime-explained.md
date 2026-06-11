@@ -1289,7 +1289,58 @@ public void onShowtimeCancelled(ShowtimeCancelledEvent event) {
 }
 ```
 
-## 14. Cảnh báo về mất dấu tiếng Việt trong file gốc
+## 14. Refactor C2: Showtime → MovieRun (link bắt buộc)
+
+### Bối cảnh
+
+Trước đây, Showtime link trực tiếp tới Movie. Lifecycle "phim có chiếu ở rạp hay không" được suy ra từ `movie.releaseDate / movie.endDate / movie.status`. Pattern này KHÔNG mô tả được các scenario thực tế:
+
+- Re-issue: Avatar 4K Remaster chiếu lại sau 17 năm. Movie chỉ có 1 dòng nhưng có 2 đợt chiếu cách nhau hàng chục năm.
+- Festival: phim arthouse chiếu trong tuần lễ festival, xen kẽ với chiếu thương mại.
+- Sneak preview: chiếu thử 1 vài suất trước release date chính thức.
+
+→ Tách `Movie` (metadata bất biến: title, duration, director, ...) khỏi `MovieRun` (mỗi đợt chiếu có startDate/endDate/status riêng). Quan hệ: 1 Movie ↔ N MovieRun ↔ N Showtime.
+
+### Thay đổi ở C2
+
+| File | Thay đổi |
+|---|---|
+| `entity/Showtime.java` | Thêm `@ManyToOne MovieRun movieRun` (nullable=false). GIỮ field `movie` làm denormalized backup |
+| `dto/ShowtimeRequest.java` | Thêm optional `movieRunId` — admin có thể chỉ định run cụ thể, hoặc để null cho service auto-pick |
+| `service/ShowtimeService.java` | Thêm helper `resolveMovieRun()` + `validateShowtimeWithinMovieRun()` (thay cho `validateShowtimeWithinMovieLifecycle` cũ). Set CẢ `movie` và `movieRun` khi create/update để giữ invariant `showtime.movie == showtime.movieRun.movie` |
+| `repository/ShowtimeRepository.java` | Thêm `existsByMovieRunIdAndStatusInAndStorageStateNot()` — dùng ở C4 (MovieRunService) để chặn xóa run khi còn showtime active |
+| `db/changelog/changes/052-showtime-movie-run-not-null.xml` | Safety-net backfill + ALTER NOT NULL với precondition `sqlCheck` |
+
+### Business rule mới (auto-pick MovieRun)
+
+Khi admin tạo showtime mà không chỉ định `movieRunId`, ShowtimeService tự pick:
+
+1. Lấy tất cả MovieRun của movie (chưa ARCHIVED).
+2. Ưu tiên run đang `NOW_SHOWING`.
+3. Fallback: run `SCHEDULED` có startDate sớm nhất.
+4. Nếu KHÔNG có run nào active (vd: tất cả ENDED, hoặc movie mới tạo chưa có run) → throw `INVALID_REQUEST`: *"Phim X chưa có đợt chiếu nào active. Vui lòng tạo đợt chiếu (MovieRun) trước khi xếp suất."*
+
+### Tại sao giữ `showtime.movie`?
+
+Đây là **denormalized backup field** — không vi phạm chuẩn hóa nghiêm trọng vì là cache của `movieRun.getMovie()` (transitive).
+
+Lý do giữ:
+- **Backward compat**: ~15 file ở module khác (statistics, booking, review, payment, notification ...) đang đọc `showtime.movie.title / id / posterUrl`. Drop bây giờ sẽ break diện rộng.
+- **Query optimization**: tránh JOIN qua `movie_runs` khi chỉ cần thông tin phim. SELECT `s JOIN movies` rẻ hơn `s JOIN movie_runs JOIN movies`.
+
+Quy tắc bất biến: `showtime.movie == showtime.movieRun.movie`. Service đảm bảo điều này trong `createShowtime / updateShowtime` — set cùng lúc 2 field, không bao giờ tách rời. Có thể drop ở C5 sau khi audit hết các usage.
+
+### Liquibase 052 strategy
+
+- **Changeset 1 (backfill safety-net)**: idempotent UPDATE — chạy trên các row có `movie_run_id IS NULL` (thường 0 row vì 051 đã backfill). Phòng trường hợp app cũ tạo showtime mới trong khoảng giữa 051 và 052.
+- **Changeset 2 (NOT NULL)**: dùng `preConditions onFail="MARK_RAN"` với `sqlCheck` count `movie_run_id IS NULL`. Nếu vẫn còn NULL (data rác) → MARK_RAN + warning thay vì HALT, để không block deploy. Admin fix tay rồi rerun.
+
+### Risk
+
+- **Mismatch invariant**: nếu code khác trong tương lai set `showtime.movie` mà quên set `movieRun` (hoặc ngược lại) → 2 field lệch. Đã được bảo vệ tạm bằng cách buộc qua service. Khi drop `movie` ở C5, risk này biến mất.
+- **MovieRun ENDED khi showtime SCHEDULED**: nếu MovieRunStatusScheduler (sẽ làm ở C3) đẩy run sang ENDED khi đến endDate, mà còn showtime SCHEDULED chưa chiếu → cần xử lý ở C3/C4 (vd: cảnh báo admin trước khi auto-end).
+
+## 15. Cảnh báo về mất dấu tiếng Việt trong file gốc
 
 Phần lớn nội đúng mục 1-10 của file này (`08-showtime-explained.md`) đang **MẤT DẤU tiếng Việt** ("Tổng quan" thấy vì "Tổng quan", "Sơ đồ" thấy vì "Sơ đồ"). Đây là vì phạm rule trong `CLAUDE.md`.
 

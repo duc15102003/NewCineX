@@ -2,6 +2,169 @@
 
 > Hướng dẫn viết test cho React app CineX: unit test component, hook, integration test API.
 
+---
+
+## 🎯 PHẦN 0 — TẠI SAO cần test (đọc trước khi học cách viết)
+
+### 0.1 Vấn đề: Code chạy ok, deploy xong bug — Tại sao?
+
+**Câu chuyện đời thường:**
+
+Bạn vừa làm xong feature "đặt vé". Test thủ công trên Chrome 5 lần, OK. Deploy production. Hôm sau:
+- User báo: "Click đặt vé không có gì xảy ra" (Safari iOS — bạn không test)
+- User báo: "Đặt 2 vé xong total ra 0đ" (voucher edge case — bạn quên test)
+- User báo: "Refresh trang xong mất tất cả" (state không persist — bạn không nghĩ tới)
+
+**Test thủ công có 4 vấn đề:**
+1. **Không scale:** 100 feature × 10 case = 1000 test mỗi lần deploy → không khả thi
+2. **Quên:** Sửa bug A xong, code khác break (regression) → bạn không tìm lại
+3. **Chậm:** Mỗi lần test = mở browser, login, click, type → 5 phút/case
+4. **Không cover edge case:** Bạn chỉ nghĩ ra happy path
+
+**Automated test giải quyết:**
+- Chạy 1000 test trong 30 giây
+- Mỗi lần code thay đổi, CI tự chạy → bug phát hiện ngay
+- Code thành "tài liệu sống": đọc test = hiểu component làm gì
+- Refactor tự tin: test cover → refactor không sợ phá
+
+### 0.2 Test Pyramid — 3 cấp test, dùng cấp nào?
+
+```
+            ┌──────────────┐
+            │     E2E      │  ← 10% test, dùng Playwright/Cypress
+            │  (chậm, đắt) │     Test flow user end-to-end
+            ├──────────────┤
+            │ Integration  │  ← 30% test, dùng RTL + MSW
+            │  (vừa)       │     Test nhiều component + API mock
+            ├──────────────┤
+            │     Unit     │  ← 60% test, dùng Vitest
+            │  (nhanh, rẻ) │     Test function/hook/component đơn lẻ
+            └──────────────┘
+```
+
+| Cấp | Phù hợp | Tốc độ | Ví dụ CineX |
+|---|---|---|---|
+| **Unit** | Logic thuần (format price, calculate total) | <50ms/test | `formatPrice(100000)` → `"100.000đ"` |
+| **Integration** | Component + API + Router | 200-500ms/test | LoginForm submit → API mock → redirect |
+| **E2E** | Flow user thực sự | 5-30s/test | User mở web → đặt vé → thanh toán → check QR |
+
+**Quy tắc:** 60% unit + 30% integration + 10% E2E. **KHÔNG ngược lại** (toàn E2E thì slow, flaky, deploy chậm).
+
+### 0.3 Triết lý "Test as user, not as developer"
+
+React Testing Library xây dựng theo triết lý này: **Test giống cách user dùng app, không phải cách code chạy bên trong.**
+
+**❌ Test implementation detail (XẤU):**
+```ts
+// Test class CSS - dễ break khi refactor styling
+expect(container.querySelector('.btn-primary')).toBeInTheDocument();
+
+// Test internal state - dễ break khi refactor component
+expect(wrapper.state('isLoading')).toBe(true);
+```
+
+**✅ Test behavior (TỐT):**
+```ts
+// Test cái user thấy
+expect(screen.getByRole('button', { name: /đăng nhập/i })).toBeInTheDocument();
+
+// Test cái user trải nghiệm
+expect(screen.getByText(/đang xử lý/i)).toBeInTheDocument();
+```
+
+→ Refactor CSS/internal state → test vẫn pass. Refactor làm hỏng UX → test fail (đúng ý nghĩa).
+
+### 0.4 AAA Pattern — Cấu trúc 1 test
+
+Mỗi test viết theo 3 phần **Arrange → Act → Assert**:
+
+```ts
+it('should show error when password is empty', async () => {
+  // ARRANGE — chuẩn bị
+  const onSubmit = vi.fn();
+  render(<LoginForm onSubmit={onSubmit} />);
+
+  // ACT — thực hiện hành động
+  await userEvent.type(screen.getByLabelText(/email/i), 'a@b.com');
+  await userEvent.click(screen.getByRole('button', { name: /đăng nhập/i }));
+
+  // ASSERT — kiểm tra kết quả
+  expect(screen.getByText(/password không được trống/i)).toBeInTheDocument();
+  expect(onSubmit).not.toHaveBeenCalled();
+});
+```
+
+**Đừng trộn lẫn:**
+- Không assert giữa chừng (chỉ ở Act)
+- Không thực hiện action ở Assert
+
+### 0.5 Hello World test — Bắt đầu trong 5 phút
+
+Nếu bạn chưa viết test nào bao giờ, đây là test đầu tiên của bạn.
+
+**Step 1:** Setup theo Section 1 bên dưới (cài deps + config vite).
+
+**Step 2:** Tạo file `src/utils/labels.ts`:
+```ts
+export function formatPrice(amount: number): string {
+  return amount.toLocaleString('vi-VN') + 'đ';
+}
+```
+
+**Step 3:** Tạo file `src/utils/labels.test.ts`:
+```ts
+import { describe, it, expect } from 'vitest';
+import { formatPrice } from './labels';
+
+describe('formatPrice', () => {
+  it('formats positive amount', () => {
+    expect(formatPrice(100000)).toBe('100.000đ');
+  });
+
+  it('formats zero', () => {
+    expect(formatPrice(0)).toBe('0đ');
+  });
+});
+```
+
+**Step 4:** Chạy:
+```bash
+npm test
+```
+
+Terminal sẽ in:
+```
+✓ src/utils/labels.test.ts (2)
+  ✓ formatPrice
+    ✓ formats positive amount
+    ✓ formats zero
+
+Test Files  1 passed (1)
+Tests       2 passed (2)
+```
+
+🎉 Chúc mừng! Bạn vừa viết test đầu tiên. Đọc tiếp các phần dưới để học test phức tạp hơn.
+
+### 0.6 Mindset: TDD vs Test-After
+
+**TDD (Test-Driven Development):**
+1. Viết test FAIL trước
+2. Code minimum để test PASS
+3. Refactor
+4. Lặp
+
+**Test-After:**
+1. Code feature xong
+2. Viết test cover code đó
+
+**CineX khuyến nghị:** Test-After cho component UI (khó TDD), TDD cho utility function (formatPrice, calculateBookingTotal).
+
+**Lý do TDD khó cho UI:** UI thay đổi nhiều, viết test trước rồi sửa lại nhiều lần tốn công. Utility function spec rõ → TDD nhanh.
+
+📚 **Đọc thêm:** [glossary.md#m](../glossary.md#m) (Memoization — test khi performance critical), [common-mistakes.md](../common-mistakes.md) (lỗi #19 `invalidateQueries` test được).
+
+---
+
 ## 1. Setup
 
 ### Dependencies
@@ -483,3 +646,99 @@ const movie = mockMovie({ title: "Joker" });
 - UX hoạt động đúng
 
 → Quality test quan trọng hơn quantity.
+
+**Câu 6 (mới)**: Test Pyramid 60/30/10 — nếu bạn đảo ngược (10 unit / 30 integration / 60 E2E) thì hậu quả?
+
+→ E2E chạy 5-30s/test. 100 E2E test = 50 phút chạy CI. Developer chờ feedback lâu → bypass test. E2E flaky (network, timing) → false positive nhiều. Test pyramid đảo ngược = **Ice Cream Cone Anti-pattern**, làm CI chậm & dev mất niềm tin.
+
+**Câu 7 (mới)**: AAA pattern — nếu bạn assert giữa Act (vd assert sau mỗi click) thì hậu quả?
+
+→ Test trở nên dài, khó đọc, mỗi test cover nhiều thứ cùng lúc → khi fail không biết bước nào sai. Đúng: 1 test = 1 behavior = 1 Assert block. Cần test nhiều bước → tách thành nhiều `it()`.
+
+**Câu 8 (mới)**: Tại sao test hook React Query phải có `QueryClientProvider` wrapper?
+
+→ `useQuery` cần đọc QueryClient từ context. Không có Provider → throw "No QueryClient set". Phải tạo `wrapper` với `QueryClientProvider` mỗi test, hoặc factory helper `createWrapper()` reuse.
+
+**Câu 9 (mới)**: MSW có 2 mode: `setupServer` (Node, dùng cho test) và `setupWorker` (browser, dùng cho dev mock). Khi nào dùng cái nào?
+
+→ Test (Vitest/Jest) chạy ở Node → `setupServer`. Dev local muốn mock BE chưa có → import MSW vào `main.tsx` chạy `setupWorker` → mock ở Service Worker layer. Cùng handler dùng được cả 2 nơi → DRY.
+
+**Câu 10 (mới)**: Bạn viết test pass local nhưng fail CI. 3 nguyên nhân thường gặp?
+
+→ (1) Time zone khác (CI UTC, local Asia/Saigon → date format khác). (2) Random seed khác (`Math.random()` → flaky). (3) Race condition giữa `act` và async update → dùng `await waitFor()`. Fix: mock `Date.now()`, seed random, dùng `findBy*` thay `getBy*` cho async.
+
+---
+
+## 13. Bài tập thực hành
+
+### Bài 1: Test utility function (LEVEL 1 — 30 phút)
+
+Viết test cho file `src/utils/labels.ts` cover các function:
+- `formatPrice(100000)` → `'100.000đ'`
+- `formatPrice(0)` → `'0đ'`
+- `formatPrice(-50000)` → `'-50.000đ'` (edge case âm)
+- `fmtDate('2026-05-20')` → `'20/05/2026'`
+- `fmtDateTime('2026-05-20T23:47:00')` → `'23:47 20/05/2026'`
+
+Yêu cầu: 100% line coverage cho file này.
+
+### Bài 2: Test MovieCard component (LEVEL 2 — 60 phút)
+
+Component `MovieCard` nhận props:
+```tsx
+type Props = {
+  movie: { id: number; title: string; posterUrl: string; rating: number };
+  onClick?: () => void;
+};
+```
+
+Viết test:
+1. Render title đúng
+2. Hiển thị poster (img src đúng)
+3. Hiển thị rating với 1 chữ số thập phân (`8.5`)
+4. Click card → gọi `onClick` 1 lần
+5. Không có `onClick` → click không crash
+
+### Bài 3: Integration test LoginPage (LEVEL 3 — 120 phút)
+
+Test full flow:
+1. Form render với 2 input + 1 button
+2. Submit form trống → hiện 2 error message
+3. Submit email invalid → hiện error "email không hợp lệ"
+4. Submit form valid + MSW mock API thành công → redirect `/dashboard`
+5. Submit form valid + MSW mock API 401 → hiện toast "Sai email hoặc mật khẩu"
+
+Yêu cầu: dùng MSW mock API, dùng `MemoryRouter` cho navigation, dùng `userEvent.type/click` (không dùng `fireEvent`).
+
+### Bài 4: Test useBookingHold hook (LEVEL 4 — 90 phút)
+
+Hook `useBookingHold` wrap mutation TanStack Query. Viết test:
+1. Initial state: `isPending = false`, `data = null`
+2. Call `mutate({ showtimeId: 1, seatIds: [10] })` → MSW mock trả booking
+3. After success: `isSuccess = true`, `data.bookingId = 1`
+4. Trigger error 409 (ghế đã đặt): `isError = true`, `error.message` đúng
+5. `queryClient.invalidateQueries(['seats', 1])` được gọi sau success
+
+### Bài 5: E2E booking flow (LEVEL 5 — 180 phút, BONUS)
+
+Dùng Playwright:
+1. Mở `localhost:5173`
+2. Click "Đăng nhập" → fill `test@cinex.vn / password123` → submit
+3. Verify redirect `/`
+4. Click 1 movie → click 1 suất chiếu
+5. Click ghế E1, E2 → click "Tiếp tục"
+6. Verify trang payment hiện 2 ghế + total amount đúng
+7. Screenshot kết quả
+
+Yêu cầu: setup `playwright.config.ts` với baseURL `http://localhost:5173`, chạy test ở Chromium + Firefox + WebKit.
+
+---
+
+## 14. Liên kết tới khái niệm khác
+
+- **AAA pattern + Why test:** Phần 0 ở trên
+- **MSW vs vi.mock:** [glossary.md#m](../glossary.md#m) (cách phân biệt)
+- **Coverage trap:** [common-mistakes.md](../common-mistakes.md) (coverage 100% không = bug-free)
+- **Test pyramid scaling:** [frontend/16-performance-optimization.md](16-performance-optimization.md) (test performance)
+- **CI integration:** [backend/13-deployment.md](../backend/13-deployment.md) (CI/CD pipeline)
+- **MSW handlers reuse cho dev:** [frontend/07-axios-api.md](07-axios-api.md) (Axios + MSW dev mode)

@@ -4,6 +4,7 @@ import com.cinex.common.response.ApiResponse;
 import com.cinex.common.response.PageResponse;
 import com.cinex.common.service.SecurityService;
 import org.springframework.security.access.prepost.PreAuthorize;
+import com.cinex.module.notification.dto.NotificationFilter;
 import com.cinex.module.notification.dto.NotificationResponse;
 import com.cinex.module.notification.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,15 +30,19 @@ public class NotificationController {
     private final SecurityService securityService;
 
     /**
-     * GET /api/notifications/me?page=0&size=20
-     * Lấy danh sách thông báo của user hiện tại, phân trang.
+     * GET /api/notifications/me?type=&isRead=&createdFrom=&createdTo=&page=0&size=20
+     * Lấy danh sách thông báo của user hiện tại, phân trang + filter.
+     *
+     * userId LẤY TỪ JWT, KHÔNG nhận từ query param (chống IDOR).
      */
     @GetMapping("/me")
-    @Operation(summary = "Get my notifications (paginated)")
+    @Operation(summary = "Get my notifications (paginated, filterable)")
     public ApiResponse<PageResponse<NotificationResponse>> getMyNotifications(
+            NotificationFilter filter,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         Long userId = securityService.getCurrentUserId();
-        return ApiResponse.ok(PageResponse.from(notificationService.getMyNotifications(userId, pageable)));
+        return ApiResponse.ok(PageResponse.from(
+                notificationService.listNotifications(userId, filter, pageable)));
     }
 
     /**

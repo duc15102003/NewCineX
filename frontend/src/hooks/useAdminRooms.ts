@@ -11,13 +11,35 @@ export interface AdminRoom {
   totalSeats: number
   status: string
   storageState: string
+  /** Chi nhánh sở hữu phòng — BE đã expose, dùng cho grouped view + form. */
+  theaterId: number | null
+  theaterName: string | null
+  theaterCity: string | null
 }
 
-export function useAdminRooms(params: Record<string, any> = {}) {
+/**
+ * Params filter cho list room — match BE RoomFilter.java.
+ */
+export interface AdminRoomParams {
+  keyword?: string
+  theaterId?: number    // Filter theo chi nhánh (admin context)
+  type?: string         // TWO_D | THREE_D | IMAX | FOUR_DX
+  status?: string       // ACTIVE | MAINTENANCE | INACTIVE
+  minSeats?: number
+  maxSeats?: number
+  includeDeleted?: boolean
+  page?: number
+  size?: number
+}
+
+export function useAdminRooms(params: AdminRoomParams = {}) {
   return useQuery({
     queryKey: ['admin', 'rooms', params],
     queryFn: async () => {
-      const res = await api.get<ApiResponse<PageResponse<AdminRoom>>>('/api/rooms', { params: { ...params, includeDeleted: true } })
+      const res = await api.get<ApiResponse<PageResponse<AdminRoom>>>('/api/rooms', {
+        // Default includeDeleted=true cho admin, nhưng page có thể override
+        params: { includeDeleted: true, ...params },
+      })
       return res.data.data
     },
   })

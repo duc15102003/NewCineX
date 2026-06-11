@@ -104,4 +104,28 @@ public class ReviewController {
         return ApiResponse.ok("Review deleted", null);
     }
 
+    @PutMapping("/api/reviews/{id}/restore")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Restore a soft-deleted review (owner or admin)")
+    public ApiResponse<Void> restoreReview(@PathVariable Long id) {
+        Long userId = securityService.getCurrentUserId();
+        reviewService.restoreReview(userId, id);
+        return ApiResponse.ok("Review restored", null);
+    }
+
+    /**
+     * GET /api/reviews/admin?movieId=&userId=&minRating=&maxRating=&hasComment=&createdFrom=&createdTo=&includeDeleted=
+     *
+     * Admin xem TẤT CẢ review xuyên phim — phục vụ kiểm duyệt nội dung.
+     * KHÔNG ràng buộc movieId; movieId trong filter là OPTIONAL (lọc nếu có).
+     */
+    @GetMapping("/api/reviews/admin")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) List all reviews across all movies (for moderation)")
+    public ApiResponse<PageResponse<ReviewResponse>> adminListReviews(
+            ReviewFilter filter,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ApiResponse.ok(PageResponse.from(reviewService.listReviews(filter, pageable)));
+    }
+
 }

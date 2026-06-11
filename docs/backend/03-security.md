@@ -471,23 +471,32 @@ Kiểm tra data client gửi lên **trước khi** vào Service. Sai → trả l
 ### Ví dụ đời thường
 Nộp hồ sơ: bảo vệ kiểm tra "có đủ giấy tờ?" TRƯỚC KHI cho vào phỏng vấn.
 
-### Ví dụ đầy đủ
+### Ví dụ đầy đủ (CineX thực tế — strict password policy)
 
 ```java
-// DTO với validation
+// File: backend/src/main/java/com/cinex/module/auth/dto/RegisterRequest.java
 public class RegisterRequest {
 
-    @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    @NotBlank(message = "Tên đăng nhập là bắt buộc")
+    @Pattern(
+            regexp = "^[a-zA-Z0-9_.]{3,50}$",
+            message = "Username chỉ chấp nhận chữ cái không dấu, số, dấu chấm và gạch dưới"
+    )
     private String username;
 
-    @NotBlank(message = "Email is required")
-    @Email(message = "Invalid email format")
+    @NotBlank(message = "Email là bắt buộc")
+    @Email(message = "Email không hợp lệ")
     private String email;
 
-    @NotBlank(message = "Password is required")
-    @Size(min = 6, max = 100, message = "Password must be between 6 and 100 characters")
+    @NotBlank(message = "Mật khẩu là bắt buộc")
+    @Pattern(
+            regexp = "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d).{8,100}$",
+            message = "Mật khẩu phải ≥ 8 ký tự, có chữ HOA, chữ thường và số"
+    )
+    @Size(min = 8, max = 100)
     private String password;
+
+    private String fullName;
 }
 
 // Controller — @Valid kích hoạt validation
@@ -533,6 +542,89 @@ public ApiResponse<AuthResponse> register(@Valid @RequestBody RegisterRequest re
 | Spring tự kiểm tra | Viết if-else |
 | Không cần query DB | Cần query DB |
 | **Dùng cả hai** | **Dùng cả hai** |
+
+### Password policy chuẩn của CineX (strict regex)
+
+CineX áp dụng **strict password policy** thông qua `@Pattern` ở mọi DTO liên quan đến mật khẩu, không chỉ ở register.
+
+| DTO | File | Áp dụng cho endpoint |
+|---|---|---|
+| `RegisterRequest` | `module/auth/dto/RegisterRequest.java` | `POST /api/auth/register` |
+| `ResetPasswordRequest` | `module/auth/dto/ResetPasswordRequest.java` | `POST /api/auth/reset-password` |
+| `ChangePasswordRequest` | `module/user/dto/ChangePasswordRequest.java` | `POST /api/users/me/change-password` |
+
+Cả 3 DTO cùng dùng 1 regex thống nhất:
+
+```java
+@Pattern(
+    regexp = "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d).{8,100}$",
+    message = "Mật khẩu phải ≥ 8 ký tự, có chữ HOA, chữ thường và số"
+)
+```
+
+#### Bóc tách regex bằng ví dụ đời thường
+
+Regex giống "checklist kiểm tra hành lý ở sân bay" — phải đủ tất cả mục thì mới cho qua.
+
+| Phần | Ý nghĩa | Ví dụ pass | Ví dụ fail |
+|---|---|---|---|
+| `^` | Bắt đầu chuỗi | — | — |
+| `(?=.*[A-Z])` | **Lookahead**: phải có ≥ 1 chữ hoa | `Abc123xy` | `abc123xy` ❌ thiếu HOA |
+| `(?=.*[a-z])` | Lookahead: phải có ≥ 1 chữ thường | `Abc123xy` | `ABC123XY` ❌ thiếu thường |
+| `(?=.*\\d)` | Lookahead: phải có ≥ 1 chữ số | `Abc123xy` | `Abcdefgh` ❌ thiếu số |
+| `.{8,100}` | Độ dài 8-100 ký tự bất kỳ | `Abc12345` | `Abc123` ❌ chỉ 6 ký tự |
+| `$` | Kết thúc chuỗi | — | — |
+
+**Lookahead `(?=...)` là gì?** Là kiểm tra "có tồn tại pattern này ở đâu đó phía trước" nhưng **không tiêu hao ký tự**. Nhờ vậy 3 lookahead có thể check 3 điều kiện độc lập trên cùng 1 chuỗi.
+
+> So sánh: nếu viết tuần tự `[A-Z][a-z]\\d.{5,}` → bắt buộc thứ tự HOA → thường → số → 5 ký tự còn lại → `Aa1xxxxx` pass nhưng `aA1xxxxx` fail (sai thứ tự). Đó là sai thiết kế.
+
+#### Vì sao chọn policy này (không quá khắt khe)
+
+| Quy tắc | Ngưỡng CineX | Vì sao không cao hơn |
+|---|---|---|
+| Độ dài | ≥ 8 | NIST 800-63B khuyến cáo ≥ 8 là tối thiểu chấp nhận được |
+| Chữ hoa + thường + số | Bắt buộc | Tăng entropy mà user vẫn nhớ được |
+| Ký tự đặc biệt | **Không bắt buộc** | NIST 2017+ không còn yêu cầu — user thường đặt `Password1!` cho có lệ |
+| Đổi pass định kỳ | **Không bắt buộc** | NIST 2017+ đã bỏ — gây user đặt pass dễ đoán dạng `Spring2026!` → `Summer2026!` |
+
+#### Username regex
+
+```java
+@Pattern(regexp = "^[a-zA-Z0-9_.]{3,50}$", message = "...")
+```
+
+| Cho phép | Không cho phép | Vì sao |
+|---|---|---|
+| `a-zA-Z` (latin) | Chữ Tiếng Việt có dấu | URL `/users/vănan` cần encode → bug |
+| `0-9` | — | OK |
+| `_` dấu gạch dưới | — | OK |
+| `.` dấu chấm | — | OK |
+| | Khoảng trắng | `@vanan ` vs `@vanan` confused |
+| | `@`, `#`, `!` | Conflict với mention `@username` trong UI |
+
+Độ dài 3-50: 3 đủ ngắn để username gọn (`an`, `v3`), 50 đủ dài cho username dài.
+
+#### Lưu ý kiến trúc: Validation ở 2 lớp
+
+Password policy ở DTO là lớp **đầu tiên**, **không phải duy nhất**:
+
+```
+1. DTO @Valid     → Format: độ dài, ký tự, regex      (lớp này)
+2. Service        → Logic: != password cũ, != email   (xem AuthService.resetPassword)
+```
+
+VD logic mà DTO không check được:
+
+```java
+// AuthService.resetPassword() — line 269
+if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+    throw new BusinessException(ErrorCode.INVALID_PASSWORD,
+            "Mật khẩu mới phải khác mật khẩu cũ");
+}
+```
+
+→ Không thể check ở DTO vì cần query DB lấy hash cũ. DTO chỉ check format, Service check rule liên quan dữ liệu.
 
 ---
 
@@ -2003,3 +2095,592 @@ public class CustomUserDetailsService implements UserDetailsService {
 ```
 
 Với 3 file này, một sinh viên có thể tự xây lại toàn bộ luồng JWT của CineX từ con số 0.
+
+---
+
+## 18. JWT Blacklist (Redis) — Vô hiệu hóa access token sớm
+
+### 18.1. Vấn đề: JWT stateless không revoke được
+
+JWT là **stateless**: server không lưu phiên đăng nhập, mỗi request chỉ verify chữ ký + check expiration. Lợi ích: scale dễ (không cần sticky session, không cần Redis chia sẻ session giữa instance). Nhược điểm:
+
+```
+Time 0:00  → User login                  → access token TTL 15 phút (hết hạn 0:15)
+Time 0:05  → User logout                 → Server revoke refresh token ✓
+                                          → Nhưng access token CŨ vẫn còn hạn 10 phút!
+Time 0:06  → Attacker steal access token → Vẫn gọi API được trong 9 phút nữa
+```
+
+Vấn đề tương tự khi user đổi password — refresh token bị revoke, nhưng access token cũ còn dùng được.
+
+**Ví dụ đời thường:** Bạn báo mất CMND → công an thu hồi số CMND đã đăng ký. Nhưng tấm CMND cũ (vật lý) vẫn nằm trong tay kẻ trộm → kẻ trộm vẫn dùng đến ngân hàng đến khi CMND hết hạn. Cần thêm 1 "danh sách CMND báo mất" để mọi nơi check.
+
+### 18.2. Giải pháp: Blacklist trong Redis với TTL = remaining
+
+Khi logout / đổi password, lưu token vào Redis. JwtAuthFilter check Redis trước khi set Authentication.
+
+**Quy tắc đặt key:**
+```
+Key:   jwt:blacklist:{sha256-hex-của-token}
+Value: "1"   (không quan trọng, chỉ cần exists)
+TTL:   exp - now   (phần còn lại trước khi token hết hạn tự nhiên)
+```
+
+**Vì sao TTL = remaining?** Token hết hạn tự nhiên → JwtAuthFilter đã reject ở bước check expiration → không cần giữ blacklist nữa. Redis tự xóa key → không cần scheduler dọn rác, không phình memory.
+
+### 18.3. Vì sao hash SHA-256 thay vì lưu raw token?
+
+| | Lưu raw token | Lưu SHA-256 hash |
+|---|---|---|
+| Memory | ~200 byte / key (JWT dài) | 64 byte (hex 32 byte hash) |
+| Bảo mật khi Redis leak | ❌ Attacker có token raw → impersonate | ✅ Hash 1 chiều — không khôi phục token |
+| Verify | `EXISTS jwt:blacklist:{raw}` | `EXISTS jwt:blacklist:{hash(raw)}` (cost ≈ 0) |
+
+> **Vì sao không dùng `jti` claim (JWT ID)?** `jti` là cách chuẩn của JWT spec — lưu UUID vào claim khi tạo token, blacklist theo `jti` (ngắn 36 byte) thay vì hash. Tuy nhiên `JwtUtil` hiện tại của CineX chưa add `jti` vào claim (token chỉ chứa `sub`, `role`, `exp`, `iat`). Hash SHA-256 là cách **tương đương về bảo mật** mà không cần migrate JWT format. Khi nâng cấp lên `jti` claim cũng chỉ thay 1 dòng `tokenHash()` → `claims.getId()`.
+
+### 18.4. Code thực tế
+
+```
+File: backend/src/main/java/com/cinex/security/JwtBlacklistService.java
+```
+
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class JwtBlacklistService {
+
+    private static final String KEY_PREFIX = "jwt:blacklist:";
+
+    private final StringRedisTemplate redis;
+    private final JwtUtil jwtUtil;
+
+    /**
+     * Đưa token vào blacklist với TTL = phần còn lại trước khi token hết hạn.
+     * Nếu token đã hết hạn → bỏ qua (filter sẽ tự reject expired).
+     */
+    public void blacklist(String token) {
+        if (token == null || token.isBlank()) return;
+        try {
+            Claims claims = jwtUtil.extractAllClaims(token);
+            Date exp = claims.getExpiration();
+            if (exp == null) return;
+
+            long remainMs = exp.getTime() - System.currentTimeMillis();
+            if (remainMs <= 0) return;   // Đã expire → khỏi blacklist
+
+            String key = KEY_PREFIX + tokenHash(token);
+            redis.opsForValue().set(key, "1", Duration.ofMillis(remainMs));
+            log.info("JWT blacklisted for user '{}', TTL={}s", claims.getSubject(), remainMs / 1000);
+        } catch (Exception e) {
+            // Token sai format / signature → coi như không cần blacklist
+            log.debug("Skip blacklist (invalid token): {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Check mỗi request từ JwtAuthFilter. Fail-open khi Redis lỗi
+     * → tránh outage Redis làm block toàn site.
+     */
+    public boolean isBlacklisted(String token) {
+        if (token == null || token.isBlank()) return false;
+        try {
+            String key = KEY_PREFIX + tokenHash(token);
+            return Boolean.TRUE.equals(redis.hasKey(key));
+        } catch (Exception e) {
+            log.warn("Redis check blacklist failed, fail-open: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /** SHA-256 → 64 hex chars. */
+    public String tokenHash(String token) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
+    }
+}
+```
+
+### 18.5. Tích hợp vào JwtAuthFilter
+
+```java
+// File: backend/src/main/java/com/cinex/security/JwtAuthFilter.java (line 51-73)
+
+String token = authHeader.substring(7);
+
+// Parse JWT 1 LẦN — lấy cả subject + expiration trong 1 call.
+Claims claims = jwtUtil.extractAllClaims(token);
+String username = claims.getSubject();
+Date expiration = claims.getExpiration();
+
+// 1. Check expired TỪ CLAIMS (không parse lại token)
+if (expiration != null && expiration.before(new Date())) {
+    log.debug("JWT expired for {}", username);
+    filterChain.doFilter(request, response);
+    return;
+}
+
+// 2. Check blacklist SAU expired
+//    → Tiết kiệm 1 round-trip Redis cho token đã hết hạn
+if (jwtBlacklistService.isBlacklisted(token)) {
+    log.debug("JWT blacklisted for {}", username);
+    filterChain.doFilter(request, response);
+    return;
+}
+```
+
+**Thứ tự check quan trọng:** expired → blacklisted, không phải ngược lại.
+- Token expired chiếm tỷ lệ lớn (mọi request quá 15 phút) → check expired trước (CPU local, nhanh) → tiết kiệm round-trip Redis.
+
+### 18.6. Tích hợp vào AuthService.logout & UserService.changePassword
+
+```java
+// AuthService.java — line 184-198
+@Transactional
+public void logout(HttpServletRequest httpRequest) {
+    String username = SecurityUtil.getCurrentUsername();
+    User user = userRepository.findActiveByUsername(username)
+            .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    refreshTokenService.revokeAllUserTokens(user.getId());
+
+    // Blacklist access token hiện tại
+    String accessToken = extractBearerToken(httpRequest);
+    if (accessToken != null) {
+        jwtBlacklistService.blacklist(accessToken);
+    }
+    log.info("User {} logged out", username);
+}
+```
+
+```java
+// UserService.java — line 104-115 (sau khi đổi password thành công)
+refreshTokenService.revokeAllUserTokens(user.getId());
+
+// Blacklist access token hiện tại — tránh attacker đang có token còn hạn
+// tiếp tục dùng trong 15 phút sau khi user đã đổi password.
+if (httpRequest != null) {
+    String authHeader = httpRequest.getHeader("Authorization");
+    if (authHeader != null && authHeader.startsWith("Bearer ")) {
+        jwtBlacklistService.blacklist(authHeader.substring(7));
+    }
+}
+```
+
+### 18.7. Sequence diagram — Login → Logout → Request bị reject
+
+```
+┌──────┐                ┌────────────────┐  ┌─────────┐  ┌───────┐
+│ User │                │ JwtAuthFilter  │  │ Service │  │ Redis │
+└──┬───┘                └───────┬────────┘  └────┬────┘  └───┬───┘
+   │                            │                │           │
+   │ POST /api/auth/login       │                │           │
+   │───────────────────────────────────────────►│           │
+   │                            │                │ verify pwd│
+   │  { access: "eyJ...", ... }                  │           │
+   │◄───────────────────────────────────────────│           │
+   │                            │                │           │
+   │ GET /api/users/me          │                │           │
+   │ Authorization: Bearer eyJ..│                │           │
+   │───────────────────────────►│                │           │
+   │                            │ extractClaims  │           │
+   │                            │ check expired  │           │
+   │                            │ check blacklist┼──EXISTS──►│
+   │                            │◄─────────────────false─────│
+   │                            │ setAuth        │           │
+   │ 200 OK { user data }       │                │           │
+   │◄───────────────────────────│                │           │
+   │                            │                │           │
+   │ POST /api/auth/logout      │                │           │
+   │ Authorization: Bearer eyJ..│                │           │
+   │───────────────────────────►│                │           │
+   │                            │  forward       │ blacklist │
+   │                            │───────────────►│ token     │
+   │                            │                │──SET──────►│
+   │                            │                │  TTL=600s │
+   │ 200 OK                     │                │           │
+   │◄───────────────────────────│                │           │
+   │                            │                │           │
+   │ GET /api/users/me          │                │           │
+   │ Authorization: Bearer eyJ..│  (token cũ)    │           │
+   │───────────────────────────►│                │           │
+   │                            │ check blacklist┼──EXISTS──►│
+   │                            │◄─────────────────true──────│
+   │                            │ SKIP setAuth   │           │
+   │ 401 Unauthorized           │                │           │
+   │◄───────────────────────────│                │           │
+```
+
+### 18.8. Tradeoff — Stateless vs Revocable
+
+| Aspect | JWT thuần (stateless) | JWT + Blacklist |
+|---|---|---|
+| Scale | ⭐⭐⭐⭐⭐ Không cần share state | ⭐⭐⭐⭐ Cần Redis chung |
+| Revoke ngay | ❌ Phải đợi expire | ✅ Logout = invalidate ngay |
+| Latency mỗi request | Verify chữ ký local | + 1 round-trip Redis (~1ms LAN) |
+| Phụ thuộc Redis | Không | Có (nhưng fail-open) |
+
+CineX chọn JWT + Blacklist vì:
+- Logout phải có hiệu lực **ngay** (sai khi user nhấn "Đăng xuất" mà hacker vẫn dùng token 15 phút).
+- Redis đã có sẵn cho rate limit, cache config → không phát sinh hạ tầng mới.
+
+### 18.9. Fail-open khi Redis chết — quyết định thiết kế
+
+`isBlacklisted` catch exception → return `false` → coi như không có trong blacklist → cho qua.
+
+**Tại sao chọn fail-open thay vì fail-close (block)?**
+
+| | Fail-open (CineX chọn) | Fail-close |
+|---|---|---|
+| Redis down 5 phút | Site vẫn chạy bình thường | **TOÀN BỘ user bị 401** |
+| Token cũ vừa logout | Vẫn dùng được trong 5 phút | An toàn hơn |
+| Tổn thất | Cửa sổ tấn công 15 phút (TTL JWT) | Mất doanh thu toàn site |
+
+→ Trade-off này chỉ chấp nhận được vì **TTL access token đã ngắn (15 phút)**. Nếu TTL access token là 1 ngày → phải fail-close hoặc giảm TTL.
+
+---
+
+## 19. STOMP WebSocket — Binding Principal từ JWT
+
+### 19.1. Vấn đề: convertAndSendToUser cần Principal
+
+CineX dùng WebSocket để push notification real-time (booking confirmed, payment success). Phương thức:
+
+```java
+simpMessagingTemplate.convertAndSendToUser(
+    username,                    // ← Spring tìm session theo Principal.getName()
+    "/queue/notifications",
+    notificationPayload
+);
+```
+
+Spring nội bộ map destination này thành `/user/{sessionId}/queue/notifications`. Để biết `sessionId` thuộc về `username` nào, **mỗi STOMP session phải có `Principal`** lưu trong session attributes.
+
+**Nếu không set Principal:**
+- `convertAndSendToUser("vanan", ...)` không tìm thấy session nào có `Principal.getName() == "vanan"`.
+- Message bị **drop âm thầm** — không exception, FE không nhận được notification.
+- Log không có gì rõ ràng → debug rất khó.
+
+### 19.2. Bonus security: chống IDOR
+
+IDOR = Insecure Direct Object Reference: user A truy cập tài nguyên của user B bằng cách đoán/sửa ID.
+
+**Nếu dùng `/topic/notifications/{userId}` (sai):**
+```javascript
+// FE user A subscribe topic của user B
+stompClient.subscribe('/topic/notifications/123', ...);   // user 123 là user khác
+```
+→ Spring broker không check authorization theo destination — A nhận được mọi notification của user 123.
+
+**Khi dùng `/user/queue/notifications` (đúng):**
+- Spring tự gắn `sessionId` vào destination dựa trên **Principal đã verify từ JWT**.
+- User A subscribe `/user/queue/notifications` → Spring map thành `/user/{sessionId-A}/queue/notifications`.
+- Backend gọi `convertAndSendToUser("user_B", ...)` → chỉ session của user B nhận → A không nghe được.
+- A không thể "spoof" Principal vì interceptor verify JWT chữ ký từ server secret.
+
+### 19.3. Code thực tế
+
+```
+File: backend/src/main/java/com/cinex/security/StompChannelInterceptor.java
+```
+
+```java
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class StompChannelInterceptor implements ChannelInterceptor {
+
+    private final JwtUtil jwtUtil;
+    private final UserDetailsService userDetailsService;
+
+    @Override
+    public Message<?> preSend(Message<?> message, MessageChannel channel) {
+        StompHeaderAccessor accessor =
+                MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        if (accessor == null) return message;
+
+        // CHỈ parse JWT ở STOMP CONNECT — các message SEND/SUBSCRIBE sau đó
+        // Spring tự attach lại Principal từ session attributes.
+        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+            String authHeader = accessor.getFirstNativeHeader("Authorization");
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                log.debug("STOMP CONNECT without Authorization header");
+                return message;
+            }
+
+            try {
+                String token = authHeader.substring(7);
+                Claims claims = jwtUtil.extractAllClaims(token);
+                String username = claims.getSubject();
+
+                if (username != null) {
+                    // Load UserDetails để có authorities — match với HTTP filter
+                    // (tránh user enabled=false vẫn mở được WebSocket).
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                    UsernamePasswordAuthenticationToken auth =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails, null, userDetails.getAuthorities());
+                    accessor.setUser(auth);   // ← Đây mới là điểm mấu chốt
+                    log.debug("STOMP CONNECT: bound Principal for user '{}'", username);
+                }
+            } catch (Exception e) {
+                log.debug("STOMP CONNECT JWT invalid: {}", e.getMessage());
+                // Không set Principal → convertAndSendToUser không tìm thấy session
+            }
+        }
+
+        return message;
+    }
+}
+```
+
+### 19.4. Đăng ký interceptor — WebSocketConfig
+
+```java
+// File: backend/src/main/java/com/cinex/common/config/WebSocketConfig.java
+
+@Override
+public void configureClientInboundChannel(ChannelRegistration registration) {
+    registration.interceptors(stompChannelInterceptor);
+}
+
+@Override
+public void configureMessageBroker(MessageBrokerRegistry config) {
+    config.enableSimpleBroker("/topic", "/queue");
+    config.setApplicationDestinationPrefixes("/app");
+    // /user = prefix cho per-user destination.
+    // FE subscribe "/user/queue/notifications" và bắt buộc có Principal hợp lệ.
+    config.setUserDestinationPrefix("/user");
+}
+```
+
+### 19.5. Frontend phải gửi gì?
+
+```typescript
+import { Client } from '@stomp/stompjs';
+
+const client = new Client({
+  brokerURL: 'ws://localhost:8088/ws',
+  // BẮT BUỘC: gửi JWT trong CONNECT frame header
+  connectHeaders: {
+    Authorization: `Bearer ${accessToken}`
+  },
+  onConnect: () => {
+    // Subscribe vào kênh per-user — không cần biết userId, Spring tự map
+    client.subscribe('/user/queue/notifications', (message) => {
+      console.log('Got notification:', message.body);
+    });
+  }
+});
+
+client.activate();
+```
+
+> **Lưu ý:** `connectHeaders` ≠ `headers`. `connectHeaders` chỉ gửi ở STOMP CONNECT frame (đúng chỗ interceptor đọc). `headers` mỗi message khác sẽ tốn CPU verify JWT lần nữa — không cần.
+
+### 19.6. Sequence diagram — Connect & Send Notification
+
+```
+┌────┐         ┌─────────────────────┐  ┌────────────┐  ┌──────────┐
+│ FE │         │ StompInterceptor    │  │ Spring     │  │ Service  │
+└─┬──┘         └──────────┬──────────┘  │ Broker     │  └────┬─────┘
+  │                       │              └─────┬──────┘       │
+  │ WS handshake          │                    │              │
+  │──────────────────────►│                    │              │
+  │                       │                    │              │
+  │ STOMP CONNECT         │                    │              │
+  │ Auth: Bearer eyJ...   │                    │              │
+  │──────────────────────►│ extractClaims      │              │
+  │                       │ loadUserDetails    │              │
+  │                       │ setUser(auth)      │              │
+  │                       │───────────────────►│ store        │
+  │                       │                    │ Principal    │
+  │                       │                    │ in session   │
+  │ CONNECTED             │                    │              │
+  │◄──────────────────────│                    │              │
+  │                       │                    │              │
+  │ SUBSCRIBE             │                    │              │
+  │ /user/queue/notifs    │                    │              │
+  │────────────────────────────────────────────►│ map → /user │
+  │                       │                    │ /{sessionId}│
+  │                       │                    │ /queue/...   │
+  │                       │                    │              │
+  │                       │                    │  (backend trigger event)
+  │                       │                    │◄─────────────│
+  │                       │                    │ convertAnd   │
+  │                       │                    │ SendToUser(  │
+  │                       │                    │  "vanan",    │
+  │                       │                    │  "/queue/..")│
+  │                       │                    │ lookup       │
+  │                       │                    │ session of   │
+  │                       │                    │ "vanan"      │
+  │ MESSAGE { payload }   │                    │              │
+  │◄────────────────────────────────────────────│              │
+```
+
+### 19.7. Lifecycle: chỉ parse JWT ở CONNECT, không phải mỗi message
+
+`preSend` được gọi cho MỌI STOMP frame (CONNECT, SUBSCRIBE, SEND, UNSUBSCRIBE, DISCONNECT). Nhưng code chỉ check `StompCommand.CONNECT`:
+
+```java
+if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+    // parse JWT, setUser
+}
+return message;   // các command khác đi tiếp không cần parse
+```
+
+**Vì sao?** Verify HMAC mỗi message tốn CPU. Sau CONNECT, Spring lưu Principal vào WebSocket session attributes — các SUBSCRIBE/SEND sau đó tự lấy Principal từ session, không cần JWT.
+
+### 19.8. Lỗi thường gặp
+
+| Triệu chứng | Nguyên nhân | Fix |
+|---|---|---|
+| `convertAndSendToUser` không tới FE | FE quên gửi `connectHeaders.Authorization` | Thêm header |
+| FE connect OK nhưng nhận `null` Principal | Token expired / sai chữ ký | Check log `JWT invalid` |
+| FE nhận được notification của user khác | Đang dùng `/topic/notifications/{id}` thay vì `/user/queue/...` | Đổi destination |
+| Mở DevTools thấy STOMP frame có header `Authorization` nhưng vẫn không nhận | Server không config `configureClientInboundChannel` | Đăng ký interceptor |
+
+---
+
+## 20. Constant-time signature compare — Chống Timing Attack
+
+### 20.1. Vấn đề: String.equals() rò rỉ thông tin qua thời gian
+
+Method `String.equals()` của Java (và C++ `strcmp`, Python `==`) **return sớm ngay khi gặp byte đầu khác nhau**:
+
+```java
+public boolean equals(Object anObject) {
+    // ... pseudo-code
+    for (int i = 0; i < length; i++) {
+        if (this.charAt(i) != other.charAt(i)) {
+            return false;   // ← THOÁT NGAY khi gặp ký tự khác
+        }
+    }
+    return true;
+}
+```
+
+**Vì sao đây là lỗ hổng?**
+
+```
+String thật:    "aXc12345" (8 ký tự)
+Attacker thử:   "bXXXXXXX" → fail ngay ký tự đầu          → 0.1 ns
+Attacker thử:   "aXXXXXXX" → fail ở ký tự 2               → 0.2 ns  ← chậm hơn!
+Attacker thử:   "aXXXXXXX" → fail ở ký tự 2 ...
+Attacker thử:   "aYXXXXXX" → fail ở ký tự 2               → 0.2 ns
+Attacker thử:   "aXcXXXXX" → fail ở ký tự 3               → 0.3 ns  ← chậm hơn nữa!
+```
+
+Đo response time của hàng nghìn request → attacker xác định **byte đầu = 'a'**, rồi tìm byte 2, byte 3... Brute force giảm từ `256^8 = 18 tỷ tỷ` xuống `256 × 8 = 2048` lần thử.
+
+### 20.2. Ví dụ đời thường
+
+Mở khóa số 4 chữ số. Nếu khóa "khóa thông minh" rung mỗi khi đúng 1 số:
+- Thử `1234` → khóa rung 1 cái (số 1 đúng) → 1 không phải số 1.
+- Thử `1235` → khóa rung 1 cái → giữ vị trí đầu là 1.
+- Tăng dần vị trí 2, 3, 4 → mở khóa trong < 40 lần thử thay vì 10.000.
+
+→ Khóa rung tiết lộ thông tin từng vị trí. `String.equals` cũng "rung" qua thời gian.
+
+### 20.3. Giải pháp: MessageDigest.isEqual — Constant-time
+
+```java
+public static boolean isEqual(byte[] digesta, byte[] digestb) {
+    if (digesta == digestb) return true;
+    if (digesta == null || digestb == null) return false;
+
+    int lenA = digesta.length;
+    int lenB = digestb.length;
+
+    if (lenB == 0) return lenA == 0;
+
+    int result = 0;
+    result |= lenA - lenB;
+
+    // ALWAYS loop hết length B, dù phát hiện sai
+    for (int i = 0; i < lenB; i++) {
+        int indexA = Math.min(i, lenA - 1);
+        result |= digesta[indexA] ^ digestb[i];
+    }
+    return result == 0;
+}
+```
+
+Chìa khóa: dùng **bitwise OR cộng dồn** thay vì return sớm. Vòng lặp luôn duyệt hết → thời gian thực thi không phụ thuộc vị trí byte sai → attacker không đo được gì.
+
+### 20.4. Code thực tế trong CineX — MoMoPaymentProcessor
+
+```
+File: backend/src/main/java/com/cinex/module/payment/processor/MoMoPaymentProcessor.java
+Line: 138-178
+```
+
+```java
+@Override
+public boolean verifyCallback(Map<String, String> params) {
+    try {
+        String signature = params.get("signature");
+        if (signature == null) return false;
+
+        // Tạo lại chữ ký từ params callback
+        String rawSignature = "accessKey=" + accessKey
+                + "&amount=" + params.getOrDefault("amount", "")
+                + "&extraData=" + params.getOrDefault("extraData", "")
+                // ... các field khác theo alphabet order MoMo quy định
+                + "&transId=" + params.getOrDefault("transId", "");
+
+        String expectedSignature = hmacSHA256(secretKey, rawSignature);
+
+        // Constant-time compare chống timing attack:
+        // String.equals() return sớm khi gặp ký tự khác → attacker đo độ trễ
+        // → đoán dần từng byte signature. MessageDigest.isEqual() so sánh hết byte.
+        if (!MessageDigest.isEqual(
+                expectedSignature.getBytes(StandardCharsets.UTF_8),
+                signature.getBytes(StandardCharsets.UTF_8))) {
+            log.warn("MoMo callback invalid signature");
+            return false;
+        }
+
+        String resultCode = params.get("resultCode");
+        return "0".equals(resultCode);
+
+    } catch (Exception e) {
+        log.error("MoMo verify callback error", e);
+        return false;
+    }
+}
+```
+
+### 20.5. Khi nào BẮT BUỘC dùng constant-time?
+
+| Comparing | Dùng `.equals()` | Dùng `MessageDigest.isEqual` |
+|---|---|---|
+| Username, email, status enum | ✅ OK (không bí mật) | ❌ Thừa |
+| Password (raw) | ❌ Không bao giờ — phải hash | — |
+| BCrypt hash (`passwordEncoder.matches`) | — | Built-in đã constant-time |
+| HMAC signature (MoMo, VnPay, webhook) | ❌ **LỖ HỔNG** | ✅ Bắt buộc |
+| JWT chữ ký | — | JJWT library đã tự dùng |
+| API key, CSRF token | ❌ Lỗ hổng | ✅ Bắt buộc |
+| Reset password token | ❌ Lỗ hổng | ✅ Bắt buộc (chưa có ở CineX) |
+
+### 20.6. Tại sao timing attack hiếm khi thực thi qua Internet?
+
+Đo timing qua Internet bị nhiễu: latency mạng (50-200ms) >> chênh lệch CPU (vài µs). Tuy nhiên:
+
+- **LAN attack**: attacker cùng VPC với server → latency 1ms, chênh CPU vẫn đo được.
+- **Statistical attack**: gửi 100.000 request, trung bình thống kê khử nhiễu mạng.
+- **Browser cache + side-channel**: timing.now() trong JS có thể đo qua XHR.
+
+→ Không phải nguy cơ "lý thuyết" — đã có CVE thực tế (ví dụ Django timing attack 2013, Rails 2014). Quy tắc an toàn: **mọi so sánh secret → constant-time**, không cần xét scenario.
+
+### 20.7. Câu hỏi tự kiểm tra
+
+1. Tại sao `String.equals()` thoát sớm khi gặp ký tự khác — đó là tối ưu performance hay lỗ hổng?
+2. Nếu MoMo gửi signature 64 ký tự nhưng `expectedSignature` chỉ 32 ký tự, `MessageDigest.isEqual` có an toàn không? (Đáp: có — vẫn loop hết length B, không return sớm.)
+3. Khi BCrypt verify password (`passwordEncoder.matches`), có cần lo về timing attack không? (Đáp: không — BCrypt nội bộ đã constant-time.)

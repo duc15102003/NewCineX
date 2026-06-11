@@ -3,12 +3,13 @@ package com.cinex.module.seat.repository;
 import com.cinex.common.entity.StorageState;
 import com.cinex.module.seat.entity.Seat;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 
-public interface SeatRepository extends JpaRepository<Seat, Long> {
+public interface SeatRepository extends JpaRepository<Seat, Long>, JpaSpecificationExecutor<Seat> {
 
     // Chỉ lấy ghế chưa xóa (ACTIVE), sắp xếp theo hàng + cột
     List<Seat> findByRoomIdAndStorageStateOrderByRowLabelAscColNumberAsc(Long roomId, StorageState storageState);

@@ -16,6 +16,9 @@ public class PaymentResponse {
     private String storageState;
     private Long bookingId;
     private String bookingCode;
+    /** Chi nhánh — qua booking.showtime.room.theater. Grouped view + audit. */
+    private Long theaterId;
+    private String theaterName;
     private BigDecimal amount;
     private PaymentMethod method;
     private String transactionCode;

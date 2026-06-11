@@ -15,6 +15,12 @@ export interface AuthResponse {
   refreshToken: string
   tokenType: string
   expiresIn: number
+  // RBAC metadata — FE dùng quyết định UX (theater selector, form auto-set)
+  username?: string
+  role?: string
+  theaterId?: number | null
+  theaterName?: string | null
+  theaterCity?: string | null
 }
 
 export interface ApiResponse<T> {

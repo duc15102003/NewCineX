@@ -1,5 +1,7 @@
 package com.cinex.module.config.service;
 
+import com.cinex.common.exception.BusinessException;
+import com.cinex.common.exception.ErrorCode;
 import com.cinex.module.config.entity.SystemConfig;
 import com.cinex.module.config.repository.SystemConfigRepository;
 import jakarta.annotation.PostConstruct;
@@ -67,16 +69,30 @@ public class SystemConfigService {
     }
 
     /**
-     * Admin cập nhật config -> lưu DB + refresh cache.
+     * Liệt kê toàn bộ config — admin xem ở trang Quản lý cấu hình.
+     */
+    @Transactional(readOnly = true)
+    public List<SystemConfig> listAll() {
+        return systemConfigRepository.findAll();
+    }
+
+    /**
+     * Admin cập nhật config — lưu DB + refresh cache. Throw nếu key không tồn tại.
+     *
+     * <p><b>Lưu ý policy:</b> KHÔNG auto-create key mới (chính sách trước đây tạo ngầm
+     * nếu key chưa có). Mỗi config phải được khai báo trước qua Liquibase seed —
+     * tránh admin gõ sai key tạo ra entry ma không được code đọc.
      */
     @Transactional
-    public void updateConfig(String key, String value) {
+    public SystemConfig updateConfig(String key, String value) {
         SystemConfig config = systemConfigRepository.findByConfigKey(key)
-                .orElseGet(() -> SystemConfig.builder().configKey(key).build());
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.NOT_FOUND, "Không tìm thấy cấu hình: " + key));
         config.setConfigValue(value);
         systemConfigRepository.save(config);
         cache.put(key, value);
         log.info("Config updated: {} = {}", key, value);
+        return config;
     }
 
     /**

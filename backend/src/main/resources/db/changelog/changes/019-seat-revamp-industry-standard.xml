@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Option C revamp: nâng seat system lên chuẩn chuỗi rạp lớn
+        (CGV / Lotte / BHD / Beta).
+
+        1. SeatType enum: thêm SWEETBOX, DELUXE, HANDICAP (giữ STANDARD/VIP/COUPLE)
+        2. SeatStatus enum: thêm BLOCKED (cố định, khác BROKEN repairable)
+        3. seats: thêm is_aisle BIT cho lối đi giữa block ghế
+        4. showtimes: thêm sweetbox_price + deluxe_price (nullable, fallback)
+        5. Cập nhật CHECK constraints
+    -->
+
+    <!-- ============ seats table ============ -->
+
+    <changeSet id="019-add-is-aisle-column" author="cinex">
+        <addColumn tableName="seats">
+            <column name="is_aisle" type="BIT" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="019-drop-old-seat-type-check" author="cinex">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_seats_seat_type'
+            </sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE seats DROP CONSTRAINT CK_seats_seat_type;</sql>
+    </changeSet>
+
+    <changeSet id="019-add-new-seat-type-check" author="cinex">
+        <sql>
+            ALTER TABLE seats ADD CONSTRAINT CK_seats_seat_type
+            CHECK (seat_type IN ('STANDARD','VIP','COUPLE','SWEETBOX','DELUXE','HANDICAP'));
+        </sql>
+    </changeSet>
+
+    <changeSet id="019-drop-old-seat-status-check" author="cinex">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_seats_status'
+            </sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE seats DROP CONSTRAINT CK_seats_status;</sql>
+    </changeSet>
+
+    <changeSet id="019-add-new-seat-status-check" author="cinex">
+        <sql>
+            ALTER TABLE seats ADD CONSTRAINT CK_seats_status
+            CHECK (status IN ('AVAILABLE','BROKEN','BLOCKED'));
+        </sql>
+    </changeSet>
+
+    <!-- ============ showtimes table ============ -->
+
+    <changeSet id="019-add-sweetbox-deluxe-prices" author="cinex">
+        <addColumn tableName="showtimes">
+            <column name="sweetbox_price" type="DECIMAL(12,0)"/>
+            <column name="deluxe_price" type="DECIMAL(12,0)"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

@@ -2,6 +2,7 @@ package com.cinex.module.snack.controller;
 
 import com.cinex.common.response.ApiResponse;
 import com.cinex.common.response.PageResponse;
+import com.cinex.module.snack.dto.SnackOrderFilter;
 import com.cinex.module.snack.dto.SnackOrderRequest;
 import com.cinex.module.snack.dto.SnackOrderResponse;
 import com.cinex.module.snack.service.SnackOrderService;
@@ -39,9 +40,10 @@ public class SnackOrderController {
      * Danh sách đơn hàng — admin xem lịch sử bán hàng tại quầy.
      */
     @GetMapping
-    @Operation(summary = "(Admin) List all POS snack orders")
+    @Operation(summary = "(Admin) List all POS snack orders with filter")
     public ApiResponse<PageResponse<SnackOrderResponse>> listOrders(
+            SnackOrderFilter filter,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(PageResponse.from(snackOrderService.listOrders(pageable)));
+        return ApiResponse.ok(PageResponse.from(snackOrderService.listOrders(filter, pageable)));
     }
 }

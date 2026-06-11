@@ -1,19 +1,63 @@
-# Backend
+# ===== Java / Gradle =====
 backend/build/
 backend/.gradle/
+backend/bin/
+backend/out/
 *.class
 *.jar
+*.war
+*.ear
 
-# Frontend
+# Gradle wrapper (giữ lại gradlew + gradle/wrapper, bỏ cache)
+backend/.gradle/
+
+# ===== Node / Vite =====
 frontend/node_modules/
 frontend/dist/
+frontend/.cache/
+frontend/.parcel-cache/
 
-# IDE
+# ===== IDE =====
 .idea/
-.vscode/
 *.iml
-.DS_Store
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+nbproject/
+*.sublime-*
 
-# Env
+# ===== OS =====
+.DS_Store
+Thumbs.db
+Desktop.ini
+._*
+
+# ===== Env / Secrets =====
 .env
-.env.local
+.env.*
+!.env.development
+*.env.local
+*.env.production.local
+
+# Spring profile local — chứa real secrets, KHÔNG commit (Cloudinary keys, ...)
+backend/src/main/resources/application-local.yml
+
+# ===== Docker =====
+docker-compose.override.yml
+
+# ===== Logs =====
+*.log
+logs/
+
+# ===== Temp =====
+tmp/
+*.tmp
+*.bak
+*.swp
+
+# Task management (private, không push)
+tasks/

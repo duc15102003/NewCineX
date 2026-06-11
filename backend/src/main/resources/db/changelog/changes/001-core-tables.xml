@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Core tables: theaters, users, auth tokens, system config, id tracker, audit log, shedlock.
+        Bảng theaters đứng đầu vì users.theater_id và 8 bảng khác FK tới.
+    -->
+
+    <!-- =================== theaters =================== -->
+    <changeSet id="001-create-theaters" author="cinex">
+        <createTable tableName="theaters">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code" type="NVARCHAR(30)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="name" type="NVARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="address" type="NVARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="city" type="NVARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="hotline" type="NVARCHAR(30)"/>
+            <column name="email" type="NVARCHAR(100)"/>
+            <column name="latitude" type="DECIMAL(9,6)"/>
+            <column name="longitude" type="DECIMAL(9,6)"/>
+            <column name="status" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="theaters" indexName="idx_theaters_city">
+            <column name="city"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- =================== users =================== -->
+    <changeSet id="001-create-users" author="cinex">
+        <createTable tableName="users">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="username" type="NVARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="email" type="NVARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="password" type="NVARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="full_name" type="NVARCHAR(100)"/>
+            <column name="phone" type="NVARCHAR(20)"/>
+            <column name="avatar_url" type="NVARCHAR(500)"/>
+            <column name="date_of_birth" type="DATE"/>
+            <column name="role" type="NVARCHAR(20)" defaultValue="USER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="theater_id" type="BIGINT"/>
+            <column name="enabled" type="BIT" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="email_verified" type="BIT" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="loyalty_points" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lifetime_points" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tier" type="NVARCHAR(20)" defaultValue="STANDARD">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="users" baseColumnNames="theater_id"
+                                 referencedTableName="theaters" referencedColumnNames="id"
+                                 constraintName="fk_users_theater"/>
+        <createIndex tableName="users" indexName="idx_users_theater_id">
+            <column name="theater_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- =================== refresh_tokens =================== -->
+    <changeSet id="001-create-refresh-tokens" author="cinex">
+        <createTable tableName="refresh_tokens">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="token" type="NVARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="expiry_date" type="DATETIME2">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revoked" type="BIT" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="refresh_tokens" baseColumnNames="user_id"
+                                 referencedTableName="users" referencedColumnNames="id"
+                                 constraintName="fk_refresh_tokens_user"/>
+        <createIndex tableName="refresh_tokens" indexName="idx_refresh_tokens_user_id">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- =================== password_reset_tokens =================== -->
+    <changeSet id="001-create-password-reset-tokens" author="cinex">
+        <createTable tableName="password_reset_tokens">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="token" type="NVARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="expiry_date" type="DATETIME2">
+                <constraints nullable="false"/>
+            </column>
+            <column name="used" type="BIT" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="password_reset_tokens" baseColumnNames="user_id"
+                                 referencedTableName="users" referencedColumnNames="id"
+                                 constraintName="fk_password_reset_tokens_user"/>
+    </changeSet>
+
+    <!-- =================== email_verification_tokens =================== -->
+    <changeSet id="001-create-email-verification-tokens" author="cinex">
+        <createTable tableName="email_verification_tokens">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="token" type="NVARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="expiry_date" type="DATETIME2">
+                <constraints nullable="false"/>
+            </column>
+            <column name="used" type="BIT" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="email_verification_tokens" baseColumnNames="user_id"
+                                 referencedTableName="users" referencedColumnNames="id"
+                                 constraintName="fk_email_verification_tokens_user"/>
+    </changeSet>
+
+    <!-- =================== system_config =================== -->
+    <changeSet id="001-create-system-config" author="cinex">
+        <createTable tableName="system_config">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="config_key" type="NVARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="config_value" type="NVARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="NVARCHAR(255)"/>
+        </createTable>
+    </changeSet>
+
+    <!-- =================== id_tracker =================== -->
+    <changeSet id="001-create-id-tracker" author="cinex">
+        <createTable tableName="id_tracker">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="entity_type" type="NVARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="prefix" type="NVARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="current_value" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="NVARCHAR(100)"/>
+        </createTable>
+    </changeSet>
+
+    <!-- =================== audit_log (V1 — legacy field-level diff, vẫn được AuditLogService dùng) =================== -->
+    <changeSet id="001-create-audit-log-v1" author="cinex">
+        <createTable tableName="audit_log">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="table_name" type="NVARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="record_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action" type="NVARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="field_name" type="NVARCHAR(50)"/>
+            <column name="old_value" type="NVARCHAR(500)"/>
+            <column name="new_value" type="NVARCHAR(500)"/>
+            <column name="changed_by" type="NVARCHAR(50)"/>
+            <column name="changed_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="audit_log" indexName="idx_audit_log_table_record">
+            <column name="table_name"/>
+            <column name="record_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- =================== audit_logs (V2 — canonical) =================== -->
+    <changeSet id="001-create-audit-logs" author="cinex">
+        <createTable tableName="audit_logs">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT"/>
+            <column name="username" type="NVARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action" type="NVARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_type" type="NVARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_id" type="BIGINT"/>
+            <column name="detail" type="NVARCHAR(2000)"/>
+            <column name="ip_address" type="NVARCHAR(45)"/>
+            <column name="user_agent" type="NVARCHAR(255)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="audit_logs" indexName="idx_audit_logs_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        <createIndex tableName="audit_logs" indexName="idx_audit_logs_action">
+            <column name="action"/>
+        </createIndex>
+        <createIndex tableName="audit_logs" indexName="idx_audit_logs_entity_type">
+            <column name="entity_type"/>
+        </createIndex>
+        <createIndex tableName="audit_logs" indexName="idx_audit_logs_created_at">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- =================== shedlock (cho @SchedulerLock multi-instance) =================== -->
+    <changeSet id="001-create-shedlock" author="cinex">
+        <createTable tableName="shedlock">
+            <column name="name" type="NVARCHAR(64)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="lock_until" type="DATETIME2(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="locked_at" type="DATETIME2(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="locked_by" type="NVARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>

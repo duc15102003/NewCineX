@@ -2,17 +2,24 @@ import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
+/**
+ * Badge — Phase 7a low-opacity pattern: bg-{color}/10 + text-{color} + border-{color}/30.
+ *
+ * Đồng nhất với status badges trong table khắp app (movie status, booking status, ...).
+ * Border radius `rounded-md` (status tag) khác từ legacy `rounded-full` (pill-style).
+ */
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors',
+  'inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium transition-colors',
   {
     variants: {
       variant: {
-        default: 'border-transparent bg-blue-100 text-blue-800',
-        secondary: 'border-transparent bg-gray-100 text-gray-800',
-        destructive: 'border-transparent bg-red-100 text-red-800',
-        success: 'border-transparent bg-green-100 text-green-800',
-        warning: 'border-transparent bg-yellow-100 text-yellow-800',
-        outline: 'border-gray-300 text-gray-700',
+        default: 'bg-[#ffc107]/10 text-[#ffc107] border-[#ffc107]/30',
+        secondary: 'bg-white/5 text-gray-300 border-white/10',
+        destructive: 'bg-red-500/10 text-red-400 border-red-500/30',
+        success: 'bg-green-500/10 text-green-400 border-green-500/30',
+        warning: 'bg-orange-500/10 text-orange-400 border-orange-500/30',
+        info: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
+        outline: 'bg-transparent text-gray-300 border-white/10',
       },
     },
     defaultVariants: {

@@ -13,6 +13,12 @@ public class VoucherResponse {
 
     private Long id;
     private String storageState;
+
+    /** Chi nhánh áp dụng. NULL = voucher toàn hệ thống. */
+    private Long theaterId;
+    private String theaterName;
+    private String theaterCity;
+
     private String code;
     private String description;
     private DiscountType discountType;

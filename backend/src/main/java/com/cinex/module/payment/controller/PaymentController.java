@@ -1,8 +1,11 @@
 package com.cinex.module.payment.controller;
 
+import com.cinex.common.exception.BusinessException;
 import com.cinex.common.response.ApiResponse;
+import com.cinex.common.response.PageResponse;
 import com.cinex.common.service.SecurityService;
 import com.cinex.module.payment.dto.CreatePaymentRequest;
+import com.cinex.module.payment.dto.PaymentFilter;
 import com.cinex.module.payment.dto.PaymentResponse;
 import com.cinex.module.payment.dto.TicketResponse;
 import com.cinex.module.payment.service.PaymentService;
@@ -11,6 +14,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,6 +32,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Payment", description = "Payment processing")
 public class PaymentController {
 
@@ -33,6 +42,22 @@ public class PaymentController {
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend-url}")
     private String frontendUrl;
+
+    /**
+     * (Admin) List tất cả payment với filter động.
+     *
+     * <p>Hỗ trợ filter: keyword (transactionCode/bookingCode), status, method,
+     * paidFrom/paidTo, createdFrom/createdTo, minAmount/maxAmount, userId, bookingId.
+     */
+    @GetMapping("/payments")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) List payments với filter")
+    public ApiResponse<PageResponse<PaymentResponse>> listPayments(
+            PaymentFilter filter,
+            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        return ApiResponse.ok(paymentService.listPayments(filter, pageable));
+    }
 
     @PostMapping("/payments/create")
     @Operation(summary = "Create payment for a booking")
@@ -46,7 +71,7 @@ public class PaymentController {
      * Cổng redirect user về URL này với params (transactionCode, status, ...).
      */
     @GetMapping("/payments/callback")
-    @Operation(summary = "Payment callback (from payment gateway) — redirect to FE result page")
+    @Operation(summary = "Payment callback (user redirect) — redirect to FE result page")
     public void paymentCallback(@RequestParam Map<String, String> params,
                                  jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         PaymentResponse result = paymentService.handleCallback(params);
@@ -54,6 +79,47 @@ public class PaymentController {
         String feUrl = frontendUrl + "/payment/result?bookingId=" + result.getBookingId()
                 + "&transactionCode=" + result.getTransactionCode();
         response.sendRedirect(feUrl);
+    }
+
+    /**
+     * [B2] MoMo IPN (Instant Payment Notification) — server-to-server POST.
+     * MoMo gửi JSON body trực tiếp tới endpoint này khi giao dịch xong (kể cả khi user
+     * không quay lại trang). Server-to-server nên đáng tin cậy hơn redirect URL.
+     *
+     * MoMo expect response JSON {"partnerCode":"...","resultCode":0} để xác nhận đã xử lý.
+     * Nếu trả khác → MoMo retry IPN nhiều lần → handleCallback PHẢI idempotent (đã fix ở B1).
+     *
+     * Docs: https://developers.momo.vn/v3/vi/docs/payment/api/wallet/onepay#ipn-url
+     */
+    @PostMapping("/payments/ipn")
+    @Operation(summary = "MoMo IPN (server-to-server) — instant payment notification")
+    public Map<String, Object> paymentIpn(@RequestBody Map<String, Object> body) {
+        // MoMo gửi JSON với các field giống callback nhưng value có thể là số → ép sang String
+        Map<String, String> params = new java.util.HashMap<>();
+        body.forEach((k, v) -> params.put(k, v == null ? "" : String.valueOf(v)));
+
+        try {
+            paymentService.handleCallback(params);
+        } catch (BusinessException e) {
+            // Lỗi nghiệp vụ (chữ ký sai, payment không tìm thấy, đã xử lý rồi) — log warn,
+            // vẫn trả response 200 để MoMo không retry vô tận (handleCallback đã idempotent).
+            log.warn("Payment IPN business error: orderId={}, error={}",
+                    params.getOrDefault("orderId", "?"), e.getMessage());
+        } catch (RuntimeException e) {
+            // Lỗi không lường trước — log error với stack trace để admin investigate.
+            // Vẫn trả response 200 để MoMo không spam retry; admin tự fix qua dashboard.
+            log.error("Payment IPN unexpected error: orderId={}",
+                    params.getOrDefault("orderId", "?"), e);
+        }
+
+        Map<String, Object> resp = new java.util.LinkedHashMap<>();
+        resp.put("partnerCode", params.getOrDefault("partnerCode", ""));
+        resp.put("requestId", params.getOrDefault("requestId", ""));
+        resp.put("orderId", params.getOrDefault("orderId", ""));
+        resp.put("resultCode", 0);
+        resp.put("message", "Confirmed");
+        resp.put("responseTime", System.currentTimeMillis());
+        return resp;
     }
 
     @GetMapping("/payments/{bookingId}")

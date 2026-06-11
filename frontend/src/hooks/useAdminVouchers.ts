@@ -8,6 +8,10 @@ export interface AdminVoucher {
   id: number
   code: string
   description: string | null
+  /** Chi nhánh áp dụng. NULL = voucher toàn hệ thống. */
+  theaterId: number | null
+  theaterName: string | null
+  theaterCity: string | null
   discountType: string
   discountValue: number
   minOrderAmount: number
@@ -19,11 +23,58 @@ export interface AdminVoucher {
   storageState: string
 }
 
-export function useAdminVouchers(params: Record<string, any> = {}) {
+/**
+ * Filter khớp với VoucherFilter ở BE — bao gồm currentlyValid, hasUsageLeft,
+ * range discountValue, range startDate/endDate.
+ *
+ * includeDeleted mặc định = true (admin xem tất cả, cả ARCHIVED).
+ */
+export interface AdminVoucherFilter {
+  /** Chi nhánh — null = SUPER_ADMIN xem tất cả; có giá trị = scope theater + global. */
+  theaterId?: number
+  /** True = chỉ xem voucher global (theater_id IS NULL). */
+  globalOnly?: boolean
+  keyword?: string
+  discountType?: string
+  active?: boolean
+  currentlyValid?: boolean
+  expired?: boolean
+  hasUsageLeft?: boolean
+  minDiscount?: number | string
+  maxDiscount?: number | string
+  startDateFrom?: string
+  startDateTo?: string
+  endDateFrom?: string
+  endDateTo?: string
+  includeDeleted?: boolean
+  page?: number
+  size?: number
+}
+
+/**
+ * Pad ":00" cho datetime-local (yyyy-MM-ddTHH:mm) → ISO yyyy-MM-ddTHH:mm:ss.
+ * Bỏ field rỗng/undefined.
+ */
+function buildVoucherParams(filter: AdminVoucherFilter): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {}
+  const dateKeys = new Set(['startDateFrom', 'startDateTo', 'endDateFrom', 'endDateTo'])
+  for (const [k, v] of Object.entries(filter)) {
+    if (v === undefined || v === null || v === '') continue
+    if (dateKeys.has(k) && typeof v === 'string') {
+      out[k] = v.length === 16 ? `${v}:00` : v
+    } else {
+      out[k] = v as string | number | boolean
+    }
+  }
+  return out
+}
+
+export function useAdminVouchers(filter: AdminVoucherFilter = {}) {
+  const params = buildVoucherParams({ includeDeleted: true, ...filter })
   return useQuery({
     queryKey: ['admin', 'vouchers', params],
     queryFn: async () => {
-      const res = await api.get<ApiResponse<PageResponse<AdminVoucher>>>('/api/vouchers', { params: { ...params, includeDeleted: true } })
+      const res = await api.get<ApiResponse<PageResponse<AdminVoucher>>>('/api/vouchers', { params })
       return res.data.data
     },
   })

@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { Menu, X, User, LogOut, Ticket, Heart, LayoutDashboard, Film } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useLogout } from '@/hooks/useAuth'
-// import NotificationBell from '@/components/common/NotificationBell' // Thông báo — Đạt
+import NotificationBell from '@/components/common/NotificationBell'
+import TheaterSelector from '@/components/theater/TheaterSelector'
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -25,27 +26,30 @@ export default function Header() {
   const avatarLetter = user?.username?.charAt(0).toUpperCase() ?? 'U'
 
   return (
-    <header className="sticky top-0 z-50 bg-[#051424]/95 backdrop-blur border-b border-white/5">
+    <header className="sticky top-0 z-50 bg-[#181309]/95 backdrop-blur border-b border-[#3f382d]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <Film size={24} className="text-[#eab308]" />
-            <span className="text-2xl font-bold text-[#eab308]">CineX</span>
+            <Film size={24} className="text-[#ffc107]" />
+            <span className="text-2xl font-bold text-[#ffc107]">CineX</span>
           </Link>
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-6 text-sm">
-            {/* <Link to="/" className="text-gray-300 hover:text-[#eab308] transition-colors">
+            <Link to="/" className="text-gray-300 hover:text-[#ffc107] transition-colors">
               Trang chủ
-            </Link> */}{/* Trang chủ user */}
-            {/* <Link to="/movies" className="text-gray-300 hover:text-[#eab308] transition-colors">
+            </Link>
+            <Link to="/movies" className="text-gray-300 hover:text-[#ffc107] transition-colors">
               Phim
-            </Link> */}{/* Danh sách phim user — Đạt */}
+            </Link>
+
+            {/* Theater selector — badge "📍 CineX Hà Nội" luôn hiện, click để đổi chi nhánh */}
+            <TheaterSelector />
 
             {isLoggedIn() ? (
               <>
-              {/* <NotificationBell /> */}{/* Thông báo — Đạt */}
+              <NotificationBell />
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -54,7 +58,7 @@ export default function Header() {
                   {user?.avatarUrl ? (
                     <img src={user.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#eab308] to-[#ca8a04] flex items-center justify-center text-black text-xs font-bold">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ffc107] to-[#e6ac06] flex items-center justify-center text-black text-xs font-bold">
                       {avatarLetter}
                     </div>
                   )}
@@ -62,9 +66,9 @@ export default function Header() {
                 </button>
 
                 {dropdownOpen && (
-                  <div className="absolute right-0 mt-3 w-52 bg-[#0d1c2d] border border-white/10 rounded-xl shadow-2xl shadow-black/40 py-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="absolute right-0 mt-3 w-52 bg-[#201b11] border border-[#3f382d] rounded-2xl shadow-2xl shadow-black/40 py-2 animate-in fade-in slide-in-from-top-2 duration-150">
                     {/* User info */}
-                    <div className="px-4 py-2.5 border-b border-white/5">
+                    <div className="px-4 py-2.5 border-b border-[#3f382d]">
                       <p className="text-sm font-medium text-white">{user?.username}</p>
                       <p className="text-xs text-gray-500 mt-0.5">Thành viên CineX</p>
                     </div>
@@ -77,28 +81,28 @@ export default function Header() {
                       >
                         <User size={16} className="text-gray-400" /> Hồ sơ
                       </Link>
-                      {/* <Link
+                      <Link
                         to="/my-tickets"
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                         onClick={() => setDropdownOpen(false)}
                       >
                         <Ticket size={16} className="text-gray-400" /> Vé của tôi
-                      </Link> */}{/* Vé của tôi — Long */}
-                      {/* <Link
+                      </Link>
+                      <Link
                         to="/favorites"
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                         onClick={() => setDropdownOpen(false)}
                       >
                         <Heart size={16} className="text-gray-400" /> Phim yêu thích
-                      </Link> */}{/* Yêu thích — Đạt */}
+                      </Link>
                     </div>
 
                     {isAdmin() && (
                       <>
-                        <hr className="border-white/5 my-1" />
+                        <hr className="border-[#3f382d] my-1" />
                         <Link
                           to="/admin"
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-[#eab308] hover:bg-[#eab308]/5 transition-colors"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-[#ffc107] hover:bg-[#ffc107]/5 transition-colors"
                           onClick={() => setDropdownOpen(false)}
                         >
                           <LayoutDashboard size={16} /> Quản trị
@@ -106,7 +110,7 @@ export default function Header() {
                       </>
                     )}
 
-                    <hr className="border-white/5 my-1" />
+                    <hr className="border-[#3f382d] my-1" />
                     <button
                       onClick={() => { setDropdownOpen(false); logout() }}
                       className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-400 hover:bg-red-400/5 transition-colors"
@@ -121,13 +125,13 @@ export default function Header() {
               <div className="flex gap-3">
                 <Link
                   to="/login"
-                  className="border border-[#eab308] text-[#eab308] hover:bg-[#eab308]/10 font-medium px-4 py-1.5 rounded-lg transition-colors"
+                  className="border border-[#ffc107] text-[#ffc107] hover:bg-[#ffc107]/10 font-medium px-4 py-1.5 rounded-lg transition-colors"
                 >
                   Đăng nhập
                 </Link>
                 <Link
                   to="/register"
-                  className="bg-[#eab308] hover:bg-[#ca8a04] text-black font-medium px-4 py-1.5 rounded-lg transition-colors"
+                  className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold px-4 py-1.5 rounded-lg transition-colors"
                 >
                   Đăng ký
                 </Link>
@@ -147,22 +151,22 @@ export default function Header() {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className="md:hidden bg-[#0a1929] border-t border-white/5 px-4 py-4 space-y-1">
-          {/* <Link to="/" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#eab308]" onClick={() => setMenuOpen(false)}>
+        <div className="md:hidden bg-[#201b11] border-t border-[#3f382d] px-4 py-4 space-y-1">
+          <Link to="/" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#ffc107]" onClick={() => setMenuOpen(false)}>
             Trang chủ
-          </Link> */}{/* Trang chủ user */}
-          {/* <Link to="/movies" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#eab308]" onClick={() => setMenuOpen(false)}>
+          </Link>
+          <Link to="/movies" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#ffc107]" onClick={() => setMenuOpen(false)}>
             Phim
-          </Link> */}{/* Danh sách phim user — Đạt */}
+          </Link>
 
           {isLoggedIn() ? (
             <>
-              <hr className="border-white/5 my-2" />
+              <hr className="border-[#3f382d] my-2" />
               <div className="flex items-center gap-3 px-3 py-2">
                 {user?.avatarUrl ? (
                   <img src={user.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#eab308] to-[#ca8a04] flex items-center justify-center text-black text-xs font-bold">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ffc107] to-[#e6ac06] flex items-center justify-center text-black text-xs font-bold">
                     {avatarLetter}
                   </div>
                 )}
@@ -174,30 +178,30 @@ export default function Header() {
               <Link to="/profile" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
                 <User size={16} className="text-gray-400" /> Hồ sơ
               </Link>
-              {/* <Link to="/my-tickets" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
+              <Link to="/my-tickets" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
                 <Ticket size={16} className="text-gray-400" /> Vé của tôi
-              </Link> */}{/* Vé của tôi — Long */}
-              {/* <Link to="/favorites" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
+              </Link>
+              <Link to="/favorites" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
                 <Heart size={16} className="text-gray-400" /> Phim yêu thích
-              </Link> */}{/* Yêu thích — Đạt */}
+              </Link>
               {isAdmin() && (
-                <Link to="/admin" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#eab308] hover:bg-[#eab308]/5" onClick={() => setMenuOpen(false)}>
+                <Link to="/admin" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#ffc107] hover:bg-[#ffc107]/5" onClick={() => setMenuOpen(false)}>
                   <LayoutDashboard size={16} /> Quản trị
                 </Link>
               )}
-              <hr className="border-white/5 my-2" />
+              <hr className="border-[#3f382d] my-2" />
               <button onClick={() => { setMenuOpen(false); logout() }} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-400/5 w-full">
                 <LogOut size={16} /> Đăng xuất
               </button>
             </>
           ) : (
             <>
-              <hr className="border-white/5 my-2" />
+              <hr className="border-[#3f382d] my-2" />
               <div className="flex gap-3 px-3">
-                <Link to="/login" className="flex-1 text-center border border-[#eab308] text-[#eab308] hover:bg-[#eab308]/10 font-medium py-2 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>
+                <Link to="/login" className="flex-1 text-center border border-[#ffc107] text-[#ffc107] hover:bg-[#ffc107]/10 font-medium py-2 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>
                   Đăng nhập
                 </Link>
-                <Link to="/register" className="flex-1 text-center bg-[#eab308] hover:bg-[#ca8a04] text-black font-medium py-2 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>
+                <Link to="/register" className="flex-1 text-center bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold py-2 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>
                   Đăng ký
                 </Link>
               </div>

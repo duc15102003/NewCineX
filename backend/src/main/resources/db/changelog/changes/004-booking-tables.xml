@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Booking flow: bookings, booking_seats, payments -->
+
+    <changeSet id="004-create-bookings" author="cinex">
+        <createTable tableName="bookings">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT"/>
+            <column name="showtime_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="theater_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_amount" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="NVARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="booking_code" type="NVARCHAR(30)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="qr_token" type="NVARCHAR(32)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="confirmed_at" type="DATETIME2"/>
+            <column name="cancelled_at" type="DATETIME2"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="bookings" baseColumnNames="user_id"
+                                 referencedTableName="users" referencedColumnNames="id"
+                                 constraintName="fk_bookings_user"/>
+        <addForeignKeyConstraint baseTableName="bookings" baseColumnNames="showtime_id"
+                                 referencedTableName="showtimes" referencedColumnNames="id"
+                                 constraintName="fk_bookings_showtime"/>
+        <addForeignKeyConstraint baseTableName="bookings" baseColumnNames="theater_id"
+                                 referencedTableName="theaters" referencedColumnNames="id"
+                                 constraintName="fk_bookings_theater"/>
+        <createIndex tableName="bookings" indexName="idx_bookings_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        <createIndex tableName="bookings" indexName="idx_bookings_showtime_id">
+            <column name="showtime_id"/>
+        </createIndex>
+        <createIndex tableName="bookings" indexName="idx_bookings_theater_id">
+            <column name="theater_id"/>
+        </createIndex>
+        <createIndex tableName="bookings" indexName="idx_bookings_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="004-create-booking-seats" author="cinex">
+        <createTable tableName="booking_seats">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="booking_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="seat_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="showtime_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="NVARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="booking_seats" baseColumnNames="booking_id"
+                                 referencedTableName="bookings" referencedColumnNames="id"
+                                 constraintName="fk_booking_seats_booking"/>
+        <addForeignKeyConstraint baseTableName="booking_seats" baseColumnNames="seat_id"
+                                 referencedTableName="seats" referencedColumnNames="id"
+                                 constraintName="fk_booking_seats_seat"/>
+        <createIndex tableName="booking_seats" indexName="idx_booking_seats_booking_id">
+            <column name="booking_id"/>
+        </createIndex>
+        <createIndex tableName="booking_seats" indexName="idx_booking_seats_showtime_seat">
+            <column name="showtime_id"/>
+            <column name="seat_id"/>
+        </createIndex>
+        <!-- Filtered unique: 1 seat trong 1 showtime chỉ có 1 booking HELD/BOOKED active.
+             SQL Server cú pháp riêng — Liquibase support qua raw SQL. -->
+        <sql>
+            CREATE UNIQUE INDEX uq_booking_seats_active
+            ON booking_seats(showtime_id, seat_id)
+            WHERE status IN ('HELD', 'BOOKED');
+        </sql>
+    </changeSet>
+
+    <changeSet id="004-create-payments" author="cinex">
+        <createTable tableName="payments">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="booking_id" type="BIGINT">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="amount" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="method" type="NVARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="transaction_code" type="NVARCHAR(100)"/>
+            <column name="gateway_transaction_id" type="NVARCHAR(100)"/>
+            <column name="status" type="NVARCHAR(20)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="paid_at" type="DATETIME2"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="payments" baseColumnNames="booking_id"
+                                 referencedTableName="bookings" referencedColumnNames="id"
+                                 constraintName="fk_payments_booking"/>
+        <createIndex tableName="payments" indexName="idx_payments_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -60,7 +60,7 @@ const PriceInput = React.forwardRef<HTMLInputElement, PriceInputProps>(
           placeholder={placeholder}
           disabled={disabled}
           className={cn(
-            'flex h-10 w-full rounded-lg border border-white/10 bg-[#0d2137] px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-[#eab308] focus:border-[#eab308] disabled:cursor-not-allowed disabled:opacity-50 pr-8',
+            'flex h-10 w-full rounded-lg border border-white/10 bg-[#2a2317] px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-[#ffc107] focus:border-[#ffc107] disabled:cursor-not-allowed disabled:opacity-50 pr-8',
             className,
           )}
         />

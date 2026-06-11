@@ -12,6 +12,10 @@ public class SnackResponse {
 
     private Long id;
     private String storageState;
+    /** Chi nhánh — phục vụ admin grouped view + audit. */
+    private Long theaterId;
+    private String theaterName;
+    private String theaterCity;
     private String name;
     private String description;
     private BigDecimal price;

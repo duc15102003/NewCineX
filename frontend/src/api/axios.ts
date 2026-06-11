@@ -5,9 +5,12 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // withCredentials=true → browser gửi kèm HttpOnly cookie (refreshToken) cho mọi request.
+  // CORS BE đã setAllowCredentials(true) + allowedOrigins cụ thể (không *).
+  withCredentials: true,
 })
 
-// Request interceptor — gắn token vào mọi request
+// Request interceptor — gắn access token (15min TTL) vào Authorization header
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) {
@@ -16,11 +19,11 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Response interceptor — auto refresh token khi hết hạn
+// Response interceptor — auto refresh token khi 401
 let isRefreshing = false
-let failedQueue: { resolve: (token: string) => void; reject: (err: any) => void }[] = []
+let failedQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = []
 
-const processQueue = (error: any, token: string | null) => {
+const processQueue = (error: unknown, token: string | null) => {
   failedQueue.forEach((prom) => {
     if (token) {
       prom.resolve(token)
@@ -36,13 +39,12 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
-    // 401 = token hết hạn → thử refresh
-    // NGOẠI TRỪ: request login/register (chưa có token → không cần refresh)
+    // 401 = access token hết hạn → thử refresh (refresh token đi qua HttpOnly cookie)
     const status = error.response?.status
     const isAuthRequest = originalRequest.url?.includes('/api/auth/login')
         || originalRequest.url?.includes('/api/auth/register')
+        || originalRequest.url?.includes('/api/auth/refresh')
     if (status === 401 && !originalRequest._retry && !isAuthRequest) {
-      // Nếu đang refresh → chờ kết quả
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({
@@ -55,37 +57,32 @@ api.interceptors.response.use(
         })
       }
 
-      originalRequest._retry = true
-      isRefreshing = true
-
-      const refreshToken = localStorage.getItem('refreshToken')
-
-      if (!refreshToken) {
-        // Không có refresh token → đá về login
-        forceLogout()
+      // Guest (chưa từng login): không có access token → 401 → reject thuần, KHÔNG redirect.
+      // Trang public (home, movie detail) có thể vô tình gọi API auth (favorite, notifications)
+      // — kể cả hook quên guard, guest cũng không bị đá về login.
+      const accessToken = localStorage.getItem('token')
+      if (!accessToken) {
         return Promise.reject(error)
       }
 
+      originalRequest._retry = true
+      isRefreshing = true
+
       try {
-        // Gọi refresh API (dùng axios mới, không qua interceptor)
+        // Refresh: body rỗng, browser tự gửi HttpOnly cookie refreshToken
         const res = await axios.post(
           `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8088'}/api/auth/refresh`,
-          { refreshToken },
+          {},
+          { withCredentials: true },
         )
 
         const newToken = res.data.data.accessToken
-        const newRefreshToken = res.data.data.refreshToken
-
-        // Lưu token mới
         localStorage.setItem('token', newToken)
-        localStorage.setItem('refreshToken', newRefreshToken)
 
-        // Retry request gốc + tất cả request đang chờ
         processQueue(null, newToken)
         originalRequest.headers.Authorization = `Bearer ${newToken}`
         return api(originalRequest)
       } catch (refreshError) {
-        // Refresh cũng fail → đá về login
         processQueue(refreshError, null)
         forceLogout()
         return Promise.reject(refreshError)
@@ -100,14 +97,14 @@ api.interceptors.response.use(
 
 function forceLogout() {
   localStorage.removeItem('token')
-  localStorage.removeItem('refreshToken')
   localStorage.removeItem('user')
+  // Legacy cleanup (refresh token trước A3 hardening)
+  localStorage.removeItem('refreshToken')
   window.location.href = '/login'
 }
 
 /**
  * Lấy message lỗi từ Axios error — dùng chung cho tất cả onError hooks.
- * Thay vì (e: any) => e.response?.data?.message → getErrorMessage(e)
  */
 export function getErrorMessage(error: unknown, fallback = 'Đã có lỗi xảy ra'): string {
   if (error && typeof error === 'object' && 'response' in error) {

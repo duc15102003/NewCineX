@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>CineX — Xác thực địa chỉ email</title>
+</head>
+
+<body style="margin:0; padding:20px; font-family: 'Inter', Arial, sans-serif; background:#051424; color:#e5e7eb;">
+  <div
+    style="max-width:560px; margin:0 auto; background:#0a1929; border-radius:16px; padding:32px; border:1px solid rgba(255,255,255,0.05);">
+    <!-- Header CineX -->
+    <div style="text-align:center; margin-bottom:24px;">
+      <h1 style="margin:0; color:#eab308; font-size:28px; letter-spacing:2px; font-weight:bold;">CineX</h1>
+      <p style="margin:4px 0 0; color:#6b7280; font-size:12px; letter-spacing:1px;">HỆ THỐNG ĐẶT VÉ XEM PHIM</p>
+    </div>
+
+    <h2 style="color:#eab308; margin-top:0;">Xác thực địa chỉ email</h2>
+    <p style="color:#9ca3af; line-height:1.6;">
+      Xin chào,<br />
+      Cảm ơn bạn đã đăng ký tài khoản CineX! Vui lòng nhấn nút bên dưới để xác thực email của bạn:
+    </p>
+
+    <div style="text-align:center; margin:28px 0;">
+      <a th:href="${verifyLink}"
+        style="background:#eab308; color:#000; padding:14px 32px; text-decoration:none; border-radius:10px; font-weight:bold; font-size:15px; display:inline-block;">
+        Xác thực email
+      </a>
+    </div>
+
+    <p style="color:#9ca3af; font-size:14px;">
+      Link sẽ hết hạn sau
+      <strong style="color:#eab308;" th:text="${expiryHours} + ' giờ'">24 giờ</strong>.
+    </p>
+
+    <p style="color:#6b7280; font-size:13px; line-height:1.6;">
+      Nếu bạn không thực hiện đăng ký này, hãy bỏ qua email này.
+    </p>
+
+    <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin:24px 0;" />
+
+    <!-- Footer -->
+    <p style="color:#6b7280; font-size:12px; text-align:center; margin:0;">
+      &copy; 2026 CineX. Hệ thống đặt vé xem phim online.<br />
+      Email tự động, vui lòng không trả lời.
+    </p>
+  </div>
+</body>
+
+</html>

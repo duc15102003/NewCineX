@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Fix Unicode tiếng Việt cho system_config.description.
+
+        Bug ở seed 009: dùng literal 'phút' không có prefix N → SQL Server interpret theo
+        session collation (Latin1) → mất dấu thành 'phút' → 'p?út'.
+
+        Fix: UPDATE tất cả description với N'...' prefix để SQL Server lưu Unicode chuẩn.
+        Các bảng khác (theaters/genres/movies/snacks/pricing/voucher) đã có N' prefix nên OK.
+    -->
+
+    <changeSet id="017-fix-system-config-encoding" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            UPDATE system_config SET description = N'Số phút giữ ghế chờ thanh toán' WHERE config_key = 'booking.hold_minutes';
+            UPDATE system_config SET description = N'Số ghế tối đa 1 lần đặt' WHERE config_key = 'booking.max_seats';
+            UPDATE system_config SET description = N'Số booking tối đa 1 user/ngày — chống bot' WHERE config_key = 'booking.max_per_user_per_day';
+            UPDATE system_config SET description = N'Cho phép đặt vé tới X phút SAU khi suất bắt đầu' WHERE config_key = 'booking.cutoff_after_start_minutes';
+            UPDATE system_config SET description = N'Cho hủy vé trước X phút khi chiếu' WHERE config_key = 'booking.cancel_before_minutes';
+            UPDATE system_config SET description = N'Sau X phút từ giờ kết thúc, vé chưa check-in → NO_SHOW' WHERE config_key = 'booking.no_show_buffer_minutes';
+            UPDATE system_config SET description = N'Tối đa lần login fail / user / window' WHERE config_key = 'auth.login_max_attempts_per_user';
+            UPDATE system_config SET description = N'Tối đa lần login fail / IP / window' WHERE config_key = 'auth.login_max_attempts_per_ip';
+            UPDATE system_config SET description = N'Window rate limit login (phút)' WHERE config_key = 'auth.login_window_minutes';
+            UPDATE system_config SET description = N'Tối đa forgot-password / email / window' WHERE config_key = 'auth.forgot_password_max_per_email';
+            UPDATE system_config SET description = N'Tối đa forgot-password / IP / window' WHERE config_key = 'auth.forgot_password_max_per_ip';
+            UPDATE system_config SET description = N'Window rate limit forgot (phút)' WHERE config_key = 'auth.forgot_password_window_minutes';
+            UPDATE system_config SET description = N'Tối đa verify-token / IP / window' WHERE config_key = 'auth.token_verify_max_per_ip';
+            UPDATE system_config SET description = N'Window rate limit verify-token (phút)' WHERE config_key = 'auth.token_verify_window_minutes';
+            UPDATE system_config SET description = N'TTL reset password token (phút)' WHERE config_key = 'auth.password_reset_token_ttl_minutes';
+            UPDATE system_config SET description = N'Điểm tích mỗi 1.000đ chi tiêu' WHERE config_key = 'loyalty.points_per_1000_vnd';
+            UPDATE system_config SET description = N'Lifetime points để đạt SILVER' WHERE config_key = 'loyalty.silver_threshold';
+            UPDATE system_config SET description = N'Lifetime points để đạt GOLD' WHERE config_key = 'loyalty.gold_threshold';
+            UPDATE system_config SET description = N'Lifetime points để đạt PLATINUM' WHERE config_key = 'loyalty.platinum_threshold';
+            UPDATE system_config SET description = N'Default range Top movies/snacks (ngày)' WHERE config_key = 'statistics.dashboard_default_days';
+            UPDATE system_config SET description = N'TTL cache statistics (giây)' WHERE config_key = 'statistics.cache_ttl_seconds';
+
+            -- id_tracker.description cũng có khả năng bị tương tự (file 009 cùng pattern)
+            UPDATE id_tracker SET description = N'Booking code: CX-YYYYMMDD-NNN' WHERE entity_type = 'BOOKING';
+            UPDATE id_tracker SET description = N'Snack order code: SO-YYYYMMDD-NNN' WHERE entity_type = 'SNACK_ORDER';
+            UPDATE id_tracker SET description = N'Payment transaction code: PAY-YYYYMMDD-NNN' WHERE entity_type = 'PAYMENT';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

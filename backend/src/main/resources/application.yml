@@ -5,26 +5,51 @@ spring:
     multipart:
       max-file-size: 5MB
       max-request-size: 5MB
+  jackson:
+    deserialization:
+      # Chặn client gửi field không có trong DTO (vd { title, hackerField: "x" }).
+      # Spring Boot mặc định IGNORE field thừa → audit log nhiễu + mass-assignment risk
+      # khi sau này thêm field nhạy cảm. Bật strict → 400 Bad Request nếu unknown property.
+      fail-on-unknown-properties: true
 
 server:
   port: 8088
+  # Gzip compression — giảm ~60-80% payload JSON cho response > 1KB.
+  # FE bandwidth giảm rõ rệt với list showtime / booking (mỗi item ~5KB,
+  # 20 items = 100KB → ~30KB sau gzip). CPU cost không đáng kể với JSON.
+  # min-response-size: chỉ nén response >= 1024 bytes (skip header/error nhỏ).
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain,text/css,application/javascript
+    min-response-size: 1024
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  backend-url: ${BACKEND_URL:http://localhost:8088}
   jwt:
-    secret: ${JWT_SECRET:dGhpcyBpcyBhIHZlcnkgbG9uZyBzZWNyZXQga2V5IGZvciBkZXZlbG9wbWVudCBvbmx5IDEyMzQ1Njc4OTA=}
+    # Bắt buộc set env JWT_SECRET — không có default để tránh leak secret trong source code
+    secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION:900000}
     refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
 
 momo:
   partner-code: ${MOMO_PARTNER_CODE:MOMO}
-  access-key: ${MOMO_ACCESS_KEY:F8BBA842ECF85}
-  secret-key: ${MOMO_SECRET_KEY:K951B6PE1waDMi640xX08PD3vg6EkVlz}
+  # Credentials nhạy cảm — bắt buộc set env, không default
+  access-key: ${MOMO_ACCESS_KEY}
+  secret-key: ${MOMO_SECRET_KEY}
   api-url: ${MOMO_API_URL:https://test-payment.momo.vn/v2/gateway/api/create}
-  return-url: ${MOMO_RETURN_URL:http://localhost:8088/api/payments/callback}
-  ipn-url: ${MOMO_IPN_URL:http://localhost:8088/api/payments/callback}
+  # Endpoint refund của MoMo — gọi khi user/admin hủy booking đã COMPLETED
+  refund-url: ${MOMO_REFUND_URL:https://test-payment.momo.vn/v2/gateway/api/refund}
+  # [B2] redirectUrl: user redirect (GET) sau khi thanh toán xong.
+  # Trỏ về BE callback (KHÔNG phải FE trực tiếp) — BE verify signature MoMo,
+  # update payment status, rồi redirect FE với params sạch (bookingId, transactionCode).
+  # Nếu trỏ thẳng FE, FE chỉ thấy params MoMo (orderId, resultCode) → hiểu sai là "thất bại".
+  redirect-url: ${MOMO_REDIRECT_URL:${app.backend-url}/api/payments/callback}
+  # [B2] ipnUrl: server-to-server (POST) → BE xử lý xác nhận giao dịch
+  ipn-url: ${MOMO_IPN_URL:${app.backend-url}/api/payments/ipn}
 
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:dale1y60n}
-  api-key: ${CLOUDINARY_API_KEY:233379921854635}
-  api-secret: ${CLOUDINARY_API_SECRET:R6Ws-brlo7FhCX2NYGHPQlnS8W8}
+  # Credentials nhạy cảm — bắt buộc set env, không default
+  api-key: ${CLOUDINARY_API_KEY}
+  api-secret: ${CLOUDINARY_API_SECRET}

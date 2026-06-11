@@ -510,4 +510,238 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 
 ---
 
-*Tổng: 23 module, 200+ test cases. Cập nhật lần cuối: 27/05/2026.*
+---
+
+## 24. THEATER — Quản lý chi nhánh (multi-tenant)
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 24.1 | Tạo theater | code=CNX-HN-VINCOM, name="CineX Vincom HN" | 201, hiển thị trong list | Cả hai |
+| 24.2 | SUPER_ADMIN tạo theater | role=SUPER_ADMIN | OK | BE |
+| 24.3 | BRANCH_ADMIN tạo theater | role=BRANCH_ADMIN | 403 Forbidden | BE |
+| 24.4 | BRANCH_ADMIN xem theater khác | theater A token, GET /theaters/{B}/rooms | 403 — scope guard | BE |
+| 24.5 | BRANCH_ADMIN xem theater của mình | theater A token, GET /theaters/{A}/rooms | OK | BE |
+| 24.6 | SUPER_ADMIN xem mọi theater | role=SUPER_ADMIN, GET /theaters/{X}/rooms | OK với mọi X | BE |
+| 24.7 | counter-sale theater scope | BRANCH_ADMIN A book showtimeId của theater B | 403 — derive showtime theater + check scope | BE |
+| 24.8 | Trùng code theater | INSERT trùng code đã có ACTIVE | 400, unique constraint | BE |
+| 24.9 | Soft delete theater còn rooms | Theater có active rooms → DELETE | Warning hoặc cascade ARCHIVE rooms | BE |
+
+---
+
+## 25. MOVIE RUN — Đợt chiếu per-theater
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 25.1 | Tạo MovieRun FIRST_RUN | movieId=7, theaterId=1, start=01/06, end=31/07 | 201, status=SCHEDULED | BE |
+| 25.2 | Status compute today < start | endDate=NULL, today < start | COMING_SOON | BE |
+| 25.3 | Status compute trong range | start ≤ today ≤ end | NOW_SHOWING | BE |
+| 25.4 | Status compute today > end | endDate != NULL, today > end | ENDED | BE |
+| 25.5 | endDate NULL + today >= start | endDate=NULL, today >= start | NOW_SHOWING vĩnh viễn | BE |
+| 25.6 | Tạo showtime ngoài range MovieRun | start=05/08, run end=31/07 | 400 "Đợt chiếu không bao trùm" | BE |
+| 25.7 | Tạo REISSUE cho phim đã FIRST_RUN | Movie có #201 FIRST_RUN ENDED → tạo #401 REISSUE | 201, FIRST_RUN không touched | BE |
+| 25.8 | Cross-theater status độc lập | Phim X ENDED tại HN, NOW_SHOWING tại SG | Trang chủ HN không hiện, SG hiện | Cả hai |
+| 25.9 | MovieRunStatusScheduler 00:01 | run start=hôm nay | Tự update SCHEDULED → NOW_SHOWING | BE |
+| 25.10 | Distributor reporting per-run | SUM bookings WHERE movie_run_id=201 | Doanh thu đúng đợt | BE |
+
+---
+
+## 26. PRICING RULES — Quy tắc giá động
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 26.1 | Tạo rule MORNING_DISCOUNT | HOUR_RANGE 8h-12h, multiplier 80 | 201, active | Cả hai |
+| 26.2 | Áp rule giảm cho showtime 10h | basePrice=100k, áp rule 80% | effectivePrice=80k | BE |
+| 26.3 | Áp 2 rule chain | basePrice=100k, MORNING 80% + STUDENT 90% | effectivePrice=72k | BE |
+| 26.4 | Global rule áp mọi theater | theater_id=NULL, code=WEEKEND | Theater A,B,C đều áp | BE |
+| 26.5 | Per-theater rule override global | code=WEEKEND global 120%, theater A 130% | Theater A áp 130%, theater B 120% | BE |
+| 26.6 | Rule không match thời gian | showtime 14h, rule HOUR_RANGE 8-12 | Không áp | BE |
+| 26.7 | FE hiển thị chip rule giảm | discountPercent=-20% | Chip xanh "-20%" | FE |
+| 26.8 | FE ẨN chip rule tăng (surge) | discountPercent=+15% | KHÔNG hiển thị chip | FE |
+| 26.9 | Gạch ngang giá gốc khi giảm | effective < base | basePrice gạch ngang | FE |
+| 26.10 | Cache invalidation | Admin sửa rule, gọi pricingEngine.refresh() | Cache clear, giá mới ngay | BE |
+| 26.11 | Schedule refresh 5 phút | Rule HOUR_RANGE 22h-24h, không có user activity | 22:01 tự reload, áp giá happy hour | BE |
+| 26.12 | WYSIWYP end-to-end | Showtime price 100k FE, confirm payment | Charge đúng 100k | Cả hai |
+
+---
+
+## 27. LOYALTY — Điểm thưởng
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 27.1 | Auto-create account khi register | User mới đăng ký | LoyaltyAccount tier=BRONZE, points=0 | BE |
+| 27.2 | Earn points khi confirm booking | totalAmount=200k, tier BRONZE 1% | +2000 points | BE |
+| 27.3 | Earn points cho GOLD tier | tier GOLD 1.5% rate, total=200k | +3000 points | BE |
+| 27.4 | Lên tier khi đạt threshold | lifetime_points >= 50k (SILVER threshold) | Auto upgrade tier | BE |
+| 27.5 | Redeem points → discount | redeem 1000 points = 10k discount | Trừ trong tổng booking | BE |
+| 27.6 | Expire 12 tháng | Transaction EARN > 12 tháng | Scheduler tạo EXPIRE transaction | BE |
+| 27.7 | LoyaltyExpirationScheduler chạy 00:30 | Cron job | Process mọi transaction quá hạn | BE |
+| 27.8 | Earn không áp cho REJECTED booking | Booking status=REJECTED | Không cộng điểm | BE |
+| 27.9 | Refund booking → revoke earn | Booking CANCELLED sau khi đã earn | Tạo ADJUST transaction âm | BE |
+| 27.10 | History page user xem transaction | GET /api/loyalty/transactions | List EARN/REDEEM/EXPIRE | Cả hai |
+
+---
+
+## 28. COMBO — Combo bắp nước per-theater
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 28.1 | Tạo combo SOLO theater HN | 1 bắp + 1 coca, price=80k | 201 trong theater HN | BE |
+| 28.2 | Combo per-theater isolation | Combo SOLO theater HN không xuất hiện trong list theater SG | OK | BE |
+| 28.3 | Combo items khác theater (constraint) | combo theater HN, snack theater SG | Reject "Snack không thuộc theater combo" | BE |
+| 28.4 | Snapshot combo price khi book | Combo 80k, sau đó admin sửa thành 90k | Booking cũ giữ 80k | BE |
+| 28.5 | Tính tổng combo trong booking | 2 combo SOLO + 1 FAMILY | tổng = 2×80k + 210k = 370k | BE |
+| 28.6 | Combo INACTIVE không hiện FE | combo.active=false | List user không hiện | FE |
+| 28.7 | Admin Combo CRUD | Standard CRUD + filter | OK | Cả hai |
+
+---
+
+## 29. POS MULTI-PAYMENT — Đa phương thức tại quầy
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 29.1 | POS book bằng CASH | method=CASH, employee thu tiền | Booking CONFIRMED ngay, không qua gateway | BE |
+| 29.2 | POS book bằng CARD_POS | method=CARD_POS, quẹt thẻ tại máy POS rạp | Booking CONFIRMED sau khi nhân viên xác nhận quẹt OK | BE |
+| 29.3 | POS book bằng TRANSFER | method=TRANSFER, sinh QR ngân hàng | Booking CONFIRMED sau khi nhân viên check biên lai | BE |
+| 29.4 | POS book bằng MOMO | method=MOMO, QR MoMo | Như user-facing flow | BE |
+| 29.5 | POS dropdown 5 method | UI shows 5 option | OK | FE |
+| 29.6 | CASH default cho POS | Mở dialog payment | CASH preselected | FE |
+| 29.7 | BRANCH_ADMIN A book showtime của theater B | counter-sale endpoint | 403 theater scope | BE |
+| 29.8 | POS book không có user (guest) | Customer info input by employee | Booking với customer snapshot, không link user | BE |
+| 29.9 | POS check-in vé bán tại quầy | Scan QR | Preview → admit (nếu phim P/K) | Cả hai |
+| 29.10 | POS reject T18 booking | Phim T18, customer trông trẻ | Bấm Reject → status=REJECTED + audit log | Cả hai |
+
+---
+
+## 30. VOUCHER — Mã giảm giá
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 30.1 | Tạo voucher PERCENTAGE | code=WELCOME20, value=20, max=50k | 201 | BE |
+| 30.2 | Tạo voucher FIXED_AMOUNT | value=30000 | 201 | BE |
+| 30.3 | Apply PERCENTAGE under cap | order=200k, 20% = 40k (< cap 50k) | discount=40k | BE |
+| 30.4 | Apply PERCENTAGE hit cap | order=1M, 20% = 200k (> cap 50k) | discount=50k | BE |
+| 30.5 | Apply FIXED_AMOUNT | order=200k, fixed=30k | discount=30k | BE |
+| 30.6 | Min order amount không đạt | order=80k, min=100k | 400 "VOUCHER_MIN_ORDER_NOT_MET" | BE |
+| 30.7 | Voucher chưa start | startDate=tomorrow | 400 "VOUCHER_NOT_STARTED" | BE |
+| 30.8 | Voucher đã expire | endDate=yesterday | 400 "VOUCHER_EXPIRED" | BE |
+| 30.9 | Usage limit reached | usedCount=usageLimit | 400 "VOUCHER_LIMIT_REACHED" | BE |
+| 30.10 | User đã dùng | existsByVoucherIdAndUserId=true | 400 "VOUCHER_ALREADY_USED" | BE |
+| 30.11 | Global voucher áp mọi theater | theater_id=NULL | Mọi rạp áp được | BE |
+| 30.12 | Per-theater voucher | theater_id=1 | Chỉ rạp 1 áp | BE |
+| 30.13 | Code global vs per-theater trùng | code=WELCOME global + WELCOME theater 1 | Cả 2 ACTIVE cùng lúc (filtered unique index) | BE |
+| 30.14 | Concurrent use voucher 1 slot | 2 user đồng thời, limit=1 | 1 success, 1 fail OptimisticLockException | BE |
+| 30.15 | VoucherCleanupScheduler 01:00 | Voucher endDate<now | Tự deactivate | BE |
+| 30.16 | Validate trước confirm booking | POST /api/vouchers/validate | Trả discount + finalAmount preview | FE |
+
+---
+
+## 31. AGE RATING — 3-tier enforcement
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 31.1 | Phim P/K không cần confirm | needsAgeConfirm=false | Book luôn, không dialog | FE |
+| 31.2 | Phim T13 hiện dialog confirm | User click giữ ghế | AgeConfirmDialog hiển thị | FE |
+| 31.3 | User confirm tuổi T18 | Click "Tôi xác nhận đủ tuổi" | Tiếp tục flow giữ ghế | FE |
+| 31.4 | Tier 2: user khai DOB < min age | User 17 tuổi book T18 | 400 "Yêu cầu từ 18 tuổi trở lên" | BE |
+| 31.5 | Tier 2: user khai DOB OK | User 25 tuổi book T18 | OK | BE |
+| 31.6 | Tier 2: user chưa khai DOB | dateOfBirth=NULL | Bypass tier 2 (chỉ tier 1 + tier 3 enforce) | BE |
+| 31.7 | Tier 3: POS preview T18 booking | Scan QR vé T18 | Show preview card + 2 nút Admit/Reject | FE |
+| 31.8 | Tier 3: Reject "không đủ tuổi" | Click Reject → reason=UNDER_AGE | status=REJECTED, audit log | BE |
+| 31.9 | Tier 3: Admit P/K auto | Phim P/K | Auto admit, không show preview | FE |
+| 31.10 | Chip CCCD trên QR ticket T13+ | Booking phim T18 | Hiển thị chip cam "Mang CCCD" | FE |
+| 31.11 | Age C đã bỏ khỏi enum | Form tạo phim | Dropdown chỉ có P/K/T13/T16/T18 | FE |
+| 31.12 | Migration 072 fix C → T18 | Phim cũ ageRating=C | UPDATE thành T18 | DB |
+
+---
+
+## 32. CACHING — Caffeine + Redis 2-tier
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 32.1 | Statistics endpoint cache 60s | Gọi 2 lần liên tiếp /api/statistics/overview | Lần 2 không hit DB (cache) | BE |
+| 32.2 | Cache TTL 60s | Đợi 65s → gọi lại | Hit DB, miss cache | BE |
+| 32.3 | PricingEngine L1 refresh | Admin sửa rule → pricingEngine.refresh() | L1 reload + L2 invalidate | BE |
+| 32.4 | PricingEngine L2 cache key truncate HOUR | 4 showtime 14:00/14:15/14:30/14:45 | Cùng key, 1 compute thật + 3 hit | BE |
+| 32.5 | Scheduled refresh 5 phút | Rule HOUR_RANGE 22h | 22:01 reload mặc dù user inactive | BE |
+| 32.6 | Redis rate-limit login fail | 5 fail trong 15 phút | Lock 15 phút | BE |
+| 32.7 | Redis rate-limit reset password | 30 attempts/IP/hour | Block IP | BE |
+| 32.8 | Session blacklist khi logout | Logout → token thêm vào blacklist Redis | Token cũ → 401 | BE |
+| 32.9 | Cache name không khai báo | @Cacheable("non-existent") | IllegalArgumentException startup | BE |
+| 32.10 | Monitor hit rate Actuator | GET /actuator/caches/stats-top-movies | hitCount/missCount/hitRate | BE |
+
+---
+
+## 33. SHEDLOCK — Distributed lock cho @Scheduled
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 33.1 | Single instance acquire lock | 1 instance, cron 0 * * * * * | OK, run mỗi phút | BE |
+| 33.2 | 2 instance không chạy trùng | Deploy 2 replica, scheduler cùng cron | Chỉ 1 instance run mỗi phút | BE |
+| 33.3 | Instance A crash khi giữ lock | Lock chưa release | Sau lockAtMostFor (5p), instance B acquire | BE |
+| 33.4 | usingDbTime() chống NTP drift | Instance A clock lệch 5s | Lock dùng GETDATE() DB → đồng bộ | BE |
+| 33.5 | Bảng shedlock query | SELECT * FROM shedlock | Hiển thị name/lock_until/locked_by | DB |
+| 33.6 | lockAtLeastFor ngắn quá | lockAtLeastFor < job duration | Vẫn OK (job giữ lock đến complete) | BE |
+| 33.7 | lockAtMostFor ngắn hơn job | Job chạy 2 phút, lockAtMostFor=30s | Sau 30s lock release → instance B acquire → race | BE |
+
+---
+
+## 34. HTTP-ONLY COOKIE AUTH — Hybrid pattern
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 34.1 | Login set refresh cookie | POST /api/auth/login | Set-Cookie: refreshToken=...; HttpOnly | BE |
+| 34.2 | Login KHÔNG trả refreshToken trong body | Login success | Body có accessToken, không có refreshToken | BE |
+| 34.3 | Refresh từ cookie (không cần body) | POST /api/auth/refresh, body={} | OK, trả accessToken mới | BE |
+| 34.4 | Refresh từ body fallback | Legacy client gửi refresh token trong body | Vẫn work (backward compat) | BE |
+| 34.5 | Logout clear cookie | POST /api/auth/logout | Set-Cookie: refreshToken=; max-age=0 | BE |
+| 34.6 | JS không đọc được refresh cookie | document.cookie | Không thấy refreshToken | FE |
+| 34.7 | Axios `withCredentials: true` | Mọi request | Browser tự gửi cookie | FE |
+| 34.8 | Refresh cookie Secure prod | app.cookie.secure=true | Cookie có flag Secure (chỉ HTTPS) | BE |
+| 34.9 | SameSite=Lax | Cookie | Vẫn gửi với navigation cùng origin | BE |
+
+---
+
+## 35. OWASP HEADERS
+
+| # | Test Case | Expected Header |
+|---|-----------|-----------------|
+| 35.1 | X-Frame-Options | `DENY` |
+| 35.2 | X-Content-Type-Options | `nosniff` |
+| 35.3 | Referrer-Policy | `same-origin` |
+| 35.4 | Content-Security-Policy | `default-src 'self'; img-src 'self' Cloudinary MoMo CDN; frame-ancestors 'none'` |
+| 35.5 | Strict-Transport-Security | `max-age=31536000; includeSubDomains` (chỉ HTTPS) |
+
+---
+
+---
+
+## 36. SEAT REVAMP — Industry-standard (Option C)
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 36.1 | Generate Preset TWO_D | applyPresetForRoomType=true, roomTypeOverride=TWO_D | 120 positions, ~100 ghế bán (loại trừ aisle) | BE |
+| 36.2 | Generate Preset IMAX | preset IMAX | 14×18, 2 deluxe rows F/G, 0 couple | BE |
+| 36.3 | Generate Preset FOUR_DX | preset FOUR_DX | 8×10, không có COUPLE/SWEETBOX | BE |
+| 36.4 | Generate Custom với VIP zone | vipZone {C-G × 4-9} | Chỉ 30 ghế trong zone là VIP, ngoài zone STANDARD | BE |
+| 36.5 | VIP rowStart > rowEnd | vipZone rowStart=G, rowEnd=C | 400 "VIP rowStart phải <= rowEnd" | BE |
+| 36.6 | Handicap position invalid | handicap row=Z (totalRows=10) | 400 "Handicap row 'Z' ngoài phạm vi A-J" | BE |
+| 36.7 | Aisle col render khoảng trống | aisleCols=[4,9] | FE render AisleGap (không button), không tính totalSeats | Cả hai |
+| 36.8 | Book ghế AISLE | Click vị trí isAisle | Chặn (toggleSeat return) | FE |
+| 36.9 | Book ghế BLOCKED | Click ghế status=BLOCKED | 400 "Ghế bị chặn vĩnh viễn" | BE |
+| 36.10 | Book ghế BROKEN | Click ghế status=BROKEN | 400 "Ghế đang bảo trì" | BE |
+| 36.11 | SWEETBOX gộp 2 cột | Click 1 ghế SWEETBOX odd col | Cả cặp được chọn | FE |
+| 36.12 | DELUXE single seat | Click ghế DELUXE | Chọn 1 ghế, giá vipPrice × 1.5 fallback | Cả hai |
+| 36.13 | HANDICAP icon ♿ | Render ghế HANDICAP | Hiện ♿ thay số cột, màu green | FE |
+| 36.14 | HANDICAP pricing inclusive | Book ghế HANDICAP | Tính basePrice (không phụ thu) | BE |
+| 36.15 | SWEETBOX fallback price | sweetboxPrice=NULL trong showtime | BE tính couplePrice × 2 | BE |
+| 36.16 | DELUXE fallback price | deluxePrice=NULL | BE tính vipPrice × 1.5 round half-up | BE |
+| 36.17 | Override ưu tiên BLOCKED > AISLE | Position vừa aisleCols vừa blockedPositions | Status=BLOCKED, isAisle=true (cả 2 flag) | BE |
+| 36.18 | Override ưu tiên HANDICAP > VIP | Handicap=B1, vipZone bao gồm B1 | seatType=HANDICAP | BE |
+| 36.19 | Bulk update isAisle dimension | PUT bulk-update {seatIds, isAisle: true} | Đánh dấu lối đi, không đụng seatType | BE |
+| 36.20 | Compliance NĐ 28/2012 | Mọi preset TWO_D/THREE_D/IMAX/FOUR_DX | Đều có ≥ 2 HANDICAP positions | BE |
+| 36.21 | Seat Map Editor 9 tools | Open editor | 9 tool buttons: 6 types + BROKEN + BLOCKED + AISLE | FE |
+| 36.22 | Generate Custom validation aisle col | aisleCols=[35] (totalCols=12) | 400 "Cột aisle 35 ngoài phạm vi 1-12" | BE |
+
+---
+
+*Tổng: 36 module, 300+ test cases. Cập nhật lần cuối: 11/06/2026 (bổ sung Seat revamp Option C: 6 SeatType chuẩn industry CGV/Lotte/BHD + AISLE + BLOCKED + HANDICAP compliance NĐ 28/2012 + RoomType-aware preset).*

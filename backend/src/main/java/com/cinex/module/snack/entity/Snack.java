@@ -1,8 +1,12 @@
 package com.cinex.module.snack.entity;
 
 import com.cinex.common.entity.BaseEntity;
+import com.cinex.module.theater.entity.Theater;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,6 +24,14 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 public class Snack extends BaseEntity {
+
+    /**
+     * Chi nhánh sở hữu snack — chuẩn industry rạp chiếu: mỗi rạp menu/giá F&B riêng.
+     * Snack rạp HN không hiển thị/bán ở rạp HCM.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "theater_id", nullable = false)
+    private Theater theater;
 
     @Column(nullable = false, length = 100, columnDefinition = "NVARCHAR(100)")
     private String name;

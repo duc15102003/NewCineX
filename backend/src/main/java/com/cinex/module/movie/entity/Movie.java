@@ -1,6 +1,7 @@
 package com.cinex.module.movie.entity;
 
 import com.cinex.common.entity.BaseEntity;
+// AgeRating + MovieStatus đã cùng package nên không cần import
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,9 +16,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -48,11 +49,8 @@ public class Movie extends BaseEntity {
     @Column(nullable = false)
     private Integer duration;
 
-    @Column(name = "release_date")
-    private LocalDate releaseDate;
-
-    @Column(name = "end_date")
-    private LocalDate endDate;
+    // releaseDate + endDate đã được CHUYỂN sang MovieRun (xem refactor R053).
+    // Vòng đời chiếu thuộc về từng đợt (FIRST_RUN/REISSUE/...), không phải metadata Movie.
 
     @Column(name = "poster_url", length = 500)
     private String posterUrl;
@@ -74,9 +72,34 @@ public class Movie extends BaseEntity {
     @Column(precision = 3, scale = 1)
     private BigDecimal rating;
 
+    /**
+     * Số lượng review đã đóng góp vào điểm {@code rating} hiện tại.
+     *
+     * <p><b>Tại sao cần?</b> Để tính rating mới khi có review thêm/sửa/xóa theo công thức
+     * incremental thay vì query AVG(*) mỗi lần (đắt khi phim có hàng nghìn review):
+     * <pre>
+     *   add:    newAvg = (oldAvg * count + newRating) / (count + 1);  count += 1
+     *   update: newAvg = (oldAvg * count - oldRating + newRating) / count
+     *   delete: newAvg = (oldAvg * count - oldRating) / (count - 1);  count -= 1
+     * </pre>
+     * Khi count = 0 → rating = null (chưa có ai đánh giá).
+     */
+    @Column(name = "rating_count", nullable = false)
+    @Builder.Default
+    private Integer ratingCount = 0;
+
+    // Movie.status — XOÁ ở refactor "MovieRun là single source of truth":
+    // status là kết quả query phụ thuộc context (theater + today), không phải thuộc tính phim.
+    // Compute on-the-fly tại MovieMapper bằng MovieStatusComputer dựa trên MovieRun.
+
+    /**
+     * Phân loại độ tuổi (TT 25/2024/BVHTTDL). Default {@code P} (phổ biến).
+     * Chỉ hiển thị badge ở trang chi tiết phim — không enforce check tuổi khi đặt vé.
+     */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private MovieStatus status;
+    @Column(name = "age_rating", nullable = false, length = 10)
+    @Builder.Default
+    private AgeRating ageRating = AgeRating.P;
 
     /**
      * [Quan hệ N:N] Movie <-> Genre qua bảng join movie_genres.
@@ -96,6 +119,11 @@ public class Movie extends BaseEntity {
             joinColumns = @JoinColumn(name = "movie_id"),
             inverseJoinColumns = @JoinColumn(name = "genre_id")
     )
+    // [Batch Fetching] Khi cần load genres của nhiều movie cùng lúc mà KHÔNG có
+    // @EntityGraph (vd: getMovie 1 entity, hoặc fallback path), Hibernate sẽ gom
+    // tối đa 50 movie.id vào 1 query "WHERE movie_id IN (...)" thay vì N query lẻ.
+    // Đây là tuyến phòng thủ thứ 2 chống N+1 ngoài @EntityGraph trên repository.
+    @BatchSize(size = 50)
     @Builder.Default
     private Set<Genre> genres = new HashSet<>();
 }

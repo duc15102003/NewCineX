@@ -1375,3 +1375,351 @@ Sau khi hoàn thành 11 bước trên, bạn đã có:
 - `03-tanstack-query.md` — Chi tiết về data fetching
 - `04-zustand-state.md` — Chi tiết về state management
 - `06-form-validation.md` — Chi tiết về form + Zod
+
+---
+
+## 12. PHẦN MỞ RỘNG — Tại sao chọn các công nghệ này?
+
+> Phần này dành cho người MỚI HOÀN TOÀN. Người đã quen có thể skip.
+
+### 12.1 Node.js & npm là gì?
+
+**Ví dụ đời thường:**
+- **JavaScript trong trình duyệt** = nói chuyện ở nhà (chỉ người trong nhà nghe).
+- **Node.js** = mang JavaScript ra ngoài đường, lên server, vào terminal — nói chuyện ở mọi nơi.
+
+**Node.js cụ thể:** Là một **JavaScript runtime** chạy JS bên ngoài trình duyệt (server, CLI tool). Được tạo năm 2009 dựa trên V8 engine của Chrome.
+
+**npm (Node Package Manager):** Là kho thư viện JavaScript khổng lồ (2M+ packages). Cú pháp:
+```bash
+npm install react        # Cài react vào node_modules/
+npm install -D vitest    # Cài vitest, đánh dấu là dev-dependency
+npm uninstall lodash     # Gỡ bỏ
+npm update               # Cập nhật package theo package.json
+npm outdated             # Xem package nào có version mới
+```
+
+**`package.json` là gì?** File metadata mô tả project:
+```json
+{
+  "name": "cinex-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",              ← npm run dev → chạy lệnh "vite"
+    "build": "tsc && vite build",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "react": "^19.0.0",         ← Production: cần để chạy
+    "axios": "^1.7.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",            ← Dev only: không vào bundle prod
+    "vitest": "^2.0.0"
+  }
+}
+```
+
+**`node_modules/` là gì?** Folder chứa source code của tất cả package đã cài. Thường có 200-500MB → KHÔNG commit lên git (đã có trong `.gitignore`).
+
+**`package-lock.json` là gì?** Lock file ghi version chính xác của từng package + dependency của package đó. CommiT lên git để team cài cùng version.
+
+### 12.2 Vite vs Webpack — Tại sao chọn Vite?
+
+**Vấn đề lịch sử với Webpack (2014-2020):**
+```
+Project lớn (1000+ file) → npm run dev → đợi 30-90 giây để bundle xong → mới mở browser
+Sửa 1 file → đợi 2-5 giây để rebuild → reload browser
+```
+
+**Vite (2020+) giải pháp:**
+- Dev mode: KHÔNG bundle. Dùng native ES Modules của browser. Browser tự import từng file.
+- HMR (Hot Module Replacement): sửa file → chỉ replace module đó, không reload toàn trang.
+
+**Benchmark Vite vs Webpack (CineX frontend, 200 files):**
+
+| Action | Webpack | Vite |
+|---|---|---|
+| Start dev server | 25-40s | < 1s |
+| HMR (sửa 1 file) | 1-3s | < 100ms |
+| Build production | 25s | 8s |
+
+**Tại sao Vite vẫn dùng Rollup cho build?**
+- Dev: ESM native (nhanh start, nhanh HMR)
+- Build: Rollup (tối ưu tree-shaking, code splitting tốt hơn)
+- Best of both worlds.
+
+**Khi nào KHÔNG nên dùng Vite?**
+- Project cần legacy browser support (IE11) — Vite không hỗ trợ.
+- Server-Side Rendering phức tạp → cân nhắc Next.js / Remix.
+
+📚 **Đọc thêm:** [glossary.md#j](../glossary.md#j) (JIT compilation tương tự cho Vite ESM).
+
+### 12.3 Tại sao React thay vì Vue/Angular/Svelte?
+
+**Lựa chọn đời thường:**
+- React = LEGO — tự do ghép, nhiều phụ kiện, cộng đồng đông.
+- Vue = IKEA — có sẵn instruction, dễ assemble.
+- Angular = Bộ đồ Pháo binh — đầy đủ vũ khí, nặng.
+- Svelte = đồ chơi gỗ thủ công — đẹp, nhẹ, ít phụ kiện.
+
+**Tại sao CineX chọn React:**
+1. **Job market:** 60% job FE Việt Nam yêu cầu React (theo TopDev 2025) → học để xin việc.
+2. **Ecosystem:** React Native cho mobile, Next.js cho SSR, có cho mọi nhu cầu.
+3. **Community:** 200k+ Stack Overflow answers, lib cho mọi thứ.
+4. **TypeScript first-class:** TS hoạt động tự nhiên với JSX.
+5. **Đồ án tốt nghiệp:** React phổ biến nhất ở Việt Nam → giảng viên dễ chấm.
+
+**Nhược điểm:**
+- Bundle size lớn hơn Svelte/Vue
+- Phải tự chọn lib (router, state, form) → quyết định mệt
+- Hook learning curve dốc (useEffect dependency array trap)
+
+### 12.4 Tại sao TypeScript bắt buộc?
+
+```ts
+// JavaScript thuần
+function calculatePrice(seats, voucher) {
+  return seats.length * 75000 - voucher.discount;
+  // Bug runtime: nếu voucher = null → crash
+  // Bug runtime: seats là string → seats.length sai
+}
+
+// TypeScript
+function calculatePrice(seats: Seat[], voucher: Voucher | null): number {
+  return seats.length * 75000 - (voucher?.discount ?? 0);
+  // Compile-time: phải xử lý voucher = null
+  // Compile-time: seats KHÔNG thể là string
+}
+```
+
+**Statistics:** Microsoft research cho thấy **15% bug runtime trong JS được phát hiện compile-time bởi TS**. CineX dùng TS để:
+- Refactor tự tin (đổi tên field → compiler tìm hết chỗ phải sửa)
+- Auto-complete chính xác (IDE biết MovieResponse có field gì)
+- Document tự nhiên (đọc type = đọc spec)
+
+📚 **Đọc thêm:** [frontend/00-typescript-basics.md](00-typescript-basics.md), [frontend/pre-04-typescript-utility-types.md](pre-04-typescript-utility-types.md).
+
+---
+
+## 13. Troubleshooting — 8 lỗi setup phổ biến
+
+### 13.1 `npm install` báo lỗi `EACCES: permission denied`
+
+🤔 **Nguyên nhân:** Bạn dùng `sudo npm install` trước đó → folder `node_modules/` bị owned by root.
+
+✅ **Fix:**
+```bash
+sudo chown -R $(whoami) ~/.npm
+rm -rf node_modules package-lock.json
+npm install
+```
+
+**KHÔNG dùng `sudo npm install`** — đó là anti-pattern.
+
+### 13.2 `npm install` chạy mãi không xong
+
+🤔 **Nguyên nhân:** Network chậm hoặc registry mặc định (registry.npmjs.org) không stable ở VN.
+
+✅ **Fix:** Đổi sang npm mirror:
+```bash
+npm config set registry https://registry.npmmirror.com
+npm install
+# Sau khi xong:
+npm config set registry https://registry.npmjs.org  # Đổi lại default
+```
+
+### 13.3 `Error: listen EADDRINUSE: port 5173 already in use`
+
+🤔 **Nguyên nhân:** Port 5173 đã có process khác chiếm (có thể là Vite từ session trước chưa tắt).
+
+✅ **Fix:**
+```bash
+# macOS / Linux: tìm và kill process
+lsof -ti:5173 | xargs kill -9
+
+# Windows:
+netstat -ano | findstr :5173
+taskkill /PID <PID> /F
+
+# Hoặc đơn giản: đổi port
+npm run dev -- --port 5174
+```
+
+### 13.4 `Cannot find module 'react'` dù đã `npm install`
+
+🤔 **Nguyên nhân:** TypeScript IDE chưa restart, hoặc `node_modules/` corrupt.
+
+✅ **Fix:**
+1. VS Code: `Cmd+Shift+P` → "Restart TS Server"
+2. Hoặc: `rm -rf node_modules package-lock.json && npm install`
+
+### 13.5 Tailwind class không có tác dụng
+
+🤔 **Nguyên nhân:** Tailwind chưa scan đúng files. Hoặc dùng dynamic class `bg-${color}-500`.
+
+✅ **Fix:**
+1. Kiểm tra `index.css` có `@import 'tailwindcss';` (Tailwind 4) hoặc `@tailwind base;` (Tailwind 3)
+2. Tailwind 4: file scan tự động — đảm bảo file `.tsx` nằm trong project root
+3. Đừng dùng dynamic class — xem [common-mistakes.md](../common-mistakes.md) lỗi #15
+
+### 13.6 CORS error khi gọi API backend
+
+```
+Access to XMLHttpRequest at 'http://localhost:8088/api/movies' from origin
+'http://localhost:5173' has been blocked by CORS policy
+```
+
+🤔 **Nguyên nhân:** Backend chưa allow origin `http://localhost:5173`.
+
+✅ **Fix (Backend SecurityConfig):**
+```java
+@Bean
+public CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration config = new CorsConfiguration();
+    config.setAllowedOrigins(List.of("http://localhost:5173"));
+    config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH"));
+    config.setAllowedHeaders(List.of("*"));
+    config.setAllowCredentials(true);
+
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/**", config);
+    return source;
+}
+```
+
+📚 **Đọc thêm:** [backend/03-security.md](../backend/03-security.md), [glossary.md#c](../glossary.md#c) (CORS).
+
+### 13.7 `npm run build` báo TypeScript error nhưng `npm run dev` chạy ok
+
+🤔 **Nguyên nhân:** Vite dev mode SKIP TypeScript check để chạy nhanh. Build mode mới check thật.
+
+✅ **Fix:** Đọc error → sửa từng cái. Hoặc tạm thời:
+```bash
+# Build bỏ qua TS check (KHÔNG khuyến nghị, chỉ debug)
+npm run build -- --mode development
+```
+
+### 13.8 Browser hiển thị trang trắng sau khi build
+
+🤔 **Nguyên nhân:** Path asset sai (CSS/JS không load được). Thường xảy ra khi deploy subdirectory.
+
+✅ **Fix `vite.config.ts`:**
+```ts
+export default defineConfig({
+  base: '/',  // Đổi thành '/cinex/' nếu deploy ở subdirectory
+});
+```
+
+Mở DevTools → Network → check file CSS/JS có 404 không.
+
+---
+
+## 14. Checklist xác nhận setup ĐÚNG
+
+Tick từng dòng trong terminal, đảm bảo TẤT CẢ ✅ trước khi đọc tiếp:
+
+```
+[ ] node -v          → v20.x.x hoặc cao hơn
+[ ] npm -v           → 10.x.x hoặc cao hơn
+[ ] Folder dự án có: package.json, package-lock.json, src/, public/, node_modules/
+[ ] npm run dev      → terminal in "VITE v6.x.x ready in XYZms"
+[ ] Mở http://localhost:5173 → thấy trang React mặc định
+[ ] DevTools (F12) → Tab Console → KHÔNG có lỗi đỏ
+[ ] Sửa text trong src/App.tsx → browser tự reload (HMR)
+[ ] npm run build    → kết thúc với "✓ built in Xs"
+[ ] Folder dist/ được tạo, chứa index.html + assets/
+```
+
+Nếu sai bất kỳ dòng nào → quay lại section 13 (Troubleshooting).
+
+---
+
+## 15. Bài tập thực hành
+
+### Bài 1: Sửa 3 bug cố tình (LEVEL 1 — 30 phút)
+
+Tạo file `src/App.tsx` có 3 lỗi sau, bạn tự sửa và giải thích nguyên nhân:
+
+```tsx
+// ❌ Bug 1
+import { useState } from 'react';
+function App() {
+  if (true) {
+    const [count, setCount] = useState(0);  // ← Lỗi gì?
+  }
+  return <div>{count}</div>;
+}
+
+// ❌ Bug 2
+function App() {
+  const [movies, setMovies] = useState([]);
+  fetch('/api/movies').then(r => r.json()).then(setMovies);  // ← Lỗi gì?
+  return <ul>{movies.map(m => <li>{m.title}</li>)}</ul>;
+}
+
+// ❌ Bug 3
+function App() {
+  const [users, setUsers] = useState([]);
+  return <ul>{users.map(u => <li>{u.name}</li>)}</ul>;  // ← Lỗi gì khi build TS?
+}
+```
+
+**Đáp án:**
+1. Hook gọi trong `if` → vi phạm Rules of Hooks. Hook phải gọi top-level.
+2. `fetch` chạy mỗi render → infinite loop khi setState. Phải bọc trong `useEffect`.
+3. TS không biết `users` là `User[]` nào → `u.name` báo `any`. Phải `useState<User[]>([])`.
+
+### Bài 2: Build trang Login từ scratch (LEVEL 2 — 90 phút)
+
+Yêu cầu:
+- Form có 2 field (email + password) dùng `react-hook-form` + Zod validation
+- Submit gọi API `POST /api/auth/login` qua Axios
+- Thành công → lưu token vào Zustand store + redirect `/dashboard`
+- Lỗi → toast lỗi (Sonner)
+
+**Tự test:** Dùng tài khoản `admin / admin123` đã có sẵn trong DB seed.
+
+### Bài 3: Production build + deploy local (LEVEL 3 — 30 phút)
+
+- `npm run build`
+- Cài `serve`: `npm install -g serve`
+- Chạy: `serve dist`
+- Mở `http://localhost:3000` → kiểm tra app chạy đúng
+- Mở DevTools Network → check bundle size có < 500KB không?
+
+Nếu > 500KB → đọc `frontend/16-performance-optimization.md` về code splitting.
+
+---
+
+## 16. Câu hỏi tự kiểm tra
+
+1. **`node_modules/` thường nặng vài trăm MB. Tại sao không commit lên git?**
+   → Vì sẽ tốn dung lượng repo + slow clone + dependency phụ thuộc hệ điều hành (binary native modules). Dùng `package-lock.json` để team cài cùng version.
+
+2. **`dependencies` vs `devDependencies` khác nhau gì? Khi nào dùng `-D`?**
+   → `dependencies`: cần để app chạy production (react, axios). `devDependencies`: chỉ cần khi dev/build (vite, vitest, eslint). `npm install -D` cài vào devDependencies. Production deploy không cần devDependencies → bundle nhỏ.
+
+3. **Vite dev nhanh hơn Webpack vì sao?**
+   → Vite KHÔNG bundle dev mode. Browser native ESM tự import từng file. Webpack phải bundle hết → mỗi khi start cần process toàn bộ source.
+
+4. **`npm install` vs `npm ci` khác nhau gì?**
+   → `npm install` đọc `package.json`, có thể update version theo `^` (caret). `npm ci` (Clean Install) đọc `package-lock.json`, version chính xác, xóa `node_modules/` trước. Production / CI dùng `npm ci` để reproducible.
+
+5. **Tại sao TypeScript build chậm hơn JavaScript?**
+   → TS phải qua bước **type check** (chạy `tsc`) trước khi transpile xuống JS. JS không có bước này.
+
+6. **`tsconfig.json` field `strict: true` có ý nghĩa gì?**
+   → Bật tất cả strict check: `strictNullChecks` (null/undefined safety), `noImplicitAny` (cấm any ẩn), `strictFunctionTypes`... Khuyến nghị BẬT cho mọi dự án mới.
+
+7. **`vite.config.ts` field `server.proxy` để làm gì?**
+   → Proxy request từ FE sang BE để tránh CORS dev mode. Ví dụ `/api/*` → `http://localhost:8088/api/*`. Production deploy thì FE và BE thường cùng domain → không cần proxy.
+
+8. **Khi `npm run build` xong, folder `dist/` chứa gì? Deploy lên đâu?**
+   → HTML + JS bundle + CSS bundle + assets. Deploy lên: Vercel, Netlify, Cloudflare Pages, hoặc serve qua Nginx. Static hosting nào cũng được.
+
+9. **Port 5173 là default của Vite. Bạn dùng port khác bằng cách nào?**
+   → 3 cách: (1) `npm run dev -- --port 3000`, (2) `vite.config.ts` field `server.port: 3000`, (3) Environment variable `PORT=3000 npm run dev`.
+
+10. **`package.json` field `scripts` viết shell command. Nếu bạn muốn chạy 2 lệnh tuần tự, viết thế nào?**
+    → Dùng `&&`: `"build": "tsc && vite build"`. Lệnh sau chỉ chạy nếu lệnh trước success. Dùng `;` để chạy bất kể fail/success. Dùng `&` (chỉ Unix) để chạy song song.

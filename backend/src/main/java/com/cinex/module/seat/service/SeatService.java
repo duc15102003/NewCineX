@@ -3,9 +3,12 @@ package com.cinex.module.seat.service;
 import com.cinex.common.entity.StorageState;
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
+import com.cinex.module.booking.entity.BookingStatus;
+import com.cinex.module.booking.repository.BookingRepository;
 import com.cinex.module.room.entity.Room;
 import com.cinex.module.room.repository.RoomRepository;
 import com.cinex.module.seat.dto.BulkUpdateSeatRequest;
+import com.cinex.module.seat.dto.SeatFilter;
 import com.cinex.module.seat.dto.SeatGenerateRequest;
 import com.cinex.module.seat.dto.SeatMapResponse;
 import com.cinex.module.seat.dto.SeatResponse;
@@ -15,8 +18,11 @@ import com.cinex.module.seat.entity.SeatStatus;
 import com.cinex.module.seat.entity.SeatType;
 import com.cinex.module.seat.mapper.SeatMapper;
 import com.cinex.module.seat.repository.SeatRepository;
+import com.cinex.module.seat.specification.SeatSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +39,23 @@ public class SeatService {
 
     private final SeatRepository seatRepository;
     private final RoomRepository roomRepository;
+    private final BookingRepository bookingRepository;
     private final SeatMapper seatMapper;
+
+    /**
+     * (ADMIN) List ghế theo filter — phân trang.
+     *
+     * <p>BẮT BUỘC có roomId trong filter — không cho list ghế cross-room.
+     * Dùng cho UI admin có cột Type / Status / Row để lọc nhanh khi phòng có hàng trăm ghế.
+     */
+    @Transactional(readOnly = true)
+    public Page<SeatResponse> listSeats(SeatFilter filter, Pageable pageable) {
+        if (filter.getRoomId() == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "roomId là bắt buộc khi list ghế");
+        }
+        return seatRepository.findAll(SeatSpecification.fromFilter(filter), pageable)
+                .map(seatMapper::toResponse);
+    }
 
     @Transactional(readOnly = true)
     public SeatMapResponse getSeatMap(Long roomId) {
@@ -57,56 +79,77 @@ public class SeatService {
     }
 
     /**
-     * (ADMIN) Tự động sinh ghế cho phòng theo cấu hình.
-     * Soft delete ghế cũ (thay vì hard delete) → giữ audit trail.
-     * Validate: vipRows và coupleRow phải nằm trong range A→(A+totalRows-1).
+     * (ADMIN) Tự động sinh ghế chuẩn industry (CGV/Lotte/BHD pattern).
+     *
+     * <p>Logic ưu tiên SeatType khi 1 position thuộc nhiều zone:
+     * <ol>
+     *   <li>BLOCKED — block cố định (override mọi loại)</li>
+     *   <li>AISLE — lối đi (không phải ghế, không tính totalSeats)</li>
+     *   <li>HANDICAP — đầu hàng, BẮT BUỘC NĐ 28/2012</li>
+     *   <li>SWEETBOX — cao cấp hơn couple</li>
+     *   <li>COUPLE — hàng cuối</li>
+     *   <li>DELUXE — phòng Premium recliner</li>
+     *   <li>VIP — zone giữa rạp</li>
+     *   <li>STANDARD — mặc định</li>
+     * </ol>
+     *
+     * <p>Có thể truyền {@code applyPresetForRoomType=true} để BE tự suggest
+     * layout theo {@code room.type} (TWO_D/THREE_D/IMAX/FOUR_DX).
      */
     @Transactional
     public SeatMapResponse generateSeats(Long roomId, SeatGenerateRequest request) {
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
-        // Validate vipRows và coupleRow nằm trong range hợp lệ
-        char maxRowChar = (char) ('A' + request.getTotalRows() - 1);
-        String maxRow = String.valueOf(maxRowChar);
-
-        Set<String> vipRows = request.getVipRows() != null ? request.getVipRows() : Set.of();
-        String coupleRow = request.getCoupleRow();
-
-        for (String vr : vipRows) {
-            if (vr.length() != 1 || vr.charAt(0) < 'A' || vr.charAt(0) > maxRowChar) {
-                throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                        "Hàng VIP '" + vr + "' nằm ngoài phạm vi A-" + maxRow);
-            }
-        }
-        if (coupleRow != null && !coupleRow.isBlank()) {
-            if (coupleRow.length() != 1 || coupleRow.charAt(0) < 'A' || coupleRow.charAt(0) > maxRowChar) {
-                throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                        "Hàng đôi '" + coupleRow + "' nằm ngoài phạm vi A-" + maxRow);
-            }
+        // Override với preset nếu admin chọn
+        if (Boolean.TRUE.equals(request.getApplyPresetForRoomType())) {
+            var rt = request.getRoomTypeOverride() != null
+                    ? request.getRoomTypeOverride() : room.getType();
+            request = SeatLayoutPreset.forRoomType(rt);
         }
 
-        // Soft delete ghế cũ thay vì hard delete
+        // Business rule: KHÔNG regenerate khi có booking active
+        boolean hasActiveBooking = bookingRepository.existsByShowtime_Room_IdAndStatusIn(
+                roomId, List.of(BookingStatus.HOLDING, BookingStatus.CONFIRMED));
+        if (hasActiveBooking) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Không thể tạo lại sơ đồ ghế khi phòng đang có booking. Hãy đợi tất cả booking kết thúc hoặc cancel trước.");
+        }
+
+        // CUSTOM LAYOUT path — iterate matrix trực tiếp từ FE visual editor
+        if (request.getCustomLayout() != null && !request.getCustomLayout().isEmpty()) {
+            return generateFromCustomLayout(room, request.getCustomLayout());
+        }
+
+        validateLayoutRequest(request);
+
+        // Soft delete ghế cũ
         seatRepository.softDeleteByRoomId(roomId);
 
+        int totalRows = request.getTotalRows();
+        int totalCols = request.getTotalCols();
+        Set<Integer> aisleCols = request.getAisleCols() != null ? request.getAisleCols() : Set.of();
+        Set<String> blockedKeys = positionsToKeys(request.getBlockedPositions());
+        Set<String> handicapKeys = positionsToKeys(request.getHandicapPositions());
+        Set<String> coupleRows = request.getCoupleRows() != null ? request.getCoupleRows() : Set.of();
+        Set<String> deluxeRows = request.getDeluxeRows() != null ? request.getDeluxeRows() : Set.of();
+
         List<Seat> seats = new ArrayList<>();
-        for (int row = 0; row < request.getTotalRows(); row++) {
-            String rowLabel = String.valueOf((char) ('A' + row));
+        int realSeatCount = 0;
 
-            boolean isCoupleRow = rowLabel.equalsIgnoreCase(coupleRow);
-            boolean isVipRow = vipRows.contains(rowLabel);
+        for (int rowIdx = 0; rowIdx < totalRows; rowIdx++) {
+            String rowLabel = String.valueOf((char) ('A' + rowIdx));
 
-            for (int col = 1; col <= request.getTotalCols(); col++) {
-                SeatType seatType;
-                if (isCoupleRow) {
-                    // Ghế đôi ghép cặp 1-2, 3-4, ... — ghế lẻ cuối (khi totalCols lẻ) → STANDARD
-                    boolean isLastOddCol = (request.getTotalCols() % 2 != 0) && (col == request.getTotalCols());
-                    seatType = isLastOddCol ? SeatType.STANDARD : SeatType.COUPLE;
-                } else if (isVipRow) {
-                    seatType = SeatType.VIP;
-                } else {
-                    seatType = SeatType.STANDARD;
-                }
+            for (int col = 1; col <= totalCols; col++) {
+                String key = rowLabel + ":" + col;
+                boolean isAisle = aisleCols.contains(col);
+                boolean isBlocked = blockedKeys.contains(key);
+
+                SeatType seatType = resolveSeatType(
+                        rowLabel, col, request,
+                        handicapKeys, coupleRows, deluxeRows);
+
+                SeatStatus status = isBlocked ? SeatStatus.BLOCKED : SeatStatus.AVAILABLE;
 
                 seats.add(Seat.builder()
                         .room(room)
@@ -114,18 +157,199 @@ public class SeatService {
                         .colNumber(col)
                         .seatNumber(rowLabel + col)
                         .seatType(seatType)
-                        .status(SeatStatus.AVAILABLE)
+                        .status(status)
+                        .aisle(isAisle)
                         .build());
+
+                if (!isAisle && !isBlocked) realSeatCount++;
             }
         }
 
         seatRepository.saveAll(seats);
-
-        room.setTotalSeats(seats.size());
+        room.setTotalSeats(realSeatCount);  // chỉ đếm seat thật bán được
         roomRepository.save(room);
 
-        log.info("Generated {} seats for room {}", seats.size(), room.getName());
+        log.info("Generated {} positions for room {} ({} bookable seats)",
+                seats.size(), room.getName(), realSeatCount);
         return getSeatMap(roomId);
+    }
+
+    /**
+     * Generate seats từ custom layout matrix (FE visual editor mode).
+     * Khác zone-based: nhận trực tiếp list cell với type + status + aisle.
+     *
+     * <p>Safety net: post-process sanitize COUPLE/SWEETBOX phải có partner kề bên
+     * cùng row (col odd: partner=col+1; col even: partner=col-1). Nếu không có
+     * partner cùng type → fallback STANDARD. Chống case FE bypass validation gửi
+     * COUPLE/SWEETBOX đơn lẻ (ghế lẻ cuối hàng).
+     */
+    private SeatMapResponse generateFromCustomLayout(Room room, List<SeatGenerateRequest.CustomLayoutCell> cells) {
+        seatRepository.softDeleteByRoomId(room.getId());
+
+        // Build index (row, col) → cell để check partner
+        java.util.Map<String, SeatGenerateRequest.CustomLayoutCell> index = new java.util.HashMap<>();
+        for (var c : cells) index.put(c.getRow() + ":" + c.getCol(), c);
+
+        List<Seat> seats = new ArrayList<>();
+        int realSeatCount = 0;
+        int fallbackCount = 0;
+
+        for (var cell : cells) {
+            boolean isAisle = Boolean.TRUE.equals(cell.getAisle());
+            SeatType type = cell.getSeatType() != null ? cell.getSeatType() : SeatType.STANDARD;
+            SeatStatus status = cell.getStatus() != null ? cell.getStatus() : SeatStatus.AVAILABLE;
+
+            // Sanitize ghế đôi không có partner đúng type → STANDARD
+            if (!isAisle && (type == SeatType.COUPLE || type == SeatType.SWEETBOX)) {
+                int col = cell.getCol();
+                boolean isOdd = col % 2 != 0;
+                int partnerCol = isOdd ? col + 1 : col - 1;
+                var partner = index.get(cell.getRow() + ":" + partnerCol);
+                if (partner == null || partner.getSeatType() != type) {
+                    type = SeatType.STANDARD;
+                    fallbackCount++;
+                }
+            }
+
+            seats.add(Seat.builder()
+                    .room(room)
+                    .rowLabel(cell.getRow())
+                    .colNumber(cell.getCol())
+                    .seatNumber(cell.getRow() + cell.getCol())
+                    .seatType(type)
+                    .status(status)
+                    .aisle(isAisle)
+                    .build());
+
+            if (!isAisle && status != SeatStatus.BLOCKED) realSeatCount++;
+        }
+
+        seatRepository.saveAll(seats);
+        room.setTotalSeats(realSeatCount);
+        roomRepository.save(room);
+
+        if (fallbackCount > 0) {
+            log.warn("Sanitized {} lone COUPLE/SWEETBOX seats to STANDARD for room {}",
+                    fallbackCount, room.getName());
+        }
+        log.info("Generated {} positions (custom) for room {} ({} bookable)",
+                seats.size(), room.getName(), realSeatCount);
+        return getSeatMap(room.getId());
+    }
+
+    /** Validate ranges + boundary của tất cả zone trong request. */
+    private void validateLayoutRequest(SeatGenerateRequest request) {
+        char maxRowChar = (char) ('A' + request.getTotalRows() - 1);
+        String maxRow = String.valueOf(maxRowChar);
+        int maxCol = request.getTotalCols();
+
+        // Aisle cols ∈ [1..totalCols]
+        if (request.getAisleCols() != null) {
+            for (Integer c : request.getAisleCols()) {
+                if (c < 1 || c > maxCol)
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                            "Cột aisle " + c + " nằm ngoài phạm vi 1-" + maxCol);
+            }
+        }
+        // VIP zone
+        if (request.getVipZone() != null) {
+            var z = request.getVipZone();
+            validateRow(z.getRowStart(), maxRowChar, maxRow, "VIP rowStart");
+            validateRow(z.getRowEnd(), maxRowChar, maxRow, "VIP rowEnd");
+            validateCol(z.getColStart(), maxCol, "VIP colStart");
+            validateCol(z.getColEnd(), maxCol, "VIP colEnd");
+            if (z.getRowStart().charAt(0) > z.getRowEnd().charAt(0))
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "VIP rowStart phải <= rowEnd");
+            if (z.getColStart() > z.getColEnd())
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "VIP colStart phải <= colEnd");
+        }
+        // Sweetbox row
+        if (request.getSweetboxRow() != null) {
+            var s = request.getSweetboxRow();
+            validateRow(s.getRow(), maxRowChar, maxRow, "Sweetbox row");
+            validateCol(s.getColStart(), maxCol, "Sweetbox colStart");
+            validateCol(s.getColEnd(), maxCol, "Sweetbox colEnd");
+        }
+        // Couple/Deluxe rows
+        if (request.getCoupleRows() != null) {
+            for (String r : request.getCoupleRows())
+                validateRow(r, maxRowChar, maxRow, "Couple row");
+        }
+        if (request.getDeluxeRows() != null) {
+            for (String r : request.getDeluxeRows())
+                validateRow(r, maxRowChar, maxRow, "Deluxe row");
+        }
+    }
+
+    private void validateRow(String row, char maxRowChar, String maxRow, String fieldLabel) {
+        if (row == null || row.length() != 1 || row.charAt(0) < 'A' || row.charAt(0) > maxRowChar)
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    fieldLabel + " '" + row + "' nằm ngoài phạm vi A-" + maxRow);
+    }
+
+    private void validateCol(Integer col, int maxCol, String fieldLabel) {
+        if (col == null || col < 1 || col > maxCol)
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    fieldLabel + " " + col + " nằm ngoài phạm vi 1-" + maxCol);
+    }
+
+    private Set<String> positionsToKeys(Set<SeatGenerateRequest.SeatPosition> positions) {
+        if (positions == null) return Set.of();
+        Set<String> keys = new java.util.HashSet<>();
+        for (var p : positions) keys.add(p.getRow() + ":" + p.getCol());
+        return keys;
+    }
+
+    /**
+     * Resolve seat type theo ưu tiên (highest first).
+     * KHÔNG check BLOCKED/AISLE ở đây — xử lý riêng ở caller.
+     */
+    private SeatType resolveSeatType(
+            String rowLabel, int col,
+            SeatGenerateRequest req,
+            Set<String> handicapKeys,
+            Set<String> coupleRows,
+            Set<String> deluxeRows) {
+        String key = rowLabel + ":" + col;
+
+        // 1. Handicap (highest priority sau BLOCKED/AISLE)
+        if (handicapKeys.contains(key)) return SeatType.HANDICAP;
+
+        // 2. Sweetbox
+        if (req.getSweetboxRow() != null) {
+            var s = req.getSweetboxRow();
+            if (rowLabel.equals(s.getRow()) && col >= s.getColStart() && col <= s.getColEnd()) {
+                // Ghế lẻ cuối → STANDARD (sweetbox ghép cặp)
+                int width = s.getColEnd() - s.getColStart() + 1;
+                boolean isLastOdd = (width % 2 != 0) && (col == s.getColEnd());
+                return isLastOdd ? SeatType.STANDARD : SeatType.SWEETBOX;
+            }
+        }
+
+        // 3. Couple
+        if (coupleRows.contains(rowLabel)) {
+            int totalCols = req.getTotalCols();
+            boolean isLastOdd = (totalCols % 2 != 0) && (col == totalCols);
+            return isLastOdd ? SeatType.STANDARD : SeatType.COUPLE;
+        }
+
+        // 4. Deluxe
+        if (deluxeRows.contains(rowLabel)) return SeatType.DELUXE;
+
+        // 5. VIP zone
+        if (req.getVipZone() != null) {
+            var z = req.getVipZone();
+            char rChar = rowLabel.charAt(0);
+            if (rChar >= z.getRowStart().charAt(0) && rChar <= z.getRowEnd().charAt(0)
+                    && col >= z.getColStart() && col <= z.getColEnd()) {
+                return SeatType.VIP;
+            }
+        }
+
+        // 6. Default
+        return SeatType.STANDARD;
     }
 
     @Transactional
@@ -146,25 +370,36 @@ public class SeatService {
     }
 
     /**
-     * (ADMIN) Bulk update loại ghế hoặc trạng thái (BROKEN) — dùng cho Seat Map Editor.
-     * - status=BROKEN: đánh dấu ghế hỏng, giữ nguyên seatType
-     * - seatType=VIP/STANDARD/COUPLE: đổi loại ghế, nếu đang BROKEN thì khôi phục AVAILABLE
+     * (ADMIN) Bulk update — Seat Map Editor support 3 dimension độc lập:
+     * <ul>
+     *   <li>{@code seatType} (STANDARD/VIP/COUPLE/SWEETBOX/DELUXE/HANDICAP)
+     *       — đổi loại; tự reset BROKEN/BLOCKED về AVAILABLE</li>
+     *   <li>{@code status} (BROKEN/BLOCKED/AVAILABLE) — đổi trạng thái</li>
+     *   <li>{@code isAisle} — đánh dấu lối đi (true) hoặc bỏ (false)</li>
+     * </ul>
+     * Có thể combine: vd seatType=STANDARD + isAisle=false.
      */
     @Transactional
     public SeatMapResponse bulkUpdateSeats(Long roomId, BulkUpdateSeatRequest request) {
         List<Seat> seats = seatRepository.findAllById(request.getSeatIds());
 
-        if (request.getStatus() == SeatStatus.BROKEN) {
-            seats.forEach(s -> s.setStatus(SeatStatus.BROKEN));
-            log.info("Bulk marked {} seats as BROKEN", seats.size());
-        } else if (request.getSeatType() != null) {
+        if (request.getStatus() != null) {
+            seats.forEach(s -> s.setStatus(request.getStatus()));
+            log.info("Bulk set status {} for {} seats", request.getStatus(), seats.size());
+        }
+        if (request.getSeatType() != null) {
             seats.forEach(s -> {
                 s.setSeatType(request.getSeatType());
-                if (s.getStatus() == SeatStatus.BROKEN) {
+                // Đổi type → reset BROKEN/BLOCKED về AVAILABLE (admin có chủ ý đổi)
+                if (s.getStatus() != SeatStatus.AVAILABLE && request.getStatus() == null) {
                     s.setStatus(SeatStatus.AVAILABLE);
                 }
             });
-            log.info("Bulk updated {} seats to type {}", seats.size(), request.getSeatType());
+            log.info("Bulk updated type {} for {} seats", request.getSeatType(), seats.size());
+        }
+        if (request.getAisle() != null) {
+            seats.forEach(s -> s.setAisle(request.getAisle()));
+            log.info("Bulk set aisle={} for {} seats", request.getAisle(), seats.size());
         }
 
         seatRepository.saveAll(seats);

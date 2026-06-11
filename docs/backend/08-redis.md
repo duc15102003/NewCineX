@@ -1053,7 +1053,198 @@ Database: 0 query (tải = 0)
 
 ---
 
-## 13. Tổng hợp kiến thức
+## 13. Code thực tế (Redis): JwtBlacklistService
+
+Đây là use case **thứ 2** của Redis trong CineX (cùng với `LoginRateLimitService`). Pattern cực kỳ giống `LoginRateLimitService` — đều là "lưu flag/counter ngắn hạn theo key, dùng TTL để tự dọn".
+
+### Bài toán: revoke access token trước khi hết hạn
+
+JWT là stateless — server không lưu phiên. Khi user logout hoặc đổi password, refresh token bị revoke ngay trong DB, nhưng access token cũ **vẫn dùng được** đến khi hết hạn tự nhiên (CineX cấu hình 15 phút). Nếu attacker có access token leak, họ có cửa sổ 15 phút để impersonate user.
+
+> Xem [03-security.md Section 18](../backend/03-security.md) cho phân tích an toàn đầy đủ. Phần này tập trung vào **cách Redis lưu trữ**.
+
+### Vì sao chọn Redis (không phải DB / HashMap)?
+
+Áp **3 câu hỏi** ở Section 8 cho use case này:
+
+| Tiêu chí | Đánh giá |
+|---|---|
+| Cần share giữa multi-instance? | ✅ Có. Instance A logout user → instance B phải reject token đó luôn |
+| Cần TTL tự xóa? | ✅ Có. Sau khi token hết hạn tự nhiên, không cần giữ blacklist nữa — tránh phình memory |
+| Cần atomic? | ✅ Có (nhẹ). `SET` + `EXISTS` đều atomic ở Redis |
+
+3/3 → Redis. Dùng HashMap sẽ sai pattern: instance khác không biết token đã blacklist, key không tự xóa khi token expire.
+
+> So sánh với DB: lưu blacklist vào bảng `revoked_tokens` cũng được, nhưng:
+> - Mỗi request phải `SELECT * FROM revoked_tokens WHERE hash = ?` → query DB cho mọi request → tốn pool connection.
+> - Phải tự code scheduler `DELETE WHERE expiry < NOW()` để dọn.
+> - Latency DB 5-20ms vs Redis 0.5-1ms.
+
+### Code thực tế
+
+```
+File: backend/src/main/java/com/cinex/security/JwtBlacklistService.java
+```
+
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class JwtBlacklistService {
+
+    private static final String KEY_PREFIX = "jwt:blacklist:";
+
+    private final StringRedisTemplate redis;
+    private final JwtUtil jwtUtil;
+
+    /**
+     * Đưa token vào blacklist với TTL = phần còn lại trước khi token hết hạn.
+     */
+    public void blacklist(String token) {
+        if (token == null || token.isBlank()) return;
+        try {
+            Claims claims = jwtUtil.extractAllClaims(token);
+            Date exp = claims.getExpiration();
+            if (exp == null) return;
+
+            long remainMs = exp.getTime() - System.currentTimeMillis();
+            if (remainMs <= 0) {
+                // Token đã expire — không cần blacklist (filter sẽ tự reject)
+                return;
+            }
+
+            String key = KEY_PREFIX + tokenHash(token);
+            redis.opsForValue().set(key, "1", Duration.ofMillis(remainMs));
+            log.info("JWT blacklisted for user '{}', TTL={}s",
+                     claims.getSubject(), remainMs / 1000);
+        } catch (Exception e) {
+            log.debug("Skip blacklist (invalid token): {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Check mỗi request từ JwtAuthFilter. Fail-open khi Redis lỗi
+     * → tránh outage Redis làm block toàn site.
+     */
+    public boolean isBlacklisted(String token) {
+        if (token == null || token.isBlank()) return false;
+        try {
+            String key = KEY_PREFIX + tokenHash(token);
+            return Boolean.TRUE.equals(redis.hasKey(key));
+        } catch (Exception e) {
+            log.warn("Redis check blacklist failed, fail-open: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /** SHA-256 → 64 hex chars. Tránh lưu token raw vào Redis. */
+    public String tokenHash(String token) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
+    }
+}
+```
+
+### Vì sao lưu SHA-256 hash thay vì raw token?
+
+| | Lưu raw token | Lưu SHA-256 |
+|---|---|---|
+| Memory | ~200 byte / key (JWT dài) | 64 hex chars cố định |
+| Bảo mật khi Redis leak | ❌ Attacker có token raw → impersonate | ✅ Hash 1 chiều |
+| Verify cost | `EXISTS jwt:blacklist:{raw}` | `EXISTS jwt:blacklist:{hash}` (cost ≈ 0) |
+
+Redis có thể bị leak qua memory dump, RDB backup file, hoặc khi attacker chiếm được Redis container. Hash giúp **giảm thiệt hại** — leak vẫn chỉ thấy hash, không khôi phục được token.
+
+### Tích hợp vào JwtAuthFilter
+
+```java
+// JwtAuthFilter.java — sau khi parse claims, trước khi setAuthentication
+if (jwtBlacklistService.isBlacklisted(token)) {
+    log.debug("JWT blacklisted for {}", username);
+    filterChain.doFilter(request, response);   // không set Authentication → 401
+    return;
+}
+```
+
+Thứ tự check trong filter:
+1. Có header `Authorization: Bearer ...`? Không → skip filter.
+2. Parse claims, lấy `subject` + `exp`.
+3. **Check expired** (CPU local, nhanh) — token quá hạn thường chiếm tỷ lệ lớn.
+4. **Check blacklist** (Redis round-trip ~1ms) — chỉ chạy nếu chưa expired → tiết kiệm 1 query Redis cho mỗi token đã hết hạn.
+5. Load `UserDetails` từ cache (Caffeine TTL 2p) → `setAuthentication`.
+
+### Use cases dùng `blacklist()` trong CineX
+
+| Action | File | Vì sao blacklist |
+|---|---|---|
+| Logout (`POST /api/auth/logout`) | `AuthService.logout()` | Nhấn "đăng xuất" → access token vẫn dùng 15 phút sau là sai |
+| Đổi password (`POST /api/users/me/change-password`) | `UserService.changePassword()` | Đề phòng attacker có sẵn access token cũ — đổi pass để cắt ngay |
+
+> Reset password (forgot-password) **không** blacklist vì user chưa login (không có access token đang dùng) — chỉ cần revoke tất cả refresh token là đủ.
+
+### Quan sát Redis khi chạy thực tế
+
+```bash
+# User vanan logout lúc 10:00:00, access token còn 12 phút
+docker exec -it cinex-redis-1 redis-cli
+
+127.0.0.1:6379> KEYS jwt:blacklist:*
+1) "jwt:blacklist:8c4a7f3d2b9e6a1f5d8c0b7e4a9f6d2c1b8e5a3f7d0c9b6e1a4f8d5c2b7e3a9f"
+
+127.0.0.1:6379> GET jwt:blacklist:8c4a7f3d2b9e6a1f5d8c0b7e4a9f6d2c1b8e5a3f7d0c9b6e1a4f8d5c2b7e3a9f
+"1"
+
+127.0.0.1:6379> TTL jwt:blacklist:8c4a7f3d2b9e6a1f5d8c0b7e4a9f6d2c1b8e5a3f7d0c9b6e1a4f8d5c2b7e3a9f
+(integer) 718        # ← Còn ~12 phút trước khi token hết hạn tự nhiên
+```
+
+Sau ~12 phút Redis tự xóa key (do TTL). Không cần scheduler nào.
+
+### So sánh JwtBlacklist với LoginRateLimit
+
+Hai service đều dùng Redis nhưng pattern khác biệt rõ:
+
+| Aspect | LoginRateLimit | JwtBlacklist |
+|---|---|---|
+| **Mục đích** | Chống brute force | Invalidate token ngay khi logout / đổi pass |
+| **Key prefix** | `login:fail:{username}` | `jwt:blacklist:{sha256-hex}` |
+| **Data lưu** | Counter (integer) — `INCR` | Flag exists — `SET key "1"` |
+| **Lệnh tạo** | `INCR` + `EXPIRE` (lần đầu) | `SET key value EX <ttl>` |
+| **TTL** | 15 phút từ lần fail ĐẦU (không reset mỗi fail) | = `exp - now` của JWT |
+| **TTL reset?** | Không (tránh attacker spam fail → block vô tận) | Mỗi token mới có TTL riêng |
+| **Check trước action** | `checkBlocked` ở đầu `login()` | `isBlacklisted` trong `JwtAuthFilter` mỗi request |
+| **Khi nào xóa thủ công** | `clearFails` khi login thành công | Không xóa — Redis tự xóa khi TTL hết |
+| **Fail mode khi Redis chết** | Fail-open (không block) | Fail-open (cho qua) |
+
+Pattern chung: **"counter/flag ngắn hạn theo key + TTL tự dọn"** — đây là pattern Redis **kinh điển** cho rate limit, session, idempotency key, distributed lock.
+
+### Threat coverage
+
+| Tấn công | Bị chặn? |
+|---|---|
+| Access token leak — user đã logout | ✅ Blacklist đến hết TTL JWT |
+| Access token leak — user CHƯA logout | ❌ Không cover (cần token binding / device fingerprint) |
+| Attacker bypass bằng cách đoán hash SHA-256 | ✅ Hash 256-bit không thể brute force |
+| Redis chết đột ngột | ⚠️ Fail-open — chấp nhận vì TTL ngắn 15 phút |
+| Attacker đọc trộm Redis (memory dump, RDB leak) | ✅ Hash 1 chiều → không khôi phục token gốc |
+
+### Mở rộng tương lai
+
+- **Thêm `jti` claim vào JWT** → blacklist theo `jti` (36 byte UUID) thay vì hash 64 byte → tiết kiệm memory.
+- **Cluster Redis** khi blacklist size lớn (>1GB).
+- **Notify user qua email** khi phát hiện token leak (gồm IP & User-Agent ở thời điểm blacklist).
+- **Device-aware**: lưu device fingerprint khi tạo token, blacklist theo device thay vì token.
+
+---
+
+## 14. Tổng hợp kiến thức
 
 ### Các lệnh Redis cơ bản (biết để debug)
 
@@ -1080,7 +1271,7 @@ FLUSHALL                   # Xóa hết tất cả key (NGUY HIỂM)
 
 ---
 
-## 14. Câu hỏi tự kiểm tra
+## 15. Câu hỏi tự kiểm tra
 
 **Câu 1:** Nếu admin sửa `max_seats` từ 8 thành 10 trực tiếp trong SQL Server (không qua API), user đặt 9 ghế sẽ bị từ chối hay thành công? Tại sao?
 

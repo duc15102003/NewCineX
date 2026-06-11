@@ -13,13 +13,45 @@ export interface AdminUser {
   avatarUrl: string | null
   role: string
   enabled: boolean
+  storageState?: string
+  createdAt?: string
+  /** Chi nhánh gán cho branch ADMIN — null cho USER/SUPER_ADMIN. */
+  theaterId?: number | null
+  theaterName?: string | null
 }
 
-export function useAdminUsers(params: Record<string, any> = {}) {
+/**
+ * Filter cho admin list user — map 1-1 với BE UserFilter.java.
+ */
+export interface AdminUserFilter {
+  keyword?: string
+  role?: 'USER' | 'ADMIN' | ''
+  enabled?: boolean
+  createdFrom?: string  // ISO datetime (yyyy-MM-ddTHH:mm:ss)
+  createdTo?: string
+  includeDeleted?: boolean
+  page?: number
+  size?: number
+}
+
+/**
+ * Loại bỏ field rỗng để BE không bind nhầm (vd: enabled=""→false giả).
+ */
+function cleanParams(input: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(input)) {
+    if (v === undefined || v === null || v === '') continue
+    out[k] = v
+  }
+  return out
+}
+
+export function useAdminUsers(params: AdminUserFilter = {}) {
   return useQuery({
     queryKey: ['admin', 'users', params],
     queryFn: async () => {
-      const res = await api.get<ApiResponse<PageResponse<AdminUser>>>('/api/users', { params })
+      const cleaned = cleanParams(params as Record<string, unknown>)
+      const res = await api.get<ApiResponse<PageResponse<AdminUser>>>('/api/users', { params: cleaned })
       return res.data.data
     },
   })

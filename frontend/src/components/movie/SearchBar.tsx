@@ -26,7 +26,7 @@ export default function SearchBar({ value, onChange, placeholder = 'Tìm kiếm 
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         placeholder={placeholder}
-        className="pl-10 bg-[#0d2137] border-white/10"
+        className="pl-10 bg-[#2a2317] border-white/10"
       />
     </div>
   )

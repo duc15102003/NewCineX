@@ -11,6 +11,12 @@ import java.util.List;
 public class SnackOrderResponse {
 
     private Long id;
+
+    /** Chi nhánh nơi đơn POS được tạo — dùng cho group-by-theater ở admin. */
+    private Long theaterId;
+    private String theaterName;
+    private String theaterCity;
+
     private String orderCode;
     private BigDecimal totalAmount;
     private String note;

@@ -1,0 +1,50 @@
+# DEV LOCAL OVERRIDE — credentials cho dev local.
+#
+# CÁCH DÙNG:
+# 1. Copy file này thành `application-local.yml` (cùng thư mục, KHÔNG có `.example`)
+# 2. Paste credentials thật / sandbox vào
+# 3. File `application-local.yml` đã được .gitignore, KHÔNG commit
+# 4. Run lại bootRun — Spring tự load qua `spring.config.import` trong application-dev.yml
+#
+# PRODUCTION: KHÔNG dùng file này. Set env vars qua secret manager (AWS Secrets Manager,
+# Vault, K8s secrets, ...).
+
+cloudinary:
+  # Lấy từ https://cloudinary.com/console
+  api-key: YOUR_CLOUDINARY_API_KEY_HERE
+  api-secret: YOUR_CLOUDINARY_API_SECRET_HERE
+
+spring:
+  mail:
+    # ============================================================
+    # BẮT BUỘC — Mỗi dev tự set credentials riêng, KHÔNG share chung
+    # ============================================================
+    # Application-dev.yml KHÔNG có default cho username/password → SMTP fail
+    # nếu thiếu. Tránh nhiều dev share Mailtrap account chung.
+    #
+    # CHỌN 1 TRONG 2 OPTION DƯỚI:
+
+    # === OPTION A: Mailtrap sandbox (dev test, KHÔNG gửi ra email thật) ===
+    # 1. Đăng ký free tại https://mailtrap.io
+    # 2. Vào Email Testing → My Inbox → Integrations chọn SMTP
+    # 3. Copy username/password (mỗi dev 1 cặp riêng)
+    host: sandbox.smtp.mailtrap.io
+    port: 2525
+    username: YOUR_MAILTRAP_USERNAME
+    password: YOUR_MAILTRAP_PASSWORD
+
+    # === OPTION B: Gmail SMTP (gửi email thật, dùng cho demo / production) ===
+    # 1. Vào Gmail → tài khoản Google → bật 2FA bắt buộc
+    # 2. Tạo App Password tại https://myaccount.google.com/apppasswords
+    #    (KHÔNG dùng password Gmail thường — Google chặn)
+    # 3. Comment block Mailtrap ở trên + uncomment block dưới
+    # host: smtp.gmail.com
+    # port: 587
+    # username: your_email@gmail.com
+    # password: your_16_char_app_password_no_space
+
+app:
+  jwt:
+    # Gen 256-bit base64: openssl rand -base64 32
+    # Optional override — dev yml đã có default
+    # secret: PASTE_BASE64_256BIT_SECRET_HERE

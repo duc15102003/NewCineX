@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- 15 thể loại phim phổ biến -->
+    <changeSet id="012-seed-genres" author="cinex">
+        <sql>
+            INSERT INTO genres (name, description, storage_state) VALUES
+            (N'Hành động',     N'Hành động, võ thuật, chiến tranh',          N'ACTIVE'),
+            (N'Phiêu lưu',     N'Khám phá, mạo hiểm, du hành',                N'ACTIVE'),
+            (N'Hoạt hình',     N'Phim hoạt hình 2D/3D',                       N'ACTIVE'),
+            (N'Hài',           N'Hài kịch, châm biếm, vui nhộn',              N'ACTIVE'),
+            (N'Tội phạm',      N'Tội phạm, điều tra, gangster',               N'ACTIVE'),
+            (N'Tâm lý',        N'Drama, tình cảm, gia đình',                  N'ACTIVE'),
+            (N'Tài liệu',      N'Phim tài liệu, lịch sử thật',                N'ACTIVE'),
+            (N'Kinh dị',       N'Kinh dị, ma quái, ám ảnh',                   N'ACTIVE'),
+            (N'Giả tưởng',     N'Fantasy, ma thuật, thế giới ảo',             N'ACTIVE'),
+            (N'Lịch sử',       N'Bối cảnh lịch sử, cổ trang',                 N'ACTIVE'),
+            (N'Âm nhạc',       N'Phim ca nhạc, tiểu sử nghệ sĩ',              N'ACTIVE'),
+            (N'Lãng mạn',      N'Tình yêu, cảm xúc đôi lứa',                  N'ACTIVE'),
+            (N'Khoa học viễn tưởng', N'Sci-fi, công nghệ tương lai, không gian', N'ACTIVE'),
+            (N'Thể thao',      N'Thi đấu, vận động viên, đội nhóm',           N'ACTIVE'),
+            (N'Hồi hộp',       N'Thriller, gay cấn, hồi hộp',                 N'ACTIVE');
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

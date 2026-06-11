@@ -26,11 +26,11 @@ function StarRating({ value, onChange, readonly = false }: { value: number; onCh
         >
           <Star
             size={readonly ? 12 : 18}
-            className={(hover || value) >= star ? 'text-[#eab308] fill-[#eab308]' : 'text-gray-600'}
+            className={(hover || value) >= star ? 'text-[#ffc107] fill-[#ffc107]' : 'text-gray-600'}
           />
         </button>
       ))}
-      {value > 0 && <span className="text-sm text-[#eab308] font-semibold ml-1">{value}/10</span>}
+      {value > 0 && <span className="text-sm text-[#ffc107] font-semibold ml-1">{value}/10</span>}
     </div>
   )
 }
@@ -56,13 +56,13 @@ export default function ReviewSection({ movieId }: ReviewSectionProps) {
   return (
     <div>
       <div className="mb-6">
-        <div className="w-10 h-1 bg-[#eab308] rounded-full mb-3" />
+        <div className="w-10 h-1 bg-[#ffc107] rounded-full mb-3" />
         <h2 className="text-2xl font-bold text-white">Đánh giá ({reviewsData?.totalElements ?? 0})</h2>
       </div>
 
       {/* Form viết review — chỉ hiện khi đã login */}
       {isLoggedIn() && (
-        <div className="bg-[#0a1929] border border-white/5 rounded-xl p-5 mb-6">
+        <div className="bg-[#201b11] border border-white/5 rounded-2xl p-5 mb-6">
           <p className="text-sm text-gray-400 mb-3">Đánh giá của bạn</p>
           <StarRating value={rating} onChange={setRating} />
           <Textarea
@@ -78,7 +78,7 @@ export default function ReviewSection({ movieId }: ReviewSectionProps) {
             <Button
               onClick={handleSubmit}
               disabled={rating === 0 || createReview.isPending}
-              className="bg-[#eab308] hover:bg-[#ca8a04] text-black font-semibold"
+              className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold"
             >
               <Send size={14} className="mr-1" /> Gửi đánh giá
             </Button>
@@ -92,13 +92,13 @@ export default function ReviewSection({ movieId }: ReviewSectionProps) {
       ) : (
         <div className="space-y-3">
           {reviews.map(r => (
-            <div key={r.id} className="bg-[#0a1929] border border-white/5 rounded-xl p-4">
+            <div key={r.id} className="bg-[#201b11] border border-white/5 rounded-2xl p-4">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   {r.avatarUrl ? (
                     <img src={r.avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover" />
                   ) : (
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#eab308] to-[#ca8a04] flex items-center justify-center text-black text-xs font-bold">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#ffc107] to-[#e6ac06] flex items-center justify-center text-black text-xs font-bold">
                       {r.username?.charAt(0).toUpperCase()}
                     </div>
                   )}

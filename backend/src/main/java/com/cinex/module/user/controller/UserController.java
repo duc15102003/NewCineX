@@ -11,6 +11,7 @@ import com.cinex.module.user.dto.UserProfileResponse;
 import com.cinex.module.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -49,8 +50,9 @@ public class UserController {
 
     @PutMapping("/me/password")
     @Operation(summary = "Change password")
-    public ApiResponse<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
-        userService.changePassword(request);
+    public ApiResponse<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                            HttpServletRequest httpRequest) {
+        userService.changePassword(request, httpRequest);
         return ApiResponse.ok("Password changed successfully", null);
     }
 
@@ -60,13 +62,19 @@ public class UserController {
         return ApiResponse.ok("Avatar uploaded", userService.uploadAvatar(file));
     }
 
-    // ===== ADMIN APIs =====
+    // ===== SUPER_ADMIN APIs (User management) =====
+    //
+    // Vì sao chỉ SUPER_ADMIN, không phải ADMIN thường?
+    // - Branch ADMIN không có lý do nghiệp vụ để quản user (HR/HQ task).
+    // - Branch ADMIN có thể abuse: tạo USER role giả mạo / promote chính mình → leak data.
+    // - Pattern industry: HR portal tách khỏi Branch admin panel. CineX dùng chung URL
+    //   nhưng chỉ SUPER_ADMIN truy cập được.
 
     /**
      * GET /api/users?keyword=vanan&role=ADMIN&enabled=true&includeDeleted=false&page=0&size=20
      */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) List users with filter")
     public ApiResponse<PageResponse<UserProfileResponse>> listUsers(
             UserFilter filter,
@@ -75,7 +83,7 @@ public class UserController {
     }
 
     @PutMapping("/{id}/role")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Update user role")
     public ApiResponse<UserProfileResponse> updateRole(
             @PathVariable Long id,
@@ -84,7 +92,7 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Update user info, role and enabled status")
     public ApiResponse<UserProfileResponse> adminUpdateUser(
             @PathVariable Long id,

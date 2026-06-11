@@ -2,14 +2,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import api, { getErrorMessage } from '@/api/axios'
 import type { ApiResponse } from '@/types/auth'
+import type { SeatTypeKey } from '@/types/seatEditor'
 
 export interface SeatItem {
   id: number
   rowLabel: string
   colNumber: number
   seatNumber: string
-  seatType: 'STANDARD' | 'VIP' | 'COUPLE'
-  status: string
+  seatType: 'STANDARD' | 'VIP' | 'COUPLE' | 'SWEETBOX' | 'DELUXE' | 'HANDICAP'
+  status: 'AVAILABLE' | 'BROKEN' | 'BLOCKED'
+  aisle: boolean
 }
 
 export interface SeatMapData {
@@ -30,23 +32,33 @@ export function useSeatMap(roomId: number) {
   })
 }
 
+/**
+ * Bulk update: nhận map seatId → SeatTypeKey (bao gồm STANDARD/VIP/COUPLE/
+ * SWEETBOX/DELUXE/HANDICAP + BROKEN/BLOCKED + AISLE).
+ *
+ * Backend split call theo dimension:
+ * - BROKEN/BLOCKED → set status
+ * - AISLE → set isAisle=true (cần API support)
+ * - 6 type còn lại → set seatType
+ */
 export function useBulkUpdateSeats(roomId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (changes: Map<number, 'STANDARD' | 'VIP' | 'COUPLE' | 'BROKEN'>) => {
-      // Group by type để gọi bulk-update theo từng loại
-      const grouped = new Map<string, number[]>()
+    mutationFn: async (changes: Map<number, SeatTypeKey>) => {
+      const grouped = new Map<SeatTypeKey, number[]>()
       changes.forEach((type, seatId) => {
         const list = grouped.get(type) || []
         list.push(seatId)
         grouped.set(type, list)
       })
       for (const [type, seatIds] of grouped) {
-        if (type === 'BROKEN') {
-          // BROKEN gửi status thay vì seatType
-          await api.put(`/api/rooms/${roomId}/seats/bulk-update`, { seatIds, status: 'BROKEN' })
+        if (type === 'BROKEN' || type === 'BLOCKED') {
+          await api.put(`/api/rooms/${roomId}/seats/bulk-update`, { seatIds, status: type })
+        } else if (type === 'AISLE') {
+          await api.put(`/api/rooms/${roomId}/seats/bulk-update`, { seatIds, aisle: true })
         } else {
-          await api.put(`/api/rooms/${roomId}/seats/bulk-update`, { seatIds, seatType: type })
+          // STANDARD / VIP / COUPLE / SWEETBOX / DELUXE / HANDICAP
+          await api.put(`/api/rooms/${roomId}/seats/bulk-update`, { seatIds, seatType: type, aisle: false })
         }
       }
     },

@@ -2,18 +2,16 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useQueryClient } from '@tanstack/react-query'
 import { useProfile, useUpdateProfile, useChangePassword } from '@/hooks/useBooking'
+import { useUploadAvatar } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useAuthStore } from '@/store/authStore'
 import { Badge } from '@/components/ui/badge'
 import Loading from '@/components/common/Loading'
 import { fmtDate } from '@/utils/labels'
-import api from '@/api/axios'
-import { toast } from 'sonner'
 import { Camera } from 'lucide-react'
 
 // Schema cập nhật thông tin
@@ -22,6 +20,11 @@ const profileSchema = z.object({
   phone: z
     .string()
     .regex(/^(0|\+84)[0-9]{8,9}$/, 'Số điện thoại không hợp lệ')
+    .or(z.literal('')),
+  // Ngày sinh optional — nếu khai thì BE auto-block phim không đủ tuổi (Phase 2).
+  dateOfBirth: z
+    .string()
+    .refine(v => !v || new Date(v) < new Date(), 'Ngày sinh phải là ngày trong quá khứ')
     .or(z.literal('')),
 })
 type ProfileForm = z.infer<typeof profileSchema>
@@ -43,7 +46,7 @@ export default function ProfilePage() {
   const { data: profile, isLoading } = useProfile()
   const updateProfile = useUpdateProfile()
   const changePassword = useChangePassword()
-  const qc = useQueryClient()
+  const uploadAvatar = useUploadAvatar()
 
   // Form cập nhật thông tin
   const {
@@ -53,7 +56,7 @@ export default function ProfilePage() {
     formState: { errors: profileErrors },
   } = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { fullName: '', phone: '' },
+    defaultValues: { fullName: '', phone: '', dateOfBirth: '' },
   })
 
   // Điền dữ liệu khi profile load xong
@@ -62,6 +65,7 @@ export default function ProfilePage() {
       resetProfile({
         fullName: profile.fullName ?? '',
         phone: profile.phone ?? '',
+        dateOfBirth: profile.dateOfBirth ?? '',
       })
     }
   }, [profile, resetProfile])
@@ -80,6 +84,7 @@ export default function ProfilePage() {
     await updateProfile.mutateAsync({
       fullName: data.fullName || undefined,
       phone: data.phone || undefined,
+      dateOfBirth: data.dateOfBirth || undefined,
     })
   }
 
@@ -92,20 +97,34 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-[#051424] flex items-center justify-center">
+      <div className="min-h-screen bg-[#181309] flex items-center justify-center">
         <p className="text-red-400">Không thể tải thông tin tài khoản.</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#051424] text-white py-10 px-4">
+    <div className="min-h-screen bg-[#181309] text-white py-10 px-4">
       <div className="max-w-xl mx-auto space-y-6">
 
-        <h1 className="text-2xl font-bold text-[#eab308]">Tài khoản của tôi</h1>
+        <h1 className="text-2xl font-bold text-[#ffc107]">Tài khoản của tôi</h1>
+
+        {/* Email verification banner — chỉ hiện khi chưa verify */}
+        {profile.emailVerified === false && (
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-start gap-3">
+            <div className="text-orange-400 mt-0.5">⚠️</div>
+            <div className="flex-1">
+              <p className="text-orange-300 font-medium">Email chưa được xác thực</p>
+              <p className="text-orange-200/70 text-sm mt-1">
+                Vui lòng kiểm tra email <span className="font-mono">{profile.email}</span> và bấm vào liên kết xác thực.
+                Một số tính năng có thể bị hạn chế cho đến khi xác thực.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Thông tin tổng quan */}
-        <Card className="bg-[#0a1929] border-white/5 text-white">
+        <Card className="bg-[#201b11] border-white/5 text-white rounded-2xl">
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
               {/* Avatar */}
@@ -113,28 +132,15 @@ export default function ProfilePage() {
                 {profile.avatarUrl ? (
                   <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover" />
                 ) : (
-                  <div className="w-16 h-16 rounded-full bg-[#eab308] flex items-center justify-center text-2xl font-bold text-black">
+                  <div className="w-16 h-16 rounded-full bg-[#ffc107] flex items-center justify-center text-2xl font-bold text-black">
                     {(profile.fullName ?? profile.username).charAt(0).toUpperCase()}
                   </div>
                 )}
                 <label className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                   <Camera size={20} className="text-white" />
-                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (!file) return
-                    const formData = new FormData()
-                    formData.append('file', file)
-                    try {
-                      const res = await api.post('/api/users/me/avatar', formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' },
-                      })
-                      const newAvatarUrl = res.data?.data?.avatarUrl
-                      if (newAvatarUrl) useAuthStore.getState().updateUser({ avatarUrl: newAvatarUrl })
-                      toast.success('Cập nhật ảnh đại diện thành công')
-                      qc.invalidateQueries({ queryKey: ['profile'] })
-                    } catch {
-                      toast.error('Upload ảnh thất bại')
-                    }
+                    if (file) uploadAvatar.mutate(file)
                   }} />
                 </label>
               </div>
@@ -144,7 +150,12 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant="warning" className="text-xs">{profile.role}</Badge>
                   {profile.enabled && (
-                    <Badge variant="success" className="text-xs">Đã xác thực</Badge>
+                    <Badge variant="success" className="text-xs">Đang hoạt động</Badge>
+                  )}
+                  {profile.emailVerified ? (
+                    <Badge variant="success" className="text-xs">Email đã xác thực</Badge>
+                  ) : (
+                    <Badge variant="destructive" className="text-xs">Email chưa xác thực</Badge>
                   )}
                 </div>
               </div>
@@ -163,7 +174,7 @@ export default function ProfilePage() {
         </Card>
 
         {/* Form chỉnh sửa thông tin */}
-        <Card className="bg-[#0a1929] border-white/5 text-white">
+        <Card className="bg-[#201b11] border-white/5 text-white rounded-2xl">
           <CardHeader>
             <CardTitle className="text-lg text-gray-100">Chỉnh sửa thông tin</CardTitle>
           </CardHeader>
@@ -174,7 +185,7 @@ export default function ProfilePage() {
                 <Input
                   id="fullName"
                   placeholder="Nguyễn Văn A"
-                  className="mt-1.5 bg-[#0d2137] border-white/10 text-white placeholder:text-gray-500"
+                  className="mt-1.5 bg-[#2a2317] border-white/10 text-white placeholder:text-gray-500"
                   {...regProfile('fullName')}
                 />
                 {profileErrors.fullName && (
@@ -187,7 +198,7 @@ export default function ProfilePage() {
                 <Input
                   id="phone"
                   placeholder="0901234567"
-                  className="mt-1.5 bg-[#0d2137] border-white/10 text-white placeholder:text-gray-500"
+                  className="mt-1.5 bg-[#2a2317] border-white/10 text-white placeholder:text-gray-500"
                   {...regProfile('phone')}
                 />
                 {profileErrors.phone && (
@@ -195,10 +206,28 @@ export default function ProfilePage() {
                 )}
               </div>
 
+              <div>
+                <Label htmlFor="dateOfBirth" className="text-gray-300">
+                  Ngày sinh <span className="text-gray-500 font-normal">(tuỳ chọn)</span>
+                </Label>
+                <Input
+                  id="dateOfBirth"
+                  type="date"
+                  className="mt-1.5 bg-[#2a2317] border-white/10 text-white"
+                  {...regProfile('dateOfBirth')}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Khai báo ngày sinh giúp tự động xác minh độ tuổi khi đặt phim T13/T16/T18 — không phải tick xác nhận mỗi lần.
+                </p>
+                {profileErrors.dateOfBirth && (
+                  <p className="text-red-400 text-xs mt-1">{profileErrors.dateOfBirth.message}</p>
+                )}
+              </div>
+
               <Button
                 type="submit"
                 loading={updateProfile.isPending}
-                className="w-full bg-[#eab308] hover:bg-[#ca8a04] text-black font-semibold"
+                className="w-full bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg"
               >
                 Lưu thay đổi
               </Button>
@@ -207,7 +236,7 @@ export default function ProfilePage() {
         </Card>
 
         {/* Form đổi mật khẩu */}
-        <Card className="bg-[#0a1929] border-white/5 text-white">
+        <Card className="bg-[#201b11] border-white/5 text-white rounded-2xl">
           <CardHeader>
             <CardTitle className="text-lg text-gray-100">Đổi mật khẩu</CardTitle>
           </CardHeader>
@@ -215,13 +244,9 @@ export default function ProfilePage() {
             <form onSubmit={handlePwd(onChangePassword)} className="space-y-4">
               <div>
                 <Label htmlFor="oldPassword" className="text-gray-300">Mật khẩu hiện tại <span className="text-red-400">*</span></Label>
-                <Input
-                  id="oldPassword"
-                  type="password"
-                  placeholder="••••••"
-                  className="mt-1.5 bg-[#0d2137] border-white/10 text-white"
-                  {...regPwd('oldPassword')}
-                />
+                <div className="mt-1.5">
+                  <PasswordInput id="oldPassword" placeholder="••••••" {...regPwd('oldPassword')} />
+                </div>
                 {pwdErrors.oldPassword && (
                   <p className="text-red-400 text-xs mt-1">{pwdErrors.oldPassword.message}</p>
                 )}
@@ -229,13 +254,9 @@ export default function ProfilePage() {
 
               <div>
                 <Label htmlFor="newPassword" className="text-gray-300">Mật khẩu mới <span className="text-red-400">*</span></Label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  placeholder="••••••"
-                  className="mt-1.5 bg-[#0d2137] border-white/10 text-white"
-                  {...regPwd('newPassword')}
-                />
+                <div className="mt-1.5">
+                  <PasswordInput id="newPassword" placeholder="••••••" {...regPwd('newPassword')} />
+                </div>
                 {pwdErrors.newPassword && (
                   <p className="text-red-400 text-xs mt-1">{pwdErrors.newPassword.message}</p>
                 )}
@@ -243,13 +264,9 @@ export default function ProfilePage() {
 
               <div>
                 <Label htmlFor="confirmPassword" className="text-gray-300">Xác nhận mật khẩu mới <span className="text-red-400">*</span></Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••"
-                  className="mt-1.5 bg-[#0d2137] border-white/10 text-white"
-                  {...regPwd('confirmPassword')}
-                />
+                <div className="mt-1.5">
+                  <PasswordInput id="confirmPassword" placeholder="••••••" {...regPwd('confirmPassword')} />
+                </div>
                 {pwdErrors.confirmPassword && (
                   <p className="text-red-400 text-xs mt-1">{pwdErrors.confirmPassword.message}</p>
                 )}
@@ -259,7 +276,7 @@ export default function ProfilePage() {
                 type="submit"
                 loading={changePassword.isPending}
                 variant="outline"
-                className="w-full border-gray-600 text-gray-200 hover:bg-[#0d2137] font-semibold"
+                className="w-full border-gray-600 text-gray-200 hover:bg-[#2a2317] font-semibold rounded-lg"
               >
                 Đổi mật khẩu
               </Button>

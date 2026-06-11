@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>CineX — Xác nhận hủy vé</title>
+</head>
+<body style="margin:0; padding:20px; font-family:'Inter', Arial, sans-serif; background:#051424; color:#e5e7eb;">
+    <div style="max-width:560px; margin:0 auto; background:#0a1929; border-radius:16px; padding:32px; border:1px solid rgba(255,255,255,0.05);">
+        <!-- Header CineX -->
+        <div style="text-align:center; margin-bottom:24px;">
+            <h1 style="margin:0; color:#eab308; font-size:28px; letter-spacing:2px; font-weight:bold;">CineX</h1>
+            <p style="margin:4px 0 0; color:#6b7280; font-size:12px; letter-spacing:1px;">HỆ THỐNG ĐẶT VÉ XEM PHIM</p>
+        </div>
+
+        <h2 style="color:#ef4444; margin-top:0;">Vé đã được hủy</h2>
+        <p style="color:#9ca3af; line-height:1.6;">
+            Vé của bạn đã được hủy thành công. Thông tin chi tiết:
+        </p>
+
+        <table style="width:100%; border-collapse:collapse; margin:20px 0;">
+            <tr>
+                <td style="padding:10px 0; color:#9ca3af;">Mã vé</td>
+                <td style="padding:10px 0; color:#eab308; font-weight:bold; text-align:right; font-family:monospace;"
+                    th:text="${bookingCode}">CINEX-001</td>
+            </tr>
+            <tr>
+                <td style="padding:10px 0; color:#9ca3af;">Phim</td>
+                <td style="padding:10px 0; color:#fff; text-align:right;" th:text="${movieTitle}">Tên phim</td>
+            </tr>
+            <tr style="border-top:1px solid rgba(255,255,255,0.1);">
+                <td style="padding:14px 0; color:#fff; font-weight:bold;">Số tiền hoàn</td>
+                <td style="padding:14px 0; color:#10b981; font-weight:bold; text-align:right; font-size:18px;"
+                    th:text="${totalAmount}">200.000đ</td>
+            </tr>
+        </table>
+
+        <p style="color:#9ca3af; font-size:14px; line-height:1.6;">
+            Số tiền hoàn sẽ được chuyển lại trong vòng <strong style="color:#10b981;">1-3 ngày làm việc</strong>
+            tùy theo phương thức thanh toán.
+        </p>
+
+        <p style="color:#6b7280; font-size:13px; line-height:1.6;">
+            Nếu có thắc mắc về việc hoàn tiền, vui lòng liên hệ bộ phận hỗ trợ của CineX.
+        </p>
+
+        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin:24px 0;"/>
+
+        <!-- Footer -->
+        <p style="color:#6b7280; font-size:12px; text-align:center; margin:0;">
+            &copy; 2026 CineX. Hệ thống đặt vé xem phim online.<br/>
+            Email tự động, vui lòng không trả lời.
+        </p>
+    </div>
+</body>
+</html>

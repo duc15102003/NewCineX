@@ -16,4 +16,10 @@ public class ValidateVoucherRequest {
 
     @NotNull(message = "Order amount is required")
     private BigDecimal orderAmount;
+
+    /**
+     * Chi nhánh của booking. Optional — nếu có, validate sẽ ưu tiên voucher theater-specific.
+     * Nếu null, chỉ tìm voucher global (backward-compat).
+     */
+    private Long theaterId;
 }

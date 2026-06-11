@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Users: 1 super admin tổng + 5 branch admins + 8 customers test.
+
+        Password mặc định CHO TẤT CẢ: "CineX@2026"
+        BCrypt hash của "CineX@2026" với strength 10: $2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe
+
+        Sau khi setup xong, đổi password ngay qua /profile hoặc admin panel.
+    -->
+
+    <changeSet id="011-seed-super-admin" author="cinex">
+        <sql>
+            INSERT INTO users (username, email, password, full_name, phone, role, theater_id, enabled, email_verified, tier, storage_state)
+            VALUES
+            (N'admin', N'admin@cinex.vn', N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe',
+             N'Quản trị tổng CineX', N'0900000000', N'SUPER_ADMIN', NULL, 1, 1, N'PLATINUM', N'ACTIVE');
+        </sql>
+    </changeSet>
+
+    <changeSet id="011-seed-branch-admins" author="cinex">
+        <sql>
+            INSERT INTO users (username, email, password, full_name, phone, role, theater_id, enabled, email_verified, tier, storage_state)
+            SELECT N'cinex.hn',  N'admin.hn@cinex.vn',  N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Quản lý CineX Hà Nội',     N'0901000001', N'ADMIN', id, 1, 1, N'STANDARD', N'ACTIVE' FROM theaters WHERE code = N'CNX-HN';
+
+            INSERT INTO users (username, email, password, full_name, phone, role, theater_id, enabled, email_verified, tier, storage_state)
+            SELECT N'cinex.hp',  N'admin.hp@cinex.vn',  N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Quản lý CineX Hải Phòng',   N'0901000002', N'ADMIN', id, 1, 1, N'STANDARD', N'ACTIVE' FROM theaters WHERE code = N'CNX-HP';
+
+            INSERT INTO users (username, email, password, full_name, phone, role, theater_id, enabled, email_verified, tier, storage_state)
+            SELECT N'cinex.qn',  N'admin.qn@cinex.vn',  N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Quản lý CineX Quảng Ninh', N'0901000003', N'ADMIN', id, 1, 1, N'STANDARD', N'ACTIVE' FROM theaters WHERE code = N'CNX-QN';
+
+            INSERT INTO users (username, email, password, full_name, phone, role, theater_id, enabled, email_verified, tier, storage_state)
+            SELECT N'cinex.dn',  N'admin.dn@cinex.vn',  N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Quản lý CineX Đà Nẵng',    N'0901000004', N'ADMIN', id, 1, 1, N'STANDARD', N'ACTIVE' FROM theaters WHERE code = N'CNX-DN';
+
+            INSERT INTO users (username, email, password, full_name, phone, role, theater_id, enabled, email_verified, tier, storage_state)
+            SELECT N'cinex.hcm', N'admin.hcm@cinex.vn', N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Quản lý CineX Hồ Chí Minh', N'0901000005', N'ADMIN', id, 1, 1, N'STANDARD', N'ACTIVE' FROM theaters WHERE code = N'CNX-HCM';
+        </sql>
+    </changeSet>
+
+    <changeSet id="011-seed-customers" author="cinex">
+        <sql>
+            INSERT INTO users (username, email, password, full_name, phone, date_of_birth, role, theater_id, enabled, email_verified, loyalty_points, lifetime_points, tier, storage_state) VALUES
+            (N'user01', N'nguyen.an@example.com',    N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Nguyễn Văn An',    N'0911111111', '1995-03-15', N'USER', NULL, 1, 1, 450,  450,  N'STANDARD', N'ACTIVE'),
+            (N'user02', N'tran.binh@example.com',    N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Trần Thị Bình',     N'0922222222', '1998-07-22', N'USER', NULL, 1, 1, 1200, 1200, N'SILVER',   N'ACTIVE'),
+            (N'user03', N'le.cuong@example.com',     N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Lê Quốc Cường',     N'0933333333', '1990-11-08', N'USER', NULL, 1, 1, 2500, 2500, N'GOLD',     N'ACTIVE'),
+            (N'user04', N'pham.dung@example.com',    N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Phạm Tiến Dũng',    N'0944444444', '2002-05-30', N'USER', NULL, 1, 1, 80,   80,   N'STANDARD', N'ACTIVE'),
+            (N'user05', N'hoang.lan@example.com',    N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Hoàng Thị Lan',     N'0955555555', '1996-09-12', N'USER', NULL, 1, 1, 5500, 5500, N'PLATINUM', N'ACTIVE'),
+            (N'user06', N'vu.minh@example.com',      N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Vũ Hoàng Minh',     N'0966666666', '1993-01-20', N'USER', NULL, 1, 0, 0,    0,    N'STANDARD', N'ACTIVE'),
+            (N'user07', N'do.huong@example.com',     N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Đỗ Mỹ Hương',       N'0977777777', '1999-04-10', N'USER', NULL, 1, 1, 750,  750,  N'SILVER',   N'ACTIVE'),
+            (N'user08', N'bui.long@example.com',     N'$2a$10$3KqUMOI7eM7WICDg0aH8I.AnzZpotYqJ.dnHEr3K6Xk8O4nGWRMBe', N'Bùi Văn Long',      N'0988888888', '2005-12-25', N'USER', NULL, 1, 1, 0,    0,    N'STANDARD', N'ACTIVE');
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -6,6 +6,7 @@ import { useRegister } from '@/hooks/useAuth'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 
 const registerSchema = z.object({
@@ -23,8 +24,11 @@ type RegisterForm = z.infer<typeof registerSchema>
 
 export default function RegisterPage() {
   const isLoggedIn = useAuthStore(s => s.isLoggedIn)
+  // mode='onTouched': lỗi xuất hiện sau lần blur đầu rồi update theo onChange
+  // → user nhập email sai → blur → thấy lỗi → fix → lỗi tự biến mất khi đúng
   const { register: reg, handleSubmit, formState: { errors } } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
+    mode: 'onTouched',
   })
   const registerMutation = useRegister()
 
@@ -42,7 +46,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="bg-[#0a1929] border border-white/5 rounded-2xl p-8">
+        <div className="bg-[#201b11] border border-white/5 rounded-2xl p-8">
           <h1 className="text-2xl font-bold text-center mb-2">Đăng ký</h1>
           <p className="text-gray-400 text-center text-sm mb-8">
             Tạo tài khoản CineX miễn phí
@@ -54,7 +58,7 @@ export default function RegisterPage() {
               <Input
                 id="fullName"
                 placeholder="Vũ Tường An"
-                className="mt-1.5 bg-[#0d2137] border-white/10"
+                className="mt-1.5 bg-[#2a2317] border-white/10"
                 {...reg('fullName')}
               />
               {errors.fullName && (
@@ -67,7 +71,8 @@ export default function RegisterPage() {
               <Input
                 id="username"
                 placeholder="Tên đăng nhập"
-                className="mt-1.5 bg-[#0d2137] border-white/10"
+                aria-invalid={!!errors.username}
+                className={`mt-1.5 bg-[#2a2317] ${errors.username ? 'border-red-500/60 focus:border-red-500' : 'border-white/10'}`}
                 {...reg('username')}
               />
               {errors.username && (
@@ -81,7 +86,8 @@ export default function RegisterPage() {
                 id="email"
                 type="email"
                 placeholder="Nhập email"
-                className="mt-1.5 bg-[#0d2137] border-white/10"
+                aria-invalid={!!errors.email}
+                className={`mt-1.5 bg-[#2a2317] ${errors.email ? 'border-red-500/60 focus:border-red-500' : 'border-white/10'}`}
                 {...reg('email')}
               />
               {errors.email && (
@@ -91,13 +97,9 @@ export default function RegisterPage() {
 
             <div>
               <Label htmlFor="password">Mật khẩu <span className="text-red-400">*</span></Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Tối thiểu 6 ký tự"
-                className="mt-1.5 bg-[#0d2137] border-white/10"
-                {...reg('password')}
-              />
+              <div className="mt-1.5">
+                <PasswordInput id="password" placeholder="Tối thiểu 6 ký tự" {...reg('password')} />
+              </div>
               {errors.password && (
                 <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>
               )}
@@ -105,13 +107,9 @@ export default function RegisterPage() {
 
             <div>
               <Label htmlFor="confirmPassword">Xác nhận mật khẩu <span className="text-red-400">*</span></Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Nhập lại mật khẩu"
-                className="mt-1.5 bg-[#0d2137] border-white/10"
-                {...reg('confirmPassword')}
-              />
+              <div className="mt-1.5">
+                <PasswordInput id="confirmPassword" placeholder="Nhập lại mật khẩu" {...reg('confirmPassword')} />
+              </div>
               {errors.confirmPassword && (
                 <p className="text-red-400 text-xs mt-1">{errors.confirmPassword.message}</p>
               )}
@@ -119,7 +117,7 @@ export default function RegisterPage() {
 
             <Button
               type="submit"
-              className="w-full bg-[#eab308] hover:bg-[#ca8a04] text-black font-semibold"
+              className="w-full bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg"
               disabled={registerMutation.isPending}
             >
               {registerMutation.isPending ? 'Đang đăng ký...' : 'Đăng ký'}
@@ -128,7 +126,7 @@ export default function RegisterPage() {
 
           <p className="text-center text-sm text-gray-400 mt-6">
             Đã có tài khoản?{' '}
-            <Link to="/login" className="text-[#eab308] hover:underline">
+            <Link to="/login" className="text-[#ffc107] hover:underline">
               Đăng nhập
             </Link>
           </p>

@@ -19,7 +19,7 @@ Module Movie quản lý **phim** và **thể loại phim**:
 | `module/movie/dto/MovieListResponse.java` | DTO rút gọn cho danh sách | DTO |
 | `module/movie/dto/GenreRequest.java` | DTO tạo thể loại | DTO |
 | `module/movie/dto/GenreResponse.java` | DTO trả thể loại | DTO |
-| `module/movie/repository/MovieRepository.java` | JpaSpecificationExecutor | Repository + Specification |
+| `module/movie/repository/MovieRepository.java` | JpaSpecificationExecutor + **@EntityGraph(genres)** fix N+1 | Repository + Specification |
 | `module/movie/repository/GenreRepository.java` | CRUD thể loại | Repository |
 | `module/movie/specification/MovieSpecification.java` | Build query WHERE động | Specification Pattern |
 | `module/movie/mapper/MovieMapper.java` | Movie ↔ DTO (xử lý N:N) | Mapper (MapStruct) |
@@ -28,6 +28,19 @@ Module Movie quản lý **phim** và **thể loại phim**:
 | `module/movie/service/GenreService.java` | List + create genre | Service |
 | `module/movie/controller/MovieController.java` | 6 endpoints phim | Controller |
 | `module/movie/controller/GenreController.java` | 2 endpoints thể loại | Controller |
+| **Pattern Movie + MovieRun (Section 4)** | | |
+| `module/movie/entity/MovieRun.java` | Entity đợt chiếu — 1 Movie ↔ N MovieRun | — |
+| `module/movie/entity/MovieRunType.java` | Enum FIRST_RUN/REISSUE/FESTIVAL/SPECIAL | Enum Pattern |
+| `module/movie/entity/MovieRunStatus.java` | Enum SCHEDULED/NOW_SHOWING/ENDED | Enum + State Machine |
+| `module/movie/dto/MovieRunRequest.java` | DTO tạo/sửa run | DTO |
+| `module/movie/dto/MovieRunResponse.java` | DTO trả run | DTO |
+| `module/movie/repository/MovieRunRepository.java` | CRUD + `existsOverlap` + `archiveByMovieId` bulk | Repository |
+| `module/movie/mapper/MovieRunMapper.java` | MovieRun → DTO (MapStruct) | Mapper |
+| `module/movie/service/MovieRunService.java` | CRUD MovieRun + helper `recomputeMovieStatus` | Service |
+| `module/movie/service/MovieRunStatusScheduler.java` | Cron 00:01 daily + `@SchedulerLock` | Scheduled Task |
+| `module/movie/controller/MovieRunController.java` | REST `/api/movie-runs` | Controller |
+| `db/changelog/changes/051-create-movie-runs-table.xml` | Phase 1 migration: tạo bảng + backfill + thêm cột NULLABLE | Liquibase |
+| `db/changelog/changes/052-showtime-movie-run-not-null.xml` | Phase 2 migration: alter NOT NULL với preConditions | Liquibase |
 
 ---
 
@@ -126,6 +139,69 @@ Specification.where(hasTitle("Avengers"))
 #### Khi nào KHÔNG nên dùng?
 - Query đơn giản, chỉ 1-2 điều kiện cố định → `findByXxx` đủ rồi
 - Specification phức tạp hơn → chỉ dùng khi có **search/filter động**
+
+#### MovieFilter mở rộng (Phase 4a)
+
+Phase 4a mở rộng `MovieFilter` từ 5 field → 11 field, hỗ trợ filter sâu hơn cho cả user (trang Phim) lẫn admin:
+
+```java
+@Getter @Setter
+public class MovieFilter {
+    // Cũ
+    private String keyword;
+    private MovieStatus status;
+    private Long genreId;
+    private Boolean includeDeleted;
+    private Boolean showing;
+
+    // ==== Mở rộng Phase 4a (J1) ====
+    private String director;              // LIKE %director%, case-insensitive
+    private String cast;                  // LIKE %cast%
+    private String language;              // equals (VD: "Tiếng Việt", "English")
+    private Integer minDuration;          // BETWEEN — phút
+    private Integer maxDuration;
+    private BigDecimal minRating;         // BETWEEN — COALESCE(rating, 0)
+    private BigDecimal maxRating;
+    private LocalDate releaseDateFrom;    // BETWEEN — ngày phát hành
+    private LocalDate releaseDateTo;
+    private Boolean hasActiveShowtimes;   // alias của showing
+}
+```
+
+**Specification mới — `hasRatingBetween` với COALESCE:**
+```java
+public static Specification<Movie> hasRatingBetween(BigDecimal min, BigDecimal max) {
+    return (root, query, cb) -> {
+        // Phim chưa có review → rating NULL → coi như 0
+        // Tránh user filter "rating >= 7" lẫn phim NULL (NULL không so sánh được)
+        var ratingExpr = cb.coalesce(root.<BigDecimal>get("rating"), BigDecimal.ZERO);
+        if (min != null && max != null) return cb.between(ratingExpr, min, max);
+        else if (min != null)          return cb.greaterThanOrEqualTo(ratingExpr, min);
+        else                            return cb.lessThanOrEqualTo(ratingExpr, max);
+    };
+}
+```
+
+SQL sinh ra: `WHERE COALESCE(m.rating, 0) >= 7.0`
+
+**Sort: dùng Spring Pageable built-in, KHÔNG custom sortBy:**
+```
+GET /api/movies?sort=rating,desc&sort=createdAt,desc&size=20
+                ^^^^^^^^^^^^^^^^                       ^^^^^^^
+                Spring tự parse → ORDER BY m.rating DESC, m.created_at DESC
+```
+
+Controller chỉ cần `@PageableDefault(sort = "createdAt", direction = DESC)` cho default — FE override bằng `?sort=...`.
+
+**Tránh over-filter:**
+
+| Có nên thêm filter? | Lý do |
+|---|---|
+| FE thực sự cần lọc trên UI | YES |
+| Filter chạy ≤ 10/giây | YES |
+| Filter hot, có index hỗ trợ | YES |
+| "Phòng hờ" — biết đâu FE cần | **NO** — KHÔNG thêm |
+| Filter join sâu 4+ bảng | Cân nhắc — có thể chậm; xem index |
 
 ---
 
@@ -298,126 +374,597 @@ movie.setStatus(MovieStatus.COMING_SOON);   // ✅ Đúng
 
 ---
 
-### 3.5 Vòng đời Movie — `releaseDate`, `endDate` + auto status
+### 3.5 [DEPRECATED] Vòng đời Movie phẳng — pattern cũ "1 Movie = 1 lifecycle"
 
-#### Bài toán
+> **Lưu ý lịch sử:** Section này mô tả pattern **cũ** trước commit `ec8d1cf`. Đã được thay thế bởi **Section 4 — Pattern Movie + MovieRun (Engagement)** ở dưới. Giữ lại để tham khảo "trước-sau" cho bạn học hiểu vì sao phải refactor.
 
-Phim không sống mãi ở rạp. Mỗi phim đi qua 3 giai đoạn:
+#### Bài toán ban đầu (đặt ở Movie)
 
-```
-        Quá khứ ◄─────────────────────────────────────────► Tương lai
-
-   ┌───────────────┐ releaseDate  ┌───────────────┐ endDate  ┌──────────┐
-   │ COMING_SOON   │─────────────►│  NOW_SHOWING  │─────────►│  ENDED   │
-   │ (sắp chiếu)   │              │ (đang chiếu)  │          │ (đã hết) │
-   ├───────────────┤              ├───────────────┤          ├──────────┤
-   │ Hiện trailer  │              │ Bán vé        │          │ Không    │
-   │ Hiện poster   │              │ Tạo showtime  │          │ bán vé   │
-   │ KHÔNG bán vé  │              │ Hiển thị "HOT"│          │ Lưu lịch │
-   │               │              │               │          │ sử       │
-   └───────────────┘              └───────────────┘          └──────────┘
-```
-
-Ví dụ "Avengers: Endgame":
-
-```
-releaseDate = 2026-07-01
-endDate     = 2026-09-15
-
-01/06/2026 → status = COMING_SOON     (hiện "Khởi chiếu 01/07")
-15/07/2026 → status = NOW_SHOWING     (đang bán vé)
-20/09/2026 → status = ENDED           (không bán vé nữa)
-```
-
-#### Vì sao cần CẢ `releaseDate/endDate` lẫn `status`?
-
-| Phương án | Lợi | Hại |
-|---|---|---|
-| Chỉ `status`, không date | Đơn giản | Không ai tự đổi status khi đến ngày → admin phải sửa thủ công mỗi ngày |
-| Chỉ date, không `status` | Derive được status từ date | Mất linh hoạt: không thể ENDED phim sớm hơn endDate (VD bị cấm chiếu) hoặc delay phim |
-| **Cả 3 (CineX)** | Date là tham chiếu cho scheduler tự đổi; status cho phép admin override | Hơi dư thừa nhưng đáng |
-
-#### Code thực tế: `MovieStatusScheduler`
-
-```
-File: backend/src/main/java/com/cinex/module/movie/service/MovieStatusScheduler.java
-```
+Trước refactor, `Movie` entity chứa **trực tiếp** 3 field lifecycle:
 
 ```java
-@Component
-@RequiredArgsConstructor
-@Slf4j
-public class MovieStatusScheduler {
-
-    private final MovieRepository movieRepository;
-
-    /**
-     * Chạy 00:01 mỗi ngày. Cron: "0 1 0 * * *" = 0 giây, 1 phút, 0 giờ.
-     * Tại sao 00:01 mà không 00:00? Tránh contention với scheduler khác
-     * thường chạy đúng nửa đêm. 1 phút trễ không ảnh hưởng UX.
-     */
-    @Scheduled(cron = "0 1 0 * * *")
-    @Transactional
-    public void updateMovieStatus() {
-        LocalDate today = LocalDate.now();
-
-        // COMING_SOON → NOW_SHOWING khi đã đến/qua releaseDate
-        List<Movie> toStart = movieRepository
-                .findByStatusAndReleaseDateLessThanEqual(MovieStatus.COMING_SOON, today);
-        toStart.forEach(m -> m.setStatus(MovieStatus.NOW_SHOWING));
-
-        // NOW_SHOWING → ENDED khi đã qua endDate
-        List<Movie> toEnd = movieRepository
-                .findByStatusAndEndDateLessThan(MovieStatus.NOW_SHOWING, today);
-        toEnd.forEach(m -> m.setStatus(MovieStatus.ENDED));
-    }
+// PATTERN CŨ — KHÔNG dùng nữa
+public class Movie {
+    private LocalDate releaseDate;   // ngày khởi chiếu
+    private LocalDate endDate;       // ngày rút rạp
+    private MovieStatus status;      // COMING_SOON / NOW_SHOWING / ENDED
 }
 ```
 
-#### Vì sao 1 ngày 1 lần, không phải mỗi phút?
+Và 1 `MovieStatusScheduler` cron 00:01 daily flip status theo `today vs (releaseDate, endDate)`.
 
-- `releaseDate` và `endDate` có độ phân giải **NGÀY** (`LocalDate`), không phải `LocalDateTime`
-- Chạy mỗi phút = 1440 lần/ngày để bắt đúng 1 thời điểm = lãng phí CPU
-- Trễ tối đa ~1 ngày là chấp nhận được với business cinema (user không quan tâm phim chuyển status đúng nửa đêm hay 9h sáng)
+#### Vấn đề (vì sao phải refactor)
 
-#### Validate Showtime trong `[releaseDate, endDate]`
+Pattern này giả định **"1 phim chỉ có đúng 1 đợt chiếu trong vòng đời"**. Sai với thực tế công nghiệp:
 
-`ShowtimeService.createShowtime` + `updateShowtime` gọi helper:
-
-```java
-private void validateShowtimeWithinMovieLifecycle(Movie movie, LocalDateTime startTime) {
-    LocalDate showtimeDate = startTime.toLocalDate();
-
-    if (movie.getReleaseDate() != null && showtimeDate.isBefore(movie.getReleaseDate())) {
-        throw new BusinessException(ErrorCode.INVALID_REQUEST,
-            String.format("Không tạo suất chiếu trước ngày khởi chiếu (%s) của phim '%s'",
-                movie.getReleaseDate(), movie.getTitle()));
-    }
-    if (movie.getEndDate() != null && showtimeDate.isAfter(movie.getEndDate())) {
-        throw new BusinessException(ErrorCode.INVALID_REQUEST,
-            String.format("Không tạo suất chiếu sau ngày kết thúc (%s) của phim '%s'",
-                movie.getEndDate(), movie.getTitle()));
-    }
-}
-```
-
-→ Admin không thể tạo nhầm "showtime ngày 30/06 cho phim khởi chiếu 01/07" hoặc "showtime sau khi phim đã ENDED".
-
-`null`-safe: nếu admin chưa nhập releaseDate/endDate → skip check tương ứng (business rule lỏng hơn).
-
-#### Tóm tắt
-
-| Thành phần | Mục đích |
+| Scenario thực tế | Pattern cũ làm sao? |
 |---|---|
-| `Movie.releaseDate` | Mốc cứng: ngày phim ra rạp |
-| `Movie.endDate` | Mốc cứng: ngày phim rút khỏi rạp |
-| `Movie.status` (enum) | Trạng thái hiện tại — admin override được |
-| `MovieStatusScheduler` (00:01 daily) | Tự đồng bộ `status` theo date |
-| `validateShowtimeWithinMovieLifecycle` | Chặn admin tạo showtime ngoài vòng đời phim |
+| Avatar (2009) chiếu lần đầu → ENDED 2010. Năm 2026 chiếu lại bản 4K Remaster | **Phải tạo "Movie" mới** với title "Avatar (4K Remaster)" → review/favorite/lịch sử mất liên kết với phim gốc |
+| Titanic chiếu kỷ niệm 25 năm | Tạo Movie trùng tên → 2 phim cùng tên trên app, user bối rối |
+| Phim festival xen kẽ chiếu thương mại | Movie status chỉ có 1 trạng thái, không tách biệt được |
+| Sneak preview trước releaseDate chính thức | Không kiến trúc nào hỗ trợ (preview = đợt chiếu sớm trước run chính) |
+
+→ Pattern **"Movie = metadata + lifecycle gộp"** **không scale**. Industry (CGV, Lotte, AMC) tách rõ:
+
+- **Movie** = "phim này" — metadata bất biến (title, đạo diễn, duration, poster, releaseDate gốc thế giới)
+- **MovieRun** = "đợt chiếu này" — gắn với cinema/rạp, có thời gian + status riêng. 1 movie có thể có nhiều run.
+
+Section 4 ngay dưới giải thích pattern mới chi tiết.
 
 ---
 
-## 4. Sơ đồ luồng xử lý
+## 4. Pattern Movie + MovieRun (Engagement)
+
+> Pattern này được CineX adopt từ commit `ec8d1cf` (C1) → `78625cd` (C4). Là refactor lớn nhất từ trước tới giờ của module Movie. Đây là chỗ học sâu nhất nếu bạn quan tâm đến **schema evolution** trong production.
+
+### 4.1 Bài toán nhắc lại
+
+1 phim có thể có nhiều đợt chiếu. Pattern 1-1 phẳng KHÔNG support. Phải tách:
+
+```
+┌─ Movie (metadata cố định) ─────────┐    ┌─ MovieRun (đợt chiếu) ──────────┐
+│ id, title, director, cast          │    │ id, movie_id (FK ManyToOne)     │
+│ duration, posterUrl, language      │ 1 ─< startDate, endDate              │
+│ releaseDate (gốc thế giới — 2009)  │    │ runType: FIRST_RUN/REISSUE/...  │
+│ status (derived field, xem 4.4)    │    │ status: SCHEDULED/NOW_SHOWING/  │
+│ rating                             │    │         ENDED                   │
+└────────────────────────────────────┘    │ notes ("Bản 4K kỷ niệm 17 năm") │
+                                          └─────────────────────────────────┘
+                                                       1
+                                                       v
+                                          ┌─ Showtime ──────────────────────┐
+                                          │ id, movie_run_id (FK, NOT NULL) │
+                                          │ movie_id (denormalized backup,  │
+                                          │   invariant: == run.movie)      │
+                                          │ room_id, startTime, ...         │
+                                          └─────────────────────────────────┘
+```
+
+Quan hệ: **1 Movie ↔ N MovieRun ↔ N Showtime**. Showtime trỏ trực tiếp tới Run, KHÔNG trỏ tới Movie nữa (movie chỉ là field denormalized — xem 4.5).
+
+### 4.2 Schema mới — bảng `movie_runs`
+
+File: `backend/src/main/java/com/cinex/module/movie/entity/MovieRun.java`
+
+```java
+@Entity
+@Table(name = "movie_runs")
+public class MovieRun extends BaseEntity {
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "movie_id", nullable = false)
+    private Movie movie;
+
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate;
+
+    @Column(name = "end_date", nullable = false)
+    private LocalDate endDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "run_type", nullable = false, length = 20)
+    @Builder.Default
+    private MovieRunType runType = MovieRunType.FIRST_RUN;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private MovieRunStatus status = MovieRunStatus.SCHEDULED;
+
+    @Column(length = 500)
+    private String notes;
+}
+```
+
+2 enum đi kèm:
+
+```java
+public enum MovieRunType { FIRST_RUN, REISSUE, FESTIVAL, SPECIAL }
+public enum MovieRunStatus { SCHEDULED, NOW_SHOWING, ENDED }
+```
+
+**Tại sao tách 2 enum?**
+
+- `runType` = bản chất đợt chiếu (gán 1 lần khi tạo, không đổi). VD: REISSUE.
+- `status` = trạng thái thời gian (auto-update theo cron). VD: NOW_SHOWING.
+- 2 thuộc tính **độc lập về mặt nghiệp vụ** → không nên gộp vào 1 enum 12-state combinatoric.
+
+### 4.3 Lifecycle 1 run — `MovieRunStatusScheduler`
+
+```
+   ┌───────────────┐  today >= startDate  ┌───────────────┐  today > endDate  ┌──────────┐
+   │  SCHEDULED    │ ───────────────────► │  NOW_SHOWING  │ ────────────────► │  ENDED   │
+   │ (chưa chiếu)  │                      │ (đang chiếu)  │                   │ (đã hết) │
+   └───────────────┘                      └───────────────┘                   └──────────┘
+```
+
+File: `backend/src/main/java/com/cinex/module/movie/service/MovieRunStatusScheduler.java`
+
+```java
+@Scheduled(cron = "0 1 0 * * *")
+@SchedulerLock(name = "movieRunStatusUpdate", lockAtLeastFor = "PT1M", lockAtMostFor = "PT10M")
+@Transactional
+public void updateMovieRunStatus() {
+    LocalDate today = LocalDate.now();
+    Set<Movie> affectedMovies = new HashSet<>();
+
+    // 1. SCHEDULED → NOW_SHOWING
+    List<MovieRun> toStart = movieRunRepository
+            .findByStatusAndStartDateLessThanEqual(MovieRunStatus.SCHEDULED, today);
+    for (MovieRun run : toStart) {
+        if (!today.isAfter(run.getEndDate())) {  // edge: data lỗi startDate=today, endDate<today
+            run.setStatus(MovieRunStatus.NOW_SHOWING);
+            affectedMovies.add(run.getMovie());
+        }
+    }
+
+    // 2. NOW_SHOWING → ENDED
+    List<MovieRun> toEnd = movieRunRepository
+            .findByStatusAndEndDateLessThan(MovieRunStatus.NOW_SHOWING, today);
+    for (MovieRun run : toEnd) {
+        run.setStatus(MovieRunStatus.ENDED);
+        affectedMovies.add(run.getMovie());
+    }
+
+    // 3. Bonus: recompute Movie.status (derived)
+    for (Movie movie : affectedMovies) {
+        movieRunService.recomputeMovieStatus(movie);
+    }
+}
+```
+
+**Điểm cần chú ý:**
+- `@SchedulerLock` (ShedLock) — khi deploy nhiều instance, chỉ 1 instance chạy job tại 1 thời điểm. Tránh 2 node cùng update → race condition. Xem `docs/backend/16-architectural-patterns.md` mục 5.
+- `lockAtLeastFor = "PT1M"` — chống clock skew (đồng hồ node A nhanh hơn node B vài giây).
+- `lockAtMostFor = "PT10M"` — nếu node lock xong rồi crash, lock tự release sau 10 phút.
+
+### 4.4 Movie.status — Derived Field (Option B)
+
+Sau refactor, **Movie KHÔNG còn `releaseDate/endDate`** ở vai trò lifecycle (releaseDate giờ chỉ là "ngày khởi chiếu gốc thế giới" - metadata). Nhưng vẫn giữ `Movie.status`.
+
+**Vì sao giữ field này?** — Backward compatibility với DTO:
+
+- `MovieResponse.status`, `MovieListResponse.status`, `FavoriteMovieResponse.status` đã expose ra FE
+- FE dùng status để hiển thị badge "Đang chiếu" / "Sắp chiếu", filter "Phim đang chiếu" trên trang chủ
+- Nếu drop hẳn → phải sửa nhiều DTO + FE + filter logic → diện ảnh hưởng rộng
+
+**Giải pháp Option B:** Giữ field, **recompute từ runs** mỗi khi run thay đổi.
+
+File: `MovieRunService.recomputeMovieStatus(Movie)`
+
+```java
+public void recomputeMovieStatus(Movie movie) {
+    List<MovieRun> runs = movieRunRepository
+            .findByMovieIdAndStorageStateNot(movie.getId(), StorageState.ARCHIVED);
+
+    if (runs.isEmpty()) return;  // Không có run — giữ status cũ
+
+    boolean hasNowShowing = runs.stream().anyMatch(r -> r.getStatus() == MovieRunStatus.NOW_SHOWING);
+    boolean hasScheduled  = runs.stream().anyMatch(r -> r.getStatus() == MovieRunStatus.SCHEDULED);
+
+    MovieStatus newStatus;
+    if (hasNowShowing)      newStatus = MovieStatus.NOW_SHOWING;
+    else if (hasScheduled)  newStatus = MovieStatus.COMING_SOON;
+    else                    newStatus = MovieStatus.ENDED;
+
+    if (movie.getStatus() != newStatus) {
+        movie.setStatus(newStatus);
+        movieRepository.save(movie);
+    }
+}
+```
+
+Quy tắc derive:
+- Có ≥1 run NOW_SHOWING → Movie = NOW_SHOWING
+- Không có NOW_SHOWING nhưng có SCHEDULED → Movie = COMING_SOON
+- Tất cả run ENDED → Movie = ENDED
+- Không có run nào → giữ nguyên (Movie chưa được lên lịch chiếu)
+
+Gọi `recomputeMovieStatus` ở: `MovieRunService.create / update / archive` + cuối job scheduler. **Eventual consistency** — Movie.status được sync lại sau mỗi event.
+
+### 4.5 Showtime.movie — Denormalized Backup
+
+`Showtime` giờ link tới `MovieRun` (NOT NULL). Nhưng **vẫn giữ field `movie`** denormalized — copy của `movieRun.movie`.
+
+```java
+@Entity
+public class Showtime extends BaseEntity {
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "movie_id", nullable = false)
+    private Movie movie;          // DENORMALIZED — invariant: == movieRun.movie
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "movie_run_id", nullable = false)
+    private MovieRun movieRun;    // Nguồn truy vấn chính
+    // ...
+}
+```
+
+**Vì sao GIỮ field denormalized này?**
+
+1. **Tránh break diện rộng:** rất nhiều query/report/statistics đang join `showtimes → movies` trực tiếp. Specification cũ (`hasShowtimeForMovie`), report doanh thu theo phim, filter homepage... đều dùng `showtime.movie_id`.
+2. **Tối ưu query:** truy `showtime.movie.title` mà không cần JOIN qua movie_runs (giảm 1 bảng).
+3. **Migration safe:** drop ngay sẽ làm app cũ (deploy chưa kịp restart) fail vì FK NOT NULL biến mất.
+
+**Invariant bắt buộc:** `showtime.movie == showtime.movieRun.movie`. Service đảm bảo trong `createShowtime / updateShowtime` — luôn set 2 field cùng lúc.
+
+```java
+// ShowtimeService — invariant đảm bảo qua service code
+MovieRun run = resolveMovieRun(movie, request.getMovieRunId());
+showtime.setMovie(movie);
+showtime.setMovieRun(run);  // run.getMovie() == movie GUARANTEED
+```
+
+Có thể drop ở C5+ sau khi audit hết các nơi đọc `showtime.movie` (có thể thay bằng `showtime.movieRun.movie`).
+
+### 4.6 Migration 2-Phase — Pattern an toàn
+
+**Bài toán:** Showtime cũ có `movie_id`. Schema mới cần `movie_run_id`. Migration 1-shot (drop + add NOT NULL) **NGUY HIỂM**:
+- Backfill chưa kịp xong → NOT NULL fail → rollback toàn bộ deploy
+- Bug trong logic backfill phát hiện sau khi đã alter schema → khó undo
+
+**Giải pháp 2-phase** (Liquibase 051 + 052):
+
+**Phase 1 (C1, changeset 051):**
+```xml
+<!-- Add column NULLABLE -->
+<addColumn tableName="showtimes">
+    <column name="movie_run_id" type="BIGINT"/>  <!-- nullable mặc định -->
+</addColumn>
+
+<!-- Backfill từ run của cùng movie -->
+<sql>
+    UPDATE s SET s.movie_run_id = (
+        SELECT TOP 1 mr.id FROM movie_runs mr
+        WHERE mr.movie_id = s.movie_id ORDER BY mr.start_date DESC
+    )
+    FROM showtimes s WHERE s.movie_run_id IS NULL;
+</sql>
+
+<!-- FK constraint (cho phép NULL — chưa NOT NULL) -->
+<addForeignKeyConstraint ... />
+```
+
+→ Sau Phase 1: app có thể đọc/ghi `movie_run_id` (NULL hoặc value). Verify thủ công trong production trước khi sang Phase 2.
+
+**Phase 2 (C2, changeset 052):**
+```xml
+<changeSet id="052-showtime-movie-run-id-not-null" author="cinex">
+    <preConditions onFail="MARK_RAN" onFailMessage="...">
+        <sqlCheck expectedResult="0">
+            SELECT COUNT(*) FROM showtimes WHERE movie_run_id IS NULL
+        </sqlCheck>
+    </preConditions>
+    <addNotNullConstraint tableName="showtimes" columnName="movie_run_id" columnDataType="BIGINT"/>
+</changeSet>
+```
+
+→ `preConditions sqlCheck count=0` — chỉ alter NOT NULL nếu không còn row NULL. `onFail="MARK_RAN"` — nếu vẫn còn NULL (data rác hiếm gặp), không halt deploy mà ghi log + skip; admin fix tay rồi rerun changeset sau.
+
+**Lợi ích:**
+- Rollback Phase 2 dễ: chỉ ALTER `nullable = true` lại
+- Phát hiện bug giữa 2 phase: rollback chỉ Phase 1 (drop column) — không mất data
+- Production-safe: app deploy phase 1 chạy ổn rồi mới push phase 2
+
+Xem doc kỹ hơn ở `docs/backend/16-architectural-patterns.md` mục 3.
+
+### 4.7 Business Rules — MovieRunService
+
+File: `backend/src/main/java/com/cinex/module/movie/service/MovieRunService.java`
+
+| Rule | Vì sao | Code reference |
+|---|---|---|
+| Không 2 run overlap ngày của cùng movie | Nếu Avatar có run [01/05-30/06] và [15/06-15/07] → showtime ngày 20/06 thuộc run nào? Ambiguous | `ensureNoOverlap` + `MovieRunRepository.existsOverlap` |
+| Không tạo run cho phim ARCHIVED | Phim đã xóa → tạo đợt chiếu vô nghĩa | `create` — check `movie.storageState == ARCHIVED` |
+| Không đổi `movie` của run đã tồn tại | Data lineage: showtime đang trỏ run → đổi movie sẽ lệch invariant | `update` — check `run.movie.id == request.movieId` |
+| Không archive run còn showtime SCHEDULED/ONGOING | Showtime "mồ côi" trỏ vào run đã ARCHIVED → user vẫn đặt vé được? | `archive` — `existsByMovieRunIdAndStatusIn(SCHEDULED, ONGOING)` |
+| Cascade archive run khi archive movie | Movie archive → run vô nghĩa | `MovieService.deleteMovie` → `movieRunRepository.archiveByMovieId` |
+| KHÔNG auto-restore run khi restore movie | Admin phải chọn cụ thể run nào restore (có thể chỉ muốn restore movie, không muốn chiếu lại) | `MovieService.restoreMovie` — comment explicit |
+
+**Công thức overlap:** 2 khoảng `[a, b]` giao `[c, d]` ⇔ `a ≤ d AND c ≤ b`.
+
+```java
+// MovieRunRepository
+@Query("SELECT COUNT(r) > 0 FROM MovieRun r " +
+       "WHERE r.movie.id = :movieId " +
+       "  AND r.storageState <> com.cinex.common.entity.StorageState.ARCHIVED " +
+       "  AND r.id <> :excludeId " +
+       "  AND r.startDate <= :end " +
+       "  AND :start <= r.endDate")
+boolean existsOverlap(@Param("movieId") Long movieId,
+                      @Param("start") LocalDate start,
+                      @Param("end") LocalDate end,
+                      @Param("excludeId") Long excludeId);
+```
+
+`excludeId` để khi UPDATE 1 run, không tính chính nó là "overlap với chính nó".
+
+### 4.8 API endpoints
+
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| `GET`    | `/api/movie-runs?movieId={id}` | Public | List runs của 1 phim, mới nhất ở đầu |
+| `GET`    | `/api/movie-runs/{id}`         | Public | Chi tiết 1 run |
+| `POST`   | `/api/movie-runs`              | ADMIN | Tạo run mới |
+| `PUT`    | `/api/movie-runs/{id}`         | ADMIN | Sửa run |
+| `DELETE` | `/api/movie-runs/{id}`         | ADMIN | Archive run |
+
+Request mẫu tạo run:
+
+```bash
+curl -X POST http://localhost:8088/api/movie-runs \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "movieId": 42,
+    "startDate": "2026-07-01",
+    "endDate":   "2026-08-15",
+    "runType":   "REISSUE",
+    "notes":     "Bản 4K Remaster kỷ niệm 17 năm"
+  }'
+```
+
+Response 200:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 101,
+    "movieId": 42,
+    "movieTitle": "Avatar",
+    "startDate": "2026-07-01",
+    "endDate":   "2026-08-15",
+    "runType":   "REISSUE",
+    "status":    "SCHEDULED",
+    "notes":     "Bản 4K Remaster kỷ niệm 17 năm"
+  }
+}
+```
+
+### 4.9 Ví dụ thực tế — Avatar (2009 + 2026)
+
+```
+Movie #42 — "Avatar"
+├── id: 42
+├── title: "Avatar"
+├── director: "James Cameron"
+├── duration: 162
+├── releaseDate: 2009-12-18   ← ngày khởi chiếu gốc thế giới
+└── status: NOW_SHOWING        ← derived từ runs (vì run #102 đang chiếu)
+
+   ↓ (1 movie ↔ N runs)
+
+MovieRun #101                       MovieRun #102
+├── movie_id: 42                    ├── movie_id: 42
+├── startDate: 2009-12-18           ├── startDate: 2026-07-01
+├── endDate:   2010-03-15           ├── endDate:   2026-08-15
+├── runType: FIRST_RUN              ├── runType: REISSUE
+├── status: ENDED                   ├── status: NOW_SHOWING
+└── notes: null                     └── notes: "Bản 4K Remaster"
+```
+
+→ Chỉ **1 Movie #42** cho cả 2 đợt chiếu cách nhau 17 năm. Review/favorite/rating của user 2009 vẫn tích lũy đúng vào Movie #42, hiển thị xuyên suốt cả khi chiếu lại 2026.
+
+### 4.10 So sánh trước/sau
+
+| Aspect | Pattern cũ (1 Movie = 1 lifecycle) | Pattern mới (Movie + MovieRun) |
+|---|---|---|
+| Avatar 2009 + 4K 2026 | 2 Movie entity riêng → review/favorite tách biệt | 1 Movie + 2 MovieRun → review/favorite gộp đúng |
+| Tạo phim mới chiếu | 1 INSERT Movie | 1 INSERT Movie + 1 INSERT MovieRun (auto khi admin set lịch chiếu) |
+| Status admin override | Sửa `Movie.status` trực tiếp | Sửa `MovieRun.status` của đúng run → recompute Movie.status |
+| Số bảng | `movies` (gộp metadata + lifecycle) | `movies` (metadata) + `movie_runs` (lifecycle) — chuẩn 3NF |
+| Showtime conflict 2 đợt chiếu khác nhau | Không hỗ trợ | Validate startTime in `[run.startDate, run.endDate]` của run cụ thể |
+| Mở rộng festival, sneak preview | Không có chỗ chứa | Tạo run thêm với runType = FESTIVAL/SPECIAL |
+
+### 4.11 Validate Showtime trong `[run.startDate, run.endDate]`
+
+`ShowtimeService.createShowtime / updateShowtime` gọi helper mới:
+
+```java
+private void validateShowtimeWithinMovieRun(MovieRun run, LocalDateTime startTime) {
+    LocalDate showtimeDate = startTime.toLocalDate();
+    if (showtimeDate.isBefore(run.getStartDate())) {
+        throw new BusinessException(ErrorCode.INVALID_REQUEST,
+            String.format("Suất chiếu phải nằm trong đợt chiếu [%s — %s]",
+                run.getStartDate(), run.getEndDate()));
+    }
+    if (showtimeDate.isAfter(run.getEndDate())) {
+        throw new BusinessException(ErrorCode.INVALID_REQUEST,
+            String.format("Suất chiếu phải nằm trong đợt chiếu [%s — %s]",
+                run.getStartDate(), run.getEndDate()));
+    }
+}
+```
+
+Thay thế hàm cũ `validateShowtimeWithinMovieLifecycle` (dùng `movie.releaseDate / endDate`). Pattern này chính xác hơn vì 1 phim có thể có nhiều đợt chiếu, validate phải gắn đúng đợt.
+
+### 4.12 Auto-pick MovieRun — Strategy UX
+
+Khi admin tạo showtime, nếu không truyền `movieRunId`, service tự pick:
+
+```java
+// ShowtimeService.resolveMovieRun
+// Strategy: NOW_SHOWING ưu tiên > nearest SCHEDULED
+```
+
+- Phim có **1 run NOW_SHOWING** → pick run đó (admin tạo showtime "đặt vào lịch chiếu hiện tại")
+- Phim có **2+ run NOW_SHOWING** (hiếm — nhiều đợt chồng) → pick run có `startDate` gần nhất
+- Phim chỉ có run SCHEDULED → pick run sắp tới
+- Không có run nào active → **throw lỗi**: "Phim X chưa có đợt chiếu nào. Vui lòng tạo đợt chiếu trước."
+
+Admin nâng cao có thể **explicit** truyền `movieRunId` để override (vd muốn tạo showtime cho run festival cụ thể).
+
+Xem pattern Auto-pick vs Explicit ở `docs/backend/16-architectural-patterns.md` mục 8.
+
+---
+
+### 3.5b Vòng đời Movie cũ — Showtime validate (chỉ tham khảo lịch sử)
+
+> **Bị thay thế** bởi `validateShowtimeWithinMovieRun` ở Section 4.11. Code cũ:
+
+```java
+// PATTERN CŨ — KHÔNG dùng nữa
+private void validateShowtimeWithinMovieLifecycle(Movie movie, LocalDateTime startTime) {
+    LocalDate showtimeDate = startTime.toLocalDate();
+    if (movie.getReleaseDate() != null && showtimeDate.isBefore(movie.getReleaseDate())) {
+        throw new BusinessException(...);
+    }
+    if (movie.getEndDate() != null && showtimeDate.isAfter(movie.getEndDate())) {
+        throw new BusinessException(...);
+    }
+}
+```
+
+Hạn chế: validate dùng `movie.releaseDate / endDate` — không phân biệt được phim có nhiều đợt chiếu khác nhau. Đã thay bằng validate theo run cụ thể.
+
+---
+
+### 3.6 Cascade soft-delete (Phase 4 — Movie → Reviews, Favorites)
+
+**Bài toán:** Admin archive Movie. User vào trang phim → thấy review cũ, thấy phim trong "Yêu thích" → bấm vào phim đã ARCHIVED → 404 → UX tệ.
+
+**Giải pháp CineX:** archive Movie → cascade xử lý dependencies — **asymmetric** (mỗi loại 1 chiến lược):
+- **Reviews**: soft delete (ARCHIVED) → khi restore Movie thì unarchive lại
+- **Favorites**: hard delete → không restore khi Movie restore
+- **Notifications**: KHÔNG cascade (FK không trực tiếp đến Movie)
+
+**Code:**
+```java
+// MovieService.deleteMovie + bulkDelete cùng gọi helper này
+private void cascadeArchiveDependencies(Long movieId) {
+    int reviewsArchived  = reviewRepository.archiveByMovieId(movieId);
+    int favoritesDeleted = userFavoriteRepository.deleteByMovieId(movieId);
+    if (reviewsArchived > 0 || favoritesDeleted > 0) {
+        log.info("Cascade archive for movie {}: {} reviews archived, {} favorites deleted",
+                 movieId, reviewsArchived, favoritesDeleted);
+    }
+}
+
+// ReviewRepository — bulk soft delete
+@Modifying
+@Query("UPDATE Review r SET r.storageState = com.cinex.common.entity.StorageState.ARCHIVED " +
+       "WHERE r.movie.id = :movieId AND r.storageState <> com.cinex.common.entity.StorageState.ARCHIVED")
+int archiveByMovieId(@Param("movieId") Long movieId);
+
+// Reverse — khi restore Movie
+@Modifying
+@Query("UPDATE Review r SET r.storageState = com.cinex.common.entity.StorageState.ACTIVE " +
+       "WHERE r.movie.id = :movieId AND r.storageState = com.cinex.common.entity.StorageState.ARCHIVED")
+int unarchiveByMovieId(@Param("movieId") Long movieId);
+
+// UserFavoriteRepository — bulk HARD delete
+@Modifying
+@Query("DELETE FROM UserFavorite uf WHERE uf.movie.id = :movieId")
+int deleteByMovieId(@Param("movieId") Long movieId);
+```
+
+**Luồng restore Movie:**
+```java
+@Transactional
+@Auditable(action = "RESTORE_MOVIE", entityType = "Movie")
+public MovieResponse restoreMovie(Long id) {
+    movie.setStorageState(StorageState.ACTIVE);
+    movieRepository.save(movie);
+
+    // Reverse cascade: unarchive review. Favorite không restore (đã hard delete).
+    int restored = reviewRepository.unarchiveByMovieId(id);
+    if (restored > 0) {
+        log.info("Restored {} reviews for movie {}", restored, movie.getTitle());
+    }
+}
+```
+
+**Sơ đồ asymmetric cascade:**
+
+```
+                    ┌──────────────────┐
+                    │  deleteMovie(id) │
+                    └────────┬─────────┘
+                             │
+            ┌────────────────┼────────────────┐
+            v                v                v
+   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+   │ Movie        │  │ Reviews      │  │ Favorites    │
+   │ storageState │  │ storageState │  │ DELETE row   │
+   │ = ARCHIVED   │  │ = ARCHIVED   │  │ (hard)       │
+   └──────┬───────┘  └──────┬───────┘  └──────────────┘
+          │                 │                  │
+   restoreMovie     unarchiveByMovieId   (KHÔNG khôi phục
+   reverse:         restore lại               được)
+   ACTIVE           ACTIVE
+```
+
+**Tại sao @Modifying @Query thay vì load → save?**
+- Load: 50 reviews → 50 UPDATE = 51 query
+- @Modifying @Query: 1 UPDATE = 1 query
+- Nhanh hơn 50x, tránh full memory load
+
+---
+
+### 3.7 N+1 Fix với @EntityGraph (Phase 3)
+
+**Bài toán cũ:**
+```java
+// MovieRepository không có @EntityGraph
+Page<Movie> findAll(Specification<Movie> spec, Pageable pageable);
+```
+List 20 phim → mỗi phim gọi `getGenres()` → bắn 1 query. Tổng: **1 + 20 = 21 query** (N+1).
+
+**Giải pháp:**
+```java
+@Override
+@EntityGraph(attributePaths = {"genres"})
+Page<Movie> findAll(Specification<Movie> spec, Pageable pageable);
+```
+
+Hibernate sinh LEFT JOIN `movies + movie_genres + genres` trong **1 query**. Pageable vẫn hoạt động — Hibernate dùng subquery để paginate trước khi join.
+
+**Lưu ý:** Tránh @EntityGraph cho many-to-many khi list LỚN (cartesian product). Với page size 10-50, JOIN FETCH vẫn nhanh hơn N+1. Nếu page size > 100 hoặc nhiều quan hệ many-to-many → cân nhắc `@BatchSize`.
+
+---
+
+### 3.8 Rating display 0 thay null (Mapper layer)
+
+**Bài toán:** Phim chưa có review thì `rating = NULL` trong DB. FE hiển thị "—" hoặc "null sao" → UX tệ. Nhưng nếu set default `0` trong entity thì mất phân biệt "chưa ai đánh giá" vs "0 sao thật sự".
+
+**Giải pháp:** Giữ NULL ở DB, convert 0 ở **Mapper layer** (DTO):
+```java
+// MovieMapper
+@Mapping(target = "rating", source = "rating", qualifiedByName = "ratingOrZero")
+MovieResponse toResponse(Movie movie);
+
+@Named("ratingOrZero")
+default BigDecimal ratingOrZero(BigDecimal rating) {
+    return rating != null ? rating : BigDecimal.ZERO;
+}
+```
+
+→ DB vẫn NULL (analytics phân biệt được "0 phim đánh giá"), FE thấy `0` (UX nhất quán). Kết hợp với COALESCE trong `hasRatingBetween` — filter "rating >= 7" vẫn loại phim NULL như mong đợi.
+
+---
+
+## 5. Sơ đồ luồng xử lý
 
 ### Tìm kiếm phim (Filter DTO + Specification)
 ```
@@ -492,7 +1039,7 @@ MovieService.createMovie(request)
 
 ---
 
-## 5. Khái niệm mới cần biết
+## 6. Khái niệm mới cần biết
 
 ### JpaSpecificationExecutor
 - Interface thêm method `findAll(Specification<T>, Pageable)` vào Repository
@@ -523,7 +1070,7 @@ MovieService.createMovie(request)
 
 ---
 
-## 6. Annotation mới sử dụng
+## 7. Annotation mới sử dụng
 
 | Annotation | Tác dụng | Ví dụ |
 |---|---|---|
@@ -538,18 +1085,27 @@ MovieService.createMovie(request)
 
 ---
 
-## 7. SQL được sinh ra
+## 8. SQL được sinh ra
 
 ```sql
--- Danh sách phim (có filter)
--- Controller dùng @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC)
-SELECT m.* FROM movies m
+-- Danh sách phim (có filter — với @EntityGraph load luôn genres trong 1 query)
+-- Controller default sort: createdAt DESC; FE override: ?sort=rating,desc
+SELECT m.*, g.*
+FROM movies m
 LEFT JOIN movie_genres mg ON m.id = mg.movie_id
+LEFT JOIN genres g ON mg.genre_id = g.id
 WHERE (m.storage_state IS NULL OR m.storage_state <> 'ARCHIVED')
   AND LOWER(m.title) LIKE '%avengers%'
   AND m.status = 'NOW_SHOWING'
-  AND mg.genre_id = 1
+  AND COALESCE(m.rating, 0) >= 7.0                              -- hasRatingBetween (J1)
+  AND m.release_date >= '2026-01-01'                            -- hasReleaseDateBetween
+  AND LOWER(m.director) LIKE '%russo%'                          -- hasDirectorLike
 ORDER BY m.created_at DESC OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY;
+
+-- Cascade archive khi delete (Phase 4)
+UPDATE reviews SET storage_state = 'ARCHIVED'
+  WHERE movie_id = 1 AND storage_state <> 'ARCHIVED';
+DELETE FROM user_favorites WHERE movie_id = 1;
 
 -- Đếm tổng (phân trang)
 SELECT COUNT(*) FROM movies m
@@ -585,7 +1141,7 @@ INSERT INTO genres (name, description, version, ...) VALUES ('Thriller', 'Phim g
 
 ---
 
-## 8. Request/Response mẫu
+## 9. Request/Response mẫu
 
 ### GET /api/movies — Danh sách phim (có search + filter)
 ```bash
@@ -660,7 +1216,7 @@ curl -X POST http://localhost:8088/api/genres \
 
 ---
 
-## 9. Câu hỏi tự kiểm tra
+## 10. Câu hỏi tự kiểm tra
 
 1. **Specification Pattern giải quyết vấn đề gì? Nếu không dùng thì phải viết bao nhiêu method cho 4 filter?**
    → Giải quyết vấn đề tổ hợp filter tăng theo cấp số nhân. 4 filter = 2^4 = 16 tổ hợp = 16 method. Specification: chỉ cần 4 method nhỏ + ghép `.and()`.
@@ -676,3 +1232,36 @@ curl -X POST http://localhost:8088/api/genres \
 
 5. **MapStruct gặp Set\<Genre\> → Set\<String\>, nó có tự map được không?**
    → KHÔNG. Phải viết custom `default` method + đánh dấu `@Named` + chỉ định `qualifiedByName` trong `@Mapping`.
+
+6. **Khi archive Movie, tại sao Reviews soft-delete còn Favorites hard-delete?**
+   → Review là **nội dung user tạo** (text + rating) — có giá trị, mất tiếc; khi restore Movie thì unarchive lại để FE hiển thị review cũ. Favorite chỉ là **cờ "đã thích"** — user có thể bấm tim lại trong 1 click, không cần lưu lịch sử. → Cascade asymmetric: phù hợp với bản chất từng loại data.
+
+7. **Tại sao `hasRatingBetween` dùng `COALESCE(rating, 0)` thay vì so sánh trực tiếp?**
+   → Phim chưa có review thì rating = NULL trong DB. SQL `NULL >= 7` = NULL (không phải FALSE), row bị loại khỏi WHERE. User filter "rating >= 0" mong đợi lấy hết phim — nhưng nếu không COALESCE thì phim NULL bị loại. COALESCE(rating, 0) → phim NULL coi như 0 → filter "≥ 0" trả về hết, filter "≥ 7" vẫn loại phim NULL (như mong đợi).
+
+8. **Nếu MovieRepository không có `@EntityGraph(attributePaths = "genres")`, list 20 phim sẽ chạy bao nhiêu query?**
+   → 1 query lấy 20 phim + 20 query lazy-load `getGenres()` cho mỗi phim = **21 query** (N+1 problem). Sau khi có @EntityGraph → Hibernate JOIN FETCH → **1 query duy nhất**.
+
+9. **Filter của Movie nay có 11 field. Khi nào dừng thêm filter?**
+   → Quy tắc: FE thực sự cần lọc trên UI thì thêm. "Phòng hờ — biết đâu sau này FE cần" → KHÔNG thêm (Interface Segregation Principle). Filter join sâu 4+ bảng → cân nhắc index hoặc denormalize cột, đừng để query chậm chỉ vì 1 filter ít dùng.
+
+10. **Sort trên list movie nên dùng custom field `sortBy` trong DTO hay Spring Pageable built-in?**
+    → **Spring Pageable built-in** (`?sort=rating,desc&sort=createdAt,desc`). Lý do: (1) Spring auto-parse, không phải viết switch case, (2) FE tự do combine nhiều cột, (3) đồng nhất với mọi list API, (4) Controller chỉ cần `@PageableDefault(sort=..., direction=DESC)` cho mặc định.
+
+11. **Vì sao CineX tách Movie thành Movie + MovieRun thay vì cứ 1 Movie / 1 lifecycle?**
+    → Pattern phẳng giả định "1 phim chỉ chiếu 1 lần". Sai với thực tế: Avatar 2009 + 4K 2026 = cùng phim, 2 đợt chiếu. Nếu tạo 2 Movie thì review/favorite/rating tách rời, user search "Avatar" thấy 2 entry trùng tên. Tách MovieRun ra cho phép 1 Movie có N run — metadata tích lũy thống nhất.
+
+12. **Movie.status sau refactor giờ là derived field — vì sao không drop hẳn?**
+    → Backward compatibility: DTO `MovieResponse / MovieListResponse / FavoriteMovieResponse` đã expose `status`, FE dùng filter "Đang chiếu" + badge. Drop ngay → sửa nhiều DTO + FE + filter logic, diện ảnh hưởng rộng. Option B: giữ field, recompute từ runs sau mỗi sự kiện (eventual consistency). Khi nào cần drop hẳn — refactor riêng, không gộp vào commit này.
+
+13. **Vì sao Showtime giờ link cả `movie_id` (denormalized) lẫn `movie_run_id`?**
+    → Showtime giờ logic chính trỏ tới run. Nhưng nhiều query/report cũ join `showtimes → movies` trực tiếp (statistics, filter homepage, mapper). Drop `movie_id` ngay sẽ break diện rộng. Giữ làm denormalized backup với invariant `showtime.movie == showtime.movieRun.movie` — service đảm bảo. Có thể drop sau khi audit hết usage.
+
+14. **Migration `movie_run_id` chia 2 changeset (NULLABLE → NOT NULL) thay vì 1 — vì sao?**
+    → Phase 1 (NULLABLE + backfill) cho phép verify data đúng trước khi alter NOT NULL. Nếu bug trong logic backfill, rollback chỉ phase 1 (drop column) — không mất data. Phase 2 (NOT NULL) còn có `preConditions sqlCheck count=0 + onFail MARK_RAN`: nếu vẫn còn NULL hiếm hoi, không halt deploy mà ghi log + skip; admin fix tay rồi rerun. Production-safe.
+
+15. **2 khoảng `[a, b]` và `[c, d]` overlap khi nào?**
+    → Khi `a ≤ d AND c ≤ b`. Áp dụng: chống MovieRun trùng ngày (cùng 1 phim không có 2 đợt chiếu chồng lên nhau), chống Showtime trùng giờ trong cùng room.
+
+16. **Tại sao `MovieRunStatusScheduler` dùng `@SchedulerLock` mà `MovieStatusScheduler` cũ không cần?**
+    → Khi deploy production có nhiều instance backend (HA), `@Scheduled` chạy trên CẢ 2 node cùng lúc → 2 transaction cùng UPDATE 1 row → race condition. ShedLock đảm bảo chỉ 1 instance chạy job tại 1 thời điểm. `MovieStatusScheduler` cũ thực ra cũng cần — nhưng giai đoạn đó CineX chưa multi-instance nên bug tiềm ẩn. Bài học: luôn `@SchedulerLock` cho mọi `@Scheduled` đụng vào DB shared.

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Voucher: vouchers, voucher_usages -->
+
+    <changeSet id="007-create-vouchers" author="cinex">
+        <createTable tableName="vouchers">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="theater_id" type="BIGINT"/>
+            <column name="code" type="NVARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="NVARCHAR(255)"/>
+            <column name="discount_type" type="NVARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="discount_value" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="min_order_amount" type="DECIMAL(12,0)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_discount" type="DECIMAL(12,0)"/>
+            <column name="usage_limit" type="INT"/>
+            <column name="used_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="start_date" type="DATETIME2">
+                <constraints nullable="false"/>
+            </column>
+            <column name="end_date" type="DATETIME2">
+                <constraints nullable="false"/>
+            </column>
+            <column name="active" type="BIT" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="vouchers" baseColumnNames="theater_id"
+                                 referencedTableName="theaters" referencedColumnNames="id"
+                                 constraintName="fk_vouchers_theater"/>
+        <createIndex tableName="vouchers" indexName="idx_vouchers_code">
+            <column name="code"/>
+        </createIndex>
+        <createIndex tableName="vouchers" indexName="idx_vouchers_theater_id">
+            <column name="theater_id"/>
+        </createIndex>
+        <createIndex tableName="vouchers" indexName="idx_vouchers_active">
+            <column name="active"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="007-create-voucher-usages" author="cinex">
+        <createTable tableName="voucher_usages">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="voucher_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="booking_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="used_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="voucher_usages" baseColumnNames="voucher_id"
+                                 referencedTableName="vouchers" referencedColumnNames="id"
+                                 constraintName="fk_voucher_usages_voucher"/>
+        <addForeignKeyConstraint baseTableName="voucher_usages" baseColumnNames="user_id"
+                                 referencedTableName="users" referencedColumnNames="id"
+                                 constraintName="fk_voucher_usages_user"/>
+        <addForeignKeyConstraint baseTableName="voucher_usages" baseColumnNames="booking_id"
+                                 referencedTableName="bookings" referencedColumnNames="id"
+                                 constraintName="fk_voucher_usages_booking"/>
+        <addUniqueConstraint tableName="voucher_usages" columnNames="voucher_id, booking_id"
+                             constraintName="uq_voucher_usages_voucher_booking"/>
+        <createIndex tableName="voucher_usages" indexName="idx_voucher_usages_user_id">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

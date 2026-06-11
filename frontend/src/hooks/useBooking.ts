@@ -114,7 +114,7 @@ export function useProfile() {
 
 export function useUpdateProfile() {
   return useMutation({
-    mutationFn: async (data: { fullName?: string; phone?: string }) => {
+    mutationFn: async (data: { fullName?: string; phone?: string; dateOfBirth?: string }) => {
       const res = await api.put<ApiResponse<UserProfile>>('/api/users/me', data)
       return res.data.data
     },
@@ -130,5 +130,70 @@ export function useChangePassword() {
     },
     onSuccess: () => toast.success('Đổi mật khẩu thành công'),
     onError: (e) => toast.error(getErrorMessage(e, 'Đổi mật khẩu thất bại')),
+  })
+}
+
+/** Ghế đã bị occupied (HOLDING + CONFIRMED) cho 1 showtime. Dùng cho seat-selection. */
+export function useOccupiedSeats(showtimeId: number | null) {
+  return useQuery({
+    queryKey: ['occupiedSeats', showtimeId],
+    enabled: !!showtimeId,
+    queryFn: async () => {
+      const res = await api.get<ApiResponse<number[]>>(
+        `/api/bookings/showtimes/${showtimeId}/occupied-seats`,
+      )
+      return res.data.data ?? []
+    },
+  })
+}
+
+export interface AvailableVoucher {
+  code: string
+  description: string
+  discountAmount: number
+  message: string
+}
+
+/**
+ * Voucher hợp lệ với 1 đơn (theo orderAmount + theater).
+ * BE đã chain logic: theater-specific + global voucher gộp lại.
+ * total <= 0 → query disabled, FE không gọi.
+ */
+export function useAvailableVouchers(total: number, theaterId: number | undefined) {
+  return useQuery({
+    queryKey: ['vouchers', 'available', total, theaterId ?? 'global'],
+    enabled: total > 0,
+    queryFn: async () => {
+      const res = await api.get<ApiResponse<AvailableVoucher[]>>('/api/vouchers/available', {
+        params: { orderAmount: total, theaterId },
+      })
+      return res.data.data ?? []
+    },
+  })
+}
+
+export interface VoucherValidateResult {
+  valid: boolean
+  code?: string
+  discountAmount: number
+  message: string
+}
+
+interface ValidateVoucherPayload {
+  code: string
+  orderAmount: number
+  theaterId: number | undefined
+}
+
+/** Validate voucher code do user nhập tay — trả result.valid + message. */
+export function useValidateVoucher() {
+  return useMutation({
+    mutationFn: async (data: ValidateVoucherPayload) => {
+      const res = await api.post<ApiResponse<VoucherValidateResult>>(
+        '/api/vouchers/validate', data,
+      )
+      return res.data.data!
+    },
+    onError: (e) => toast.error(getErrorMessage(e, 'Không thể kiểm tra voucher')),
   })
 }

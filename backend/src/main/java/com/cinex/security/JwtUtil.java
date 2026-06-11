@@ -50,12 +50,22 @@ public class JwtUtil {
     }
 
     private <T> T extractClaim(String token, Function<Claims, T> resolver) {
-        Claims claims = Jwts.parser()
+        Claims claims = extractAllClaims(token);
+        return resolver.apply(claims);
+    }
+
+    /**
+     * Parse JWT 1 LẦN duy nhất → trả về toàn bộ Claims.
+     * Filter dùng method này để đọc cả username + expiration trong 1 lần parse
+     * (thay vì gọi extractUsername + isTokenExpired = 2 lần parse signature).
+     * Parse signature là tác vụ tốn CPU (HMAC-SHA256), bottleneck mỗi request.
+     */
+    public Claims extractAllClaims(String token) {
+        return Jwts.parser()
                 .verifyWith(getSigningKey())
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-        return resolver.apply(claims);
     }
 
     private SecretKey getSigningKey() {

@@ -15,6 +15,16 @@ import java.time.LocalDateTime;
 @Setter
 public class VoucherRequest {
 
+    /**
+     * Chi nhánh áp dụng voucher.
+     * <ul>
+     *   <li>NULL = voucher toàn hệ thống (chỉ SUPER_ADMIN được tạo)</li>
+     *   <li>NOT NULL = voucher chỉ áp dụng tại 1 chi nhánh cụ thể</li>
+     * </ul>
+     * Branch ADMIN: service override field này từ JWT (không cho tạo cho rạp khác).
+     */
+    private Long theaterId;
+
     @NotBlank(message = "Mã voucher là bắt buộc")
     @Size(max = 30, message = "Mã voucher tối đa 30 ký tự")
     private String code;

@@ -44,6 +44,22 @@ public class BookingSeat {
     @JoinColumn(name = "seat_id", nullable = false)
     private Seat seat;
 
+    /**
+     * Denormalized showtime_id — copy từ booking.showtime.id khi tạo.
+     *
+     * Vì sao tách field thay vì lấy qua booking.getShowtime().getId()?
+     * - DB có partial unique index `uk_booking_seats_active (showtime_id, seat_id)
+     *   WHERE status IN ('HELD','BOOKED')` để chống double-booking ở tầng DB
+     *   (xem changeset 034).
+     * - SQL Server filtered index KHÔNG tham chiếu được cột bảng khác (bookings.showtime_id),
+     *   nên cột phải nằm trực tiếp trên booking_seats.
+     * - Trigger AFTER INSERT có sync showtime_id từ bookings, nhưng SQL Server check NOT NULL
+     *   constraint TRƯỚC khi trigger chạy → app phải set value trước.
+     * - App set trong BookingService.holdSeats + counterSale = single source of truth.
+     */
+    @Column(name = "showtime_id", nullable = false)
+    private Long showtimeId;
+
     // Giá tại thời điểm đặt (giá có thể thay đổi sau)
     @Column(nullable = false, precision = 12, scale = 0)
     private BigDecimal price;

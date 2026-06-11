@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- System configs + id tracker prefixes -->
+
+    <changeSet id="009-seed-system-config" author="cinex">
+        <sql>
+            INSERT INTO system_config (config_key, config_value, description) VALUES
+            ('booking.hold_minutes', '10', 'Số phút giữ ghế chờ thanh toán'),
+            ('booking.max_seats', '8', 'Số ghế tối đa 1 lần đặt'),
+            ('booking.max_per_user_per_day', '20', 'Số booking tối đa 1 user/ngày — chống bot'),
+            ('booking.cutoff_after_start_minutes', '15', 'Cho phép đặt vé tới X phút SAU khi suất bắt đầu'),
+            ('booking.cancel_before_minutes', '60', 'Cho hủy vé trước X phút khi chiếu'),
+            ('booking.no_show_buffer_minutes', '30', 'Sau X phút từ giờ kết thúc, vé chưa check-in → NO_SHOW'),
+            ('auth.login_max_attempts_per_user', '5', 'Tối đa lần login fail / user / window'),
+            ('auth.login_max_attempts_per_ip', '20', 'Tối đa lần login fail / IP / window'),
+            ('auth.login_window_minutes', '15', 'Window rate limit login (phút)'),
+            ('auth.forgot_password_max_per_email', '3', 'Tối đa forgot-password / email / window'),
+            ('auth.forgot_password_max_per_ip', '10', 'Tối đa forgot-password / IP / window'),
+            ('auth.forgot_password_window_minutes', '60', 'Window rate limit forgot (phút)'),
+            ('auth.token_verify_max_per_ip', '30', 'Tối đa verify-token / IP / window'),
+            ('auth.token_verify_window_minutes', '60', 'Window rate limit verify-token (phút)'),
+            ('auth.password_reset_token_ttl_minutes', '15', 'TTL reset password token (phút)'),
+            ('loyalty.points_per_1000_vnd', '1', 'Điểm tích mỗi 1.000đ chi tiêu'),
+            ('loyalty.silver_threshold', '500', 'Lifetime points để đạt SILVER'),
+            ('loyalty.gold_threshold', '2000', 'Lifetime points để đạt GOLD'),
+            ('loyalty.platinum_threshold', '5000', 'Lifetime points để đạt PLATINUM'),
+            ('statistics.dashboard_default_days', '7', 'Default range Top movies/snacks (ngày)'),
+            ('statistics.cache_ttl_seconds', '60', 'TTL cache statistics (giây)');
+        </sql>
+    </changeSet>
+
+    <changeSet id="009-seed-id-tracker" author="cinex">
+        <sql>
+            INSERT INTO id_tracker (entity_type, prefix, current_value, description) VALUES
+            ('BOOKING', 'CX', 0, 'Booking code: CX-YYYYMMDD-NNN'),
+            ('SNACK_ORDER', 'SO', 0, 'Snack order code: SO-YYYYMMDD-NNN'),
+            ('PAYMENT', 'PAY', 0, 'Payment transaction code: PAY-YYYYMMDD-NNN');
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

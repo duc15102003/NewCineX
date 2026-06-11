@@ -1,30 +1,31 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/api/axios'
 import type { ApiResponse } from '@/types/auth'
-import type { Genre, MovieDetail, MovieListItem, PageResponse, ShowtimeItem } from '@/types/movie'
+import type { Genre, MovieDetail, MovieFilter, MovieListItem, PageResponse, ShowtimeItem } from '@/types/movie'
 
-interface MovieParams {
-  keyword?: string
-  status?: string
-  showing?: boolean
-  genreId?: number
-  page?: number
-  size?: number
+/**
+ * Loại bỏ field undefined/null/'' trước khi gửi BE.
+ */
+function cleanParams(input: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(input)) {
+    if (v === undefined || v === null || v === '') continue
+    out[k] = v
+  }
+  return out
 }
 
-export function useMovies(params: MovieParams = {}) {
+export function useMovies(params: MovieFilter = {}) {
   return useQuery({
     queryKey: ['movies', params],
     queryFn: async () => {
+      const cleaned = cleanParams({
+        ...params,
+        page: params.page ?? 0,
+        size: params.size ?? 20,
+      })
       const res = await api.get<ApiResponse<PageResponse<MovieListItem>>>('/api/movies', {
-        params: {
-          keyword: params.keyword || undefined,
-          status: params.status || undefined,
-          showing: params.showing || undefined,
-          genreId: params.genreId || undefined,
-          page: params.page ?? 0,
-          size: params.size ?? 20,
-        },
+        params: cleaned,
       })
       return res.data.data
     },
@@ -55,13 +56,18 @@ export function useGenres() {
   })
 }
 
-export function useShowtimes(movieId: number, date: string) {
+/**
+ * List showtime của 1 phim + ngày, optional filter theo chi nhánh.
+ *
+ * <p>Sau F1 (Theater): nếu truyền {@code theaterId}, chỉ trả suất chiếu trong chi nhánh đó.
+ */
+export function useShowtimes(movieId: number, date: string, theaterId?: number | null) {
   return useQuery({
-    queryKey: ['showtimes', movieId, date],
+    queryKey: ['showtimes', movieId, date, theaterId ?? 'all'],
     queryFn: async () => {
-      const res = await api.get<ApiResponse<PageResponse<ShowtimeItem>>>('/api/showtimes', {
-        params: { movieId, date, size: 50 },
-      })
+      const params: Record<string, unknown> = { movieId, date, size: 50 }
+      if (theaterId) params.theaterId = theaterId
+      const res = await api.get<ApiResponse<PageResponse<ShowtimeItem>>>('/api/showtimes', { params })
       return res.data.data.content
     },
     enabled: !!movieId && !!date,

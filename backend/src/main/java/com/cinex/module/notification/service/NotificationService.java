@@ -4,9 +4,11 @@ import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
 import com.cinex.module.auth.entity.User;
 import com.cinex.module.auth.repository.UserRepository;
+import com.cinex.module.notification.dto.NotificationFilter;
 import com.cinex.module.notification.dto.NotificationResponse;
 import com.cinex.module.notification.entity.Notification;
 import com.cinex.module.notification.repository.NotificationRepository;
+import com.cinex.module.notification.specification.NotificationSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -28,10 +30,23 @@ public class NotificationService {
 
     /**
      * Lấy danh sách thông báo của user, phân trang, mới nhất lên đầu.
+     * Overload không filter để giữ tương thích lùi.
      */
     @Transactional(readOnly = true)
     public Page<NotificationResponse> getMyNotifications(Long userId, Pageable pageable) {
-        return notificationRepository.findByUserId(userId, pageable)
+        return listNotifications(userId, null, pageable);
+    }
+
+    /**
+     * Lấy notifications của user theo filter (type/isRead/created range).
+     *
+     * [Specification Pattern] userId BẮT BUỘC, lấy từ SecurityContext ở controller →
+     * không bao giờ tin client truyền vào (chống IDOR).
+     */
+    @Transactional(readOnly = true)
+    public Page<NotificationResponse> listNotifications(Long userId, NotificationFilter filter, Pageable pageable) {
+        var spec = NotificationSpecification.fromFilter(filter, userId);
+        return notificationRepository.findAll(spec, pageable)
                 .map(this::toResponse);
     }
 
@@ -105,11 +120,21 @@ public class NotificationService {
         Notification saved = notificationRepository.save(notification);
         log.info("Created {} notification for user {}: {}", type, userId, title);
 
-        // [WebSocket Push] Broadcast thông báo mới đến FE ngay lập tức.
-        // Topic: /topic/user/{username}/notifications — per-user, chỉ FE của user đó nhận.
-        // FE subscribe topic này → bell icon cập nhật ngay, không cần polling 30s.
-        simpMessagingTemplate.convertAndSend(
-                "/topic/user/" + user.getUsername() + "/notifications",
+        // [WebSocket Push - per-user destination] Push thông báo mới đến FE ngay lập tức.
+        //
+        // TRƯỚC ĐÂY: convertAndSend("/topic/user/{username}/notifications", ...)
+        //   → /topic là broadcast: ai biết username (rất dễ đoán) cũng subscribe được
+        //     → IDOR — user A đọc lén thông báo của user B.
+        //
+        // GIỜ: convertAndSendToUser(username, "/queue/notifications", ...)
+        //   → Spring tự dịch thành đích nội bộ /user/{sessionId}/queue/notifications.
+        //   → FE phải subscribe "/user/queue/notifications" và phải đăng nhập (Principal
+        //     khớp với username). Không user khác nào tự subscribe đường này được.
+        //
+        // Cần config setUserDestinationPrefix("/user") trong WebSocketConfig (đã có).
+        simpMessagingTemplate.convertAndSendToUser(
+                user.getUsername(),
+                "/queue/notifications",
                 toResponse(saved)
         );
 

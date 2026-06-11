@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        CHECK constraints — bảo vệ data integrity ở DB level, không chỉ app level.
+        Ngăn ai đó INSERT giá trị enum xấu qua tool ngoài (DBeaver, SQL trực tiếp,
+        migration tay) → DB throw error ngay, không silent corrupt data.
+    -->
+
+    <changeSet id="008-check-storage-state" author="cinex">
+        <sql>
+            ALTER TABLE users ADD CONSTRAINT chk_users_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE theaters ADD CONSTRAINT chk_theaters_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE genres ADD CONSTRAINT chk_genres_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE movies ADD CONSTRAINT chk_movies_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE movie_runs ADD CONSTRAINT chk_movie_runs_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE rooms ADD CONSTRAINT chk_rooms_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE seats ADD CONSTRAINT chk_seats_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE showtimes ADD CONSTRAINT chk_showtimes_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE bookings ADD CONSTRAINT chk_bookings_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE payments ADD CONSTRAINT chk_payments_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE snacks ADD CONSTRAINT chk_snacks_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE combos ADD CONSTRAINT chk_combos_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE snack_orders ADD CONSTRAINT chk_snack_orders_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE reviews ADD CONSTRAINT chk_reviews_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE user_favorites ADD CONSTRAINT chk_user_favorites_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE notifications ADD CONSTRAINT chk_notifications_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE loyalty_transactions ADD CONSTRAINT chk_loyalty_transactions_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE vouchers ADD CONSTRAINT chk_vouchers_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+            ALTER TABLE pricing_rules ADD CONSTRAINT chk_pricing_rules_storage_state CHECK (storage_state IN ('ACTIVE','ARCHIVED'));
+        </sql>
+    </changeSet>
+
+    <changeSet id="008-check-enums" author="cinex">
+        <sql>
+            -- Auth + RBAC
+            ALTER TABLE users ADD CONSTRAINT chk_users_role CHECK (role IN ('USER','ADMIN','SUPER_ADMIN'));
+            ALTER TABLE users ADD CONSTRAINT chk_users_tier CHECK (tier IN ('STANDARD','SILVER','GOLD','PLATINUM'));
+
+            -- Cinema infra
+            ALTER TABLE theaters ADD CONSTRAINT chk_theaters_status CHECK (status IN ('ACTIVE','MAINTENANCE','CLOSED'));
+            ALTER TABLE rooms ADD CONSTRAINT chk_rooms_type CHECK (type IN ('TWO_D','THREE_D','IMAX','FOUR_DX'));
+            ALTER TABLE rooms ADD CONSTRAINT chk_rooms_status CHECK (status IN ('ACTIVE','MAINTENANCE','INACTIVE'));
+            ALTER TABLE seats ADD CONSTRAINT chk_seats_type CHECK (seat_type IN ('STANDARD','VIP','COUPLE'));
+            ALTER TABLE seats ADD CONSTRAINT chk_seats_status CHECK (status IN ('AVAILABLE','BROKEN'));
+
+            -- Catalog
+            ALTER TABLE movies ADD CONSTRAINT chk_movies_age_rating CHECK (age_rating IN ('P','K','T13','T16','T18'));
+            ALTER TABLE movie_runs ADD CONSTRAINT chk_movie_runs_type CHECK (run_type IN ('FIRST_RUN','REISSUE','FESTIVAL','SPECIAL'));
+            ALTER TABLE movie_runs ADD CONSTRAINT chk_movie_runs_status CHECK (status IN ('SCHEDULED','NOW_SHOWING','ENDED'));
+
+            -- Showtime
+            ALTER TABLE showtimes ADD CONSTRAINT chk_showtimes_status CHECK (status IN ('SCHEDULED','ONGOING','FINISHED','CANCELLED'));
+
+            -- Booking
+            ALTER TABLE bookings ADD CONSTRAINT chk_bookings_status CHECK (status IN ('HOLDING','CONFIRMED','CHECKED_IN','CANCELLED','EXPIRED','NO_SHOW','REJECTED'));
+            ALTER TABLE booking_seats ADD CONSTRAINT chk_booking_seats_status CHECK (status IN ('HELD','BOOKED','CANCELLED'));
+
+            -- Payment
+            ALTER TABLE payments ADD CONSTRAINT chk_payments_method CHECK (method IN ('VNPAY','MOMO','CASH','CARD_POS','TRANSFER'));
+            ALTER TABLE payments ADD CONSTRAINT chk_payments_status CHECK (status IN ('PENDING','COMPLETED','FAILED','REFUNDED'));
+
+            -- Voucher
+            ALTER TABLE vouchers ADD CONSTRAINT chk_vouchers_discount_type CHECK (discount_type IN ('PERCENTAGE','FIXED_AMOUNT'));
+
+            -- Pricing
+            ALTER TABLE pricing_rules ADD CONSTRAINT chk_pricing_rules_type CHECK (rule_type IN ('DAY_OF_WEEK','HOUR_RANGE','DATE_RANGE','COMPOSITE'));
+
+            -- Loyalty
+            ALTER TABLE loyalty_transactions ADD CONSTRAINT chk_loyalty_transactions_type CHECK (transaction_type IN ('EARN','REDEEM','ADJUST'));
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

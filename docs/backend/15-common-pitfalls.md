@@ -1,6 +1,240 @@
-# Backend Pitfalls — Top 20 bug Spring Boot phổ biến
+# Backend Pitfalls — Top 21 bug Spring Boot phổ biến
 
 > File này gom các bug "vô hình" mà mọi dev Spring đều gặp khi build dự án CineX-style. Mỗi bug đều có code reproduce + cơ chế gốc + cách fix. Đọc 1 lần, tránh được 80% pain points.
+
+---
+
+## 🎓 PHẦN 0 — 5 khái niệm nền tảng PHẢI hiểu trước (đọc trước khi xem 21 bug)
+
+Không hiểu 5 khái niệm này, bạn đọc bug bên dưới sẽ chỉ thuộc lòng "fix kiểu này" mà không hiểu WHY. Mỗi khái niệm có ví dụ đời thường + cơ chế hoạt động trong Spring.
+
+### 0.1 Proxy Pattern — Tại sao `@Transactional` cần proxy?
+
+**Ví dụ đời thường:** Bạn (target bean) muốn xin nghỉ phép, nhưng thay vì gọi thẳng Giám đốc, bạn phải đi qua thư ký (proxy). Thư ký ghi log "Anh A xin nghỉ", check quyền, rồi mới đưa giấy vào phòng Giám đốc. Mọi việc xin nghỉ đều đi qua thư ký → log + check quyền luôn được thực hiện.
+
+**Spring proxy:**
+```
+External caller -> [Spring Proxy] -> Target bean (method gốc)
+                       │
+                       ├─ Before: openTransaction()
+                       ├─ Invoke target method
+                       └─ After: commit() / rollback()
+```
+
+Spring tạo proxy bằng 2 cách:
+- **JDK Dynamic Proxy** (nếu class implement interface): tạo class mới implement cùng interface, mỗi method gọi tới target.
+- **CGLIB** (nếu class không có interface): subclass target bằng bytecode manipulation.
+
+**Hệ quả nguy hiểm — Self-Invocation (xem bug #1):**
+```java
+class A {
+    @Transactional
+    void m1() {}
+
+    void m2() {
+        this.m1();  // ❌ this = target, KHÔNG đi qua proxy → @Transactional vô hiệu
+    }
+}
+```
+
+**Khi nào proxy không tạo được?** Final class, final method, private method, static method — không subclass được → AOP không hoạt động.
+
+📚 **Đọc thêm:** [glossary.md#p-q](../glossary.md#p-q) (Proxy), [backend/04-spring-features.md](04-spring-features.md) (AOP).
+
+---
+
+### 0.2 Reflection — Cơ chế "magic" của Spring/Hibernate/Jackson
+
+**Ví dụ đời thường:** Bạn đưa cho Spring 1 hộp đen (Java class), Spring KHÔNG biết bên trong có gì. Reflection cho Spring khả năng "mở hộp ra, đọc nhãn từng đồ vật, tự gọi các method, sửa field" lúc runtime.
+
+```java
+Class<?> clazz = User.class;
+// Đọc nhãn: tất cả annotation
+Annotation[] annotations = clazz.getAnnotations();
+// Tìm method có @PostConstruct
+for (Method method : clazz.getDeclaredMethods()) {
+    if (method.isAnnotationPresent(PostConstruct.class)) {
+        method.invoke(userInstance);  // Gọi method qua reflection
+    }
+}
+// Đọc/sửa field private (bypass encapsulation!)
+Field passwordField = clazz.getDeclaredField("password");
+passwordField.setAccessible(true);
+passwordField.set(userInstance, "new-value");
+```
+
+**Spring dùng reflection cho:**
+- Scan `@Component`, `@Service`, `@Repository` → tạo bean
+- Inject `@Autowired` field/constructor
+- Activate `@Transactional`, `@PreAuthorize`, `@PostConstruct`
+- Jackson deserialize JSON → POJO
+
+**Nhược điểm:**
+- **Chậm hơn** code thường ~10-100 lần (vì JVM optimize kém)
+- **Bypass type safety** ở compile-time
+- **Bypass encapsulation** (đọc/sửa field private)
+
+**Khi nào tránh dùng reflection:**
+- Code business logic — luôn dùng method gọi trực tiếp
+- Inner loop performance-critical — cache `Method` object thay vì lookup mỗi lần
+
+📚 **Đọc thêm:** [glossary.md#r-s](../glossary.md#r-s) (Reflection).
+
+---
+
+### 0.3 Spring Bean Lifecycle — Từ khi tạo đến khi destroy
+
+**Ví dụ đời thường:** Một nhân viên mới vào công ty (Bean được tạo) phải:
+1. Tuyển dụng (instantiation)
+2. Onboarding — nhận dependency (DI)
+3. Đào tạo — chạy `@PostConstruct` (init)
+4. Làm việc bình thường (sẵn sàng nhận request)
+5. Nghỉ việc — chạy `@PreDestroy` (cleanup, đóng connection, flush log)
+
+**Spring chi tiết:**
+```
+1. Bean Instantiation (new ClassName())
+   ↓
+2. Populate Properties (set field qua DI)
+   ↓
+3. BeanNameAware.setBeanName()
+   ↓
+4. BeanFactoryAware.setBeanFactory()
+   ↓
+5. ApplicationContextAware.setApplicationContext()
+   ↓
+6. @PostConstruct (init method) ← ⚠️ Bug #21 ở đây
+   ↓
+7. InitializingBean.afterPropertiesSet()
+   ↓
+8. Custom init-method
+   ↓
+9. Bean SẴN SÀNG nhận request
+   ↓
+10. (khi app shutdown)
+    @PreDestroy
+    ↓
+11. DisposableBean.destroy()
+    ↓
+12. Custom destroy-method
+```
+
+**Lý do quan trọng:** `@PostConstruct` chạy TRƯỚC khi proxy hoàn thiện → nếu method `@PostConstruct` gọi method `@Transactional` của chính bean → annotation không hoạt động (xem bug #21).
+
+📚 **Đọc thêm:** [backend/01-spring-boot-basics.md](01-spring-boot-basics.md) (Bean), [glossary.md#i](../glossary.md#i) (IoC).
+
+---
+
+### 0.4 Lazy Loading & Hibernate Session — Cơ chế của LazyInitializationException
+
+**Ví dụ đời thường:** Bạn vào thư viện (Session opened), mượn 1 cuốn sách (entity load) với phần "danh sách tác giả" để trống (LAZY). Bạn ra khỏi thư viện (Session closed). Trên đường về, bạn lật xem danh sách tác giả → cuốn sách không tự lấy được từ thư viện (đã đóng cửa) → exception.
+
+**Cơ chế chi tiết:**
+
+```java
+@Entity
+public class Movie {
+    @ManyToOne(fetch = LAZY)
+    private Director director;  // ← LAZY = không load ngay
+}
+
+// Service:
+@Transactional  // ← Session open
+public Movie findMovie(Long id) {
+    return movieRepo.findById(id).orElseThrow();
+    // Lúc này: movie.director = HibernateProxy (chưa load)
+}
+// ← Khi method exit: Session CLOSED
+
+// Controller:
+@GetMapping("/{id}")
+public Movie getMovie(@PathVariable Long id) {
+    Movie m = movieService.findMovie(id);
+    // Jackson serialize JSON → gọi m.getDirector().getName()
+    // HibernateProxy cố lookup DB → Session đã đóng → LazyInitializationException ❌
+}
+```
+
+**3 cách fix:**
+
+1. **DTO projection trong `@Transactional`** ✅ Best practice
+   ```java
+   @Transactional
+   public MovieResponse findMovie(Long id) {
+       Movie m = movieRepo.findById(id).orElseThrow();
+       return MovieResponse.builder()
+           .title(m.getTitle())
+           .directorName(m.getDirector().getName())  // Load LAZY trong session
+           .build();
+   }
+   ```
+
+2. **JOIN FETCH** (load eager 1 lần cụ thể)
+   ```java
+   @Query("SELECT m FROM Movie m JOIN FETCH m.director WHERE m.id = :id")
+   Optional<Movie> findByIdWithDirector(Long id);
+   ```
+
+3. **`@EntityGraph`** (declarative)
+   ```java
+   @EntityGraph(attributePaths = {"director", "genres"})
+   Optional<Movie> findById(Long id);
+   ```
+
+❌ **TRÁNH** Open Session In View (OSIV) — kéo dài session ra controller. Spring Boot bật mặc định `spring.jpa.open-in-view=true` nhưng nên TẮT vì che giấu N+1 và lazy issues.
+
+📚 **Đọc thêm:** [backend/02-jpa-hibernate.md](02-jpa-hibernate.md) (JPA), [glossary.md#l-m](../glossary.md#l-m) (Lazy Loading).
+
+---
+
+### 0.5 Transaction & Propagation — ACID trong Spring
+
+**Ví dụ đời thường:** Chuyển khoản 100k từ A sang B = 2 thao tác:
+1. Trừ 100k tài khoản A
+2. Cộng 100k tài khoản B
+
+Bước 1 xong, mạng đứt ở bước 2 → A mất 100k, B không nhận được → tan rã. **Transaction** đảm bảo: hoặc cả 2 thành công, hoặc cả 2 rollback.
+
+**Spring transaction qua `@Transactional`:**
+```java
+@Transactional(
+    propagation = Propagation.REQUIRED,   // ← Default: dùng tx hiện tại, hoặc tạo mới nếu chưa có
+    isolation = Isolation.READ_COMMITTED, // ← Mức cô lập
+    timeout = 30,                          // ← Timeout 30s
+    rollbackFor = Exception.class          // ← Rollback cho mọi exception (default chỉ RuntimeException)
+)
+public void transferMoney(Long fromId, Long toId, BigDecimal amount) {
+    accountRepo.subtractBalance(fromId, amount);  // Bước 1
+    accountRepo.addBalance(toId, amount);          // Bước 2 → nếu fail, bước 1 rollback
+}
+```
+
+**7 mức Propagation — Khi nào dùng cái nào?**
+
+| Propagation | Hành vi | Khi nào dùng |
+|---|---|---|
+| **REQUIRED** (default) | Dùng tx hiện tại, không có thì tạo mới | 99% trường hợp |
+| **REQUIRES_NEW** | Luôn tạo tx MỚI, suspend tx cha | Audit log (phải commit dù business fail) |
+| **NESTED** | Savepoint trong tx cha | Hiếm dùng |
+| **SUPPORTS** | Có tx thì dùng, không có thì không | Method đọc read-only |
+| **NOT_SUPPORTED** | Không cần tx, suspend tx cha | Long-running không cần lock |
+| **MANDATORY** | BẮT BUỘC phải có tx cha (không có → throw) | Method nội bộ, defensive |
+| **NEVER** | KHÔNG được có tx cha (có → throw) | Hiếm dùng |
+
+**4 mức Isolation:**
+
+| Isolation | Đảm bảo | Hiệu năng |
+|---|---|---|
+| **READ_UNCOMMITTED** | Không đảm bảo | Nhanh nhất, nhưng dirty read |
+| **READ_COMMITTED** (default SQL Server) | Không đọc dirty data | Có phantom + non-repeatable read |
+| **REPEATABLE_READ** | Đọc lại trong tx ra cùng giá trị | Có phantom read |
+| **SERIALIZABLE** | Như chạy tuần tự | Chậm nhất, lock nặng |
+
+**Quy tắc:** Method nào có save/update/delete DB → BẮT BUỘC `@Transactional`. Method chỉ đọc → `@Transactional(readOnly = true)` (Hibernate tối ưu, không dirty checking).
+
+📚 **Đọc thêm:** [database/01-database-techniques.md](../database/01-database-techniques.md) (Transaction isolation), [glossary.md#a](../glossary.md#a) (ACID).
+
+---
 
 ## Mục lục
 
@@ -24,6 +258,7 @@
 18. [`@Transactional(readOnly = true)` save âm thầm](#18-transactional-readonly)
 19. [`AuthenticationManager` vs `UserDetailsService`](#19-auth-manager-vs-user-details)
 20. [Cache stampede / thundering herd](#20-cache-stampede)
+21. [`@PostConstruct` + `@Transactional` không hoạt động](#21-postconstruct-transactional)
 
 ---
 
@@ -1089,6 +1324,122 @@ Chi tiết xem `backend/04-spring-features.md` mục 16.
 
 ---
 
+## 21. `@PostConstruct` + `@Transactional` không hoạt động {#21-postconstruct-transactional}
+
+### Triệu chứng
+Bạn thêm `@PostConstruct` để chạy 1 method khởi tạo data lúc app start. Method này có `@Transactional`. App start không lỗi, nhưng data không được commit, hoặc lazy field không load được.
+
+### Code reproduce
+```java
+@Service
+public class GenreService {
+
+    @Autowired
+    private GenreRepository genreRepository;
+
+    @PostConstruct
+    @Transactional  // ❌ KHÔNG hoạt động!
+    public void seedDefaultGenres() {
+        if (genreRepository.count() == 0) {
+            genreRepository.save(new Genre("Action"));
+            genreRepository.save(new Genre("Drama"));
+            // → Không có transaction → Hibernate không flush → data có thể không persist
+        }
+    }
+}
+```
+
+### Tại sao xảy ra
+Quay lại **Bean Lifecycle** (PHẦN 0.3): `@PostConstruct` chạy ở bước 6, NHƯNG Spring proxy hoàn thiện ở bước 9 (sau init). Khi `@PostConstruct` chạy:
+- `this` = target bean gốc, chưa được proxy bọc lại
+- `@Transactional` advice chưa được apply
+- Method chạy như method thường, không có transaction
+
+Đây cũng là dạng **Self-Invocation** (bug #1), nhưng ẩn hơn vì user không gọi `this.method()` trực tiếp — Spring tự gọi.
+
+### Cách phát hiện
+- Bật SQL log: không thấy `BEGIN TRANSACTION` cho method `@PostConstruct`.
+- Đặt breakpoint trong `TransactionInterceptor.invoke()` → không stop.
+- Nếu `@PostConstruct` method gọi method có lazy collection → `LazyInitializationException` (do session không mở).
+
+### 3 cách fix
+
+**Fix 1: `ApplicationRunner` thay `@PostConstruct`** ✅ Best practice
+
+```java
+@Component
+@RequiredArgsConstructor
+public class DataSeeder implements ApplicationRunner {
+    private final GenreService genreService;
+
+    @Override
+    public void run(ApplicationArguments args) {
+        // Chạy SAU khi context fully initialized (bước sau bước 9)
+        // → proxy đã sẵn sàng → @Transactional hoạt động
+        genreService.seedDefaultGenres();
+    }
+}
+
+@Service
+public class GenreService {
+    @Transactional
+    public void seedDefaultGenres() { ... }
+}
+```
+
+**Fix 2: Inject self qua `@Lazy`**
+
+```java
+@Service
+public class GenreService {
+    @Autowired @Lazy
+    private GenreService self;
+
+    @PostConstruct
+    public void init() {
+        self.seedDefaultGenres();  // Gọi qua proxy
+    }
+
+    @Transactional
+    public void seedDefaultGenres() { ... }
+}
+```
+
+**Fix 3: `TransactionTemplate` thủ công**
+
+```java
+@Service
+@RequiredArgsConstructor
+public class GenreService {
+    private final TransactionTemplate transactionTemplate;
+    private final GenreRepository genreRepository;
+
+    @PostConstruct
+    public void init() {
+        transactionTemplate.execute(status -> {
+            // Code này chạy trong transaction
+            if (genreRepository.count() == 0) {
+                genreRepository.save(new Genre("Action"));
+            }
+            return null;
+        });
+    }
+}
+```
+
+### Anti-pattern cảnh báo
+**ĐỪNG** dùng `@PostConstruct` cho seed data quan trọng vì:
+- Nếu app crash giữa chừng, data có thể bán-commit
+- Khó test (PostConstruct chạy auto, khó mock)
+- Multi-instance deploy: mỗi instance đều chạy `@PostConstruct` → race condition
+
+**Thay vào đó:**
+- Liquibase seed data (`<insert>` trong changeset) — chỉ chạy 1 lần
+- `ApplicationRunner` + idempotent check (`if (count == 0)`)
+- Migration script chạy lần đầu deploy
+
+---
+
 ## Bảng tổng kết
 
 | Triệu chứng | Bug | Fix nhanh |
@@ -1113,6 +1464,7 @@ Chi tiết xem `backend/04-spring-features.md` mục 16.
 | Save không persist | #18 | Bỏ `readOnly = true` |
 | Auth flow phức tạp | #19 | Chọn manual hoặc AuthenticationManager |
 | DB sập khi cache expire | #20 | Mutex lock với Redisson |
+| `@PostConstruct` + `@Transactional` không commit | #21 | `ApplicationRunner` thay `@PostConstruct` |
 
 ---
 
@@ -1145,3 +1497,23 @@ Chi tiết xem `backend/04-spring-features.md` mục 16.
 **Câu 7:** Vì sao KHÔNG dùng `@Data` Lombok cho entity?
 
 → 3 lý do: (1) `toString()` bidirectional → stack overflow, (2) `equals/hashCode` resolve lazy field → N+1, (3) hashCode đổi sau khi id được assign → Set mất tracking.
+
+**Câu 8 (mới):** `@PostConstruct` chạy ở bước nào trong Bean lifecycle? Tại sao `@Transactional` trong `@PostConstruct` không hoạt động?
+
+→ `@PostConstruct` chạy ở **bước 6** (init), TRƯỚC khi Spring proxy hoàn thiện (bước 9). Tại bước 6, `this` = target bean gốc chưa được proxy bọc → `@Transactional` advice chưa apply → method chạy không có transaction. Fix: dùng `ApplicationRunner` (chạy SAU bước 9) hoặc inject `@Lazy self` để gọi qua proxy.
+
+**Câu 9 (mới):** Bạn deploy 3 instance app. `@PostConstruct seedDefaultData()` chạy ở mỗi instance. Vấn đề gì?
+
+→ Race condition khi seed: 3 instance đồng thời check `count == 0` → đều thấy 0 → đều INSERT → duplicate. Fix: dùng Liquibase `<insert>` (chỉ chạy 1 lần qua DATABASECHANGELOG), hoặc DB UNIQUE constraint + try-catch DataIntegrityViolation.
+
+**Câu 10 (mới):** Phân biệt Proxy Spring (JDK Dynamic Proxy vs CGLIB). Khi nào dùng cái nào?
+
+→ JDK Dynamic Proxy: target class IMPLEMENT interface → Spring tạo class mới impl cùng interface, mỗi method gọi tới target. CGLIB: target không có interface → Spring subclass target bằng bytecode. CGLIB không proxy được `final class` / `final method` → AOP fail. Mặc định Spring Boot 2.x dùng CGLIB (`spring.aop.proxy-target-class=true`).
+
+**Câu 11 (mới):** `Propagation.REQUIRES_NEW` khác `REQUIRED` thế nào? Ví dụ CineX dùng `REQUIRES_NEW` ở đâu?
+
+→ `REQUIRED` (default): nếu có tx cha thì dùng, không có thì tạo mới. `REQUIRES_NEW`: LUÔN tạo tx mới, suspend tx cha. CineX dùng `REQUIRES_NEW` cho **AuditLog** — dù business transaction rollback, log audit vẫn phải commit (để debug). Nếu dùng `REQUIRED` thì audit log cũng bị rollback theo → mất dấu vết.
+
+**Câu 12 (mới):** Bạn có method `cleanupExpiredBookings()` chạy mỗi phút. Bạn deploy 3 instance. Mỗi instance đều chạy scheduler riêng → cùng UPDATE 1 booking 3 lần. Cách fix?
+
+→ ShedLock (xem [module-guides/09-booking-explained.md](../module-guides/09-booking-explained.md) section 4.1). ShedLock dùng DB row làm distributed lock — instance nào INSERT lock row trước thì chạy, 2 instance kia skip. Annotation: `@SchedulerLock(name="cleanup", lockAtLeastFor="PT30S", lockAtMostFor="PT5M")`.

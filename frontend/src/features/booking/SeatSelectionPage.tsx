@@ -1,40 +1,52 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useShowtimeSeatMap, useHoldSeats } from '@/hooks/useBooking'
-import { useSeatWebSocket } from '@/hooks/useWebSocket'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import type { SeatItem } from '@/types/booking'
-import { label, SEAT_TYPE_LABELS } from '@/utils/labels'
 import { toast } from 'sonner'
-import { Tag, X } from 'lucide-react'
-import api, { getErrorMessage } from '@/api/axios'
+
+import {
+  useShowtimeSeatMap, useHoldSeats,
+  useOccupiedSeats, useAvailableVouchers, useValidateVoucher,
+  type AvailableVoucher, type VoucherValidateResult,
+} from '@/hooks/useBooking'
+import { useSeatWebSocket } from '@/hooks/useWebSocket'
+import { usePublicConfigNumber } from '@/hooks/useConfig'
 import Loading from '@/components/common/Loading'
 
-// Màu ghế theo type + trạng thái
-function getSeatColor(
-  seat: SeatItem,
-  isSelected: boolean,
-  isOccupied: boolean,
-): string {
-  if (seat.status === 'BROKEN') return 'bg-red-600 cursor-not-allowed opacity-70'
-  if (isOccupied) return 'bg-gray-600 cursor-not-allowed opacity-50'
-  if (isSelected) return 'bg-[#eab308] text-black font-bold scale-110'
-  if (seat.seatType === 'VIP') return 'bg-yellow-600 hover:bg-yellow-500'
-  if (seat.seatType === 'COUPLE') return 'bg-purple-600 hover:bg-purple-500'
-  return 'bg-green-600 hover:bg-green-500'
-}
+import SeatMap from './components/SeatMap'
+import BookingSummary from './components/BookingSummary'
+import AgeConfirmDialog from './components/AgeConfirmDialog'
+import type { SeatItem } from '@/types/booking'
+import { needsAgeConfirm } from '@/utils/labels'
+import type { AgeRating } from '@/types/movie'
 
-function formatPrice(amount: number) {
-  return amount.toLocaleString('vi-VN') + 'đ'
-}
-
-// Giá ghế được lấy từ showtime data, không hardcode
-function getSeatPrice(seatType: string, showtime: { basePrice: number; vipPrice?: number; couplePrice?: number }): number {
-  if (seatType === 'VIP') return showtime.vipPrice ?? showtime.basePrice
-  if (seatType === 'COUPLE') return showtime.couplePrice ?? showtime.basePrice
-  return showtime.basePrice // STANDARD
+/**
+ * Lấy giá ghế theo type — DÙNG effective price (sau PricingEngine) để khớp với BE tính tiền.
+ * Chuẩn industry "What You See Is What You Pay": user thấy bao nhiêu trả bấy nhiêu.
+ *
+ * <p>Fallback về basePrice raw nếu BE chưa expose effective (backward-compat).
+ */
+function getSeatPrice(seatType: string, showtime: {
+  basePrice: number
+  vipPrice?: number
+  couplePrice?: number
+  sweetboxPrice?: number | null
+  deluxePrice?: number | null
+  effectiveBasePrice?: number
+  effectiveVipPrice?: number | null
+  effectiveCouplePrice?: number | null
+  effectiveSweetboxPrice?: number | null
+  effectiveDeluxePrice?: number | null
+}): number {
+  const effBase = showtime.effectiveBasePrice ?? showtime.basePrice
+  const effVip = showtime.effectiveVipPrice ?? showtime.vipPrice ?? effBase
+  const effCouple = showtime.effectiveCouplePrice ?? showtime.couplePrice ?? effBase
+  switch (seatType) {
+    case 'VIP':      return effVip
+    case 'COUPLE':   return effCouple
+    case 'SWEETBOX': return showtime.effectiveSweetboxPrice ?? showtime.sweetboxPrice ?? effCouple * 2
+    case 'DELUXE':   return showtime.effectiveDeluxePrice ?? showtime.deluxePrice ?? Math.round(effVip * 1.5)
+    case 'HANDICAP': return effBase  // inclusive policy
+    default:         return effBase  // STANDARD
+  }
 }
 
 export default function SeatSelectionPage() {
@@ -44,25 +56,22 @@ export default function SeatSelectionPage() {
 
   const { data, isLoading, isError } = useShowtimeSeatMap(id)
   const holdSeats = useHoldSeats()
+  const validateVoucherMut = useValidateVoucher()
+  // Hold minutes từ system_config (admin có thể chỉnh) — KHÔNG hardcode "10 phút"
+  const { data: holdMinutes = 10 } = usePublicConfigNumber('booking.hold_minutes', 10)
 
   const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([])
   const [occupiedSeatIds, setOccupiedSeatIds] = useState<number[]>([])
   const [voucherCode, setVoucherCode] = useState('')
-  const [voucherResult, setVoucherResult] = useState<{ valid: boolean; code?: string; discountAmount: number; message: string } | null>(null)
-  const [voucherLoading, setVoucherLoading] = useState(false)
-  const [availableVouchers, setAvailableVouchers] = useState<{ code: string; description: string; discountAmount: number; message: string }[]>([])
+  const [voucherResult, setVoucherResult] = useState<VoucherValidateResult | null>(null)
   const [showVoucherList, setShowVoucherList] = useState(true)
+  const [ageConfirmOpen, setAgeConfirmOpen] = useState(false)
 
-  // Load ghế đã bán/đang giữ khi mở trang
+  // Ghế đã occupied — load qua hook, đồng bộ vào local state để WS có thể patch tăng dần
+  const { data: initialOccupied = [] } = useOccupiedSeats(id || null)
   useEffect(() => {
-    if (!id) return
-    api.get(`/api/bookings/showtimes/${id}/occupied-seats`)
-      .then(res => {
-        const ids = res.data?.data ?? []
-        setOccupiedSeatIds(ids)
-      })
-      .catch(() => {})
-  }, [id])
+    if (initialOccupied.length > 0) setOccupiedSeatIds(initialOccupied)
+  }, [initialOccupied])
 
   // WebSocket: nhận update ghế real-time
   const handleSeatUpdate = useCallback((update: { seatIds: number[]; status: string }) => {
@@ -72,33 +81,46 @@ export default function SeatSelectionPage() {
       setOccupiedSeatIds(prev => prev.filter(sid => !update.seatIds.includes(sid)))
     }
   }, [])
-
   useSeatWebSocket(id, handleSeatUpdate)
 
+  // beforeunload warning: ngăn user vô tình đóng tab / nav-away khi đã chọn ghế.
+  // Ghế chưa thực sự lock cho mình tới khi click "Giữ ghế" → user khác có thể giành ghế nếu rời trang.
+  useEffect(() => {
+    if (selectedSeatIds.length === 0) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      // Chrome/Edge cần returnValue; Firefox đọc text returned. Browser hiện
+      // generic warning, không hiện string custom (security policy).
+      e.returnValue = ''
+      return ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [selectedSeatIds.length])
+
   function toggleSeat(seat: SeatItem, seats?: SeatItem[]) {
-    if (seat.status === 'BROKEN') return
+    if (seat.aisle) return  // lối đi không phải ghế
+    if (seat.status === 'BROKEN' || seat.status === 'BLOCKED') return
     if (occupiedSeatIds.includes(seat.id)) return
 
-    // COUPLE: chọn/bỏ cả cặp
-    if (seat.seatType === 'COUPLE' && seats) {
+    // COUPLE & SWEETBOX: chọn/bỏ cả cặp
+    if ((seat.seatType === 'COUPLE' || seat.seatType === 'SWEETBOX') && seats) {
       const isOdd = seat.colNumber % 2 === 1
       const partnerCol = isOdd ? seat.colNumber + 1 : seat.colNumber - 1
-      const partner = seats.find(s => s.colNumber === partnerCol && s.seatType === 'COUPLE')
+      const partner = seats.find(s => s.colNumber === partnerCol && s.seatType === seat.seatType)
       const ids = partner ? [seat.id, partner.id] : [seat.id]
-      const allSelected = ids.every(id => selectedSeatIds.includes(id))
+      const allSelected = ids.every(sid => selectedSeatIds.includes(sid))
 
       setSelectedSeatIds(prev =>
         allSelected
-          ? prev.filter(id => !ids.includes(id))
+          ? prev.filter(sid => !ids.includes(sid))
           : [...new Set([...prev, ...ids])]
       )
       return
     }
 
     setSelectedSeatIds(prev =>
-      prev.includes(seat.id)
-        ? prev.filter(s => s !== seat.id)
-        : [...prev, seat.id],
+      prev.includes(seat.id) ? prev.filter(s => s !== seat.id) : [...prev, seat.id],
     )
   }
 
@@ -114,17 +136,13 @@ export default function SeatSelectionPage() {
     return getSelectedSeats().reduce((sum, s) => sum + getSeatPrice(s.seatType, data.showtime), 0)
   }
 
-  // Fetch voucher khả dụng khi tổng tiền thay đổi
-  useEffect(() => {
-    const total = calcTotal()
-    if (total <= 0) { setAvailableVouchers([]); return }
-    api.get('/api/vouchers/available', { params: { orderAmount: total } })
-      .then(res => setAvailableVouchers(res.data?.data ?? []))
-      .catch(() => setAvailableVouchers([]))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSeatIds.length])
+  // Fetch voucher khả dụng khi tổng tiền thay đổi.
+  // theaterId từ showtime → server resolve theater-specific + global voucher.
+  const total = calcTotal()
+  const showtimeTheaterId = data?.showtime?.theaterId
+  const { data: availableVouchers = [] } = useAvailableVouchers(total, showtimeTheaterId)
 
-  function selectVoucher(v: { code: string; discountAmount: number; description: string }) {
+  function selectVoucher(v: AvailableVoucher) {
     setVoucherCode(v.code)
     setVoucherResult({ valid: true, code: v.code, discountAmount: v.discountAmount, message: v.description })
     setShowVoucherList(false)
@@ -132,23 +150,17 @@ export default function SeatSelectionPage() {
 
   async function handleApplyVoucher() {
     if (!voucherCode.trim()) return
-    const total = calcTotal()
     if (total === 0) { toast.error('Vui lòng chọn ghế trước'); return }
-    setVoucherLoading(true)
-    try {
-      const res = await api.post('/api/vouchers/validate', {
-        code: voucherCode.trim(),
-        orderAmount: total,
-      })
-      const result = res.data.data
-      setVoucherResult(result)
-      if (!result.valid) toast.error(result.message)
-    } catch (e) {
-      toast.error(getErrorMessage(e, 'Không thể kiểm tra voucher'))
-      setVoucherResult(null)
-    } finally {
-      setVoucherLoading(false)
-    }
+    validateVoucherMut.mutate(
+      { code: voucherCode.trim(), orderAmount: total, theaterId: showtimeTheaterId },
+      {
+        onSuccess: (result) => {
+          setVoucherResult(result)
+          if (!result.valid) toast.error(result.message)
+        },
+        onError: () => setVoucherResult(null),
+      },
+    )
   }
 
   function clearVoucher() {
@@ -157,15 +169,13 @@ export default function SeatSelectionPage() {
   }
 
   function getFinalTotal(): number {
-    const total = calcTotal()
     if (voucherResult?.valid && voucherResult.discountAmount) {
       return Math.max(0, total - voucherResult.discountAmount)
     }
     return total
   }
 
-  async function handleHoldSeats() {
-    if (selectedSeatIds.length === 0) return
+  async function doHoldSeats() {
     const result = await holdSeats.mutateAsync({
       showtimeId: id,
       seatIds: selectedSeatIds,
@@ -174,11 +184,26 @@ export default function SeatSelectionPage() {
     navigate(`/payment/${result.bookingId}`)
   }
 
-  if (isLoading) return <Loading />
+  async function handleHoldSeats() {
+    if (selectedSeatIds.length === 0) return
+    // Chuẩn industry: T13/T16/T18/C → mở confirm dialog xác nhận tuổi + cảnh báo mang CCCD.
+    // P/K → vào thẳng hold seats.
+    if (needsAgeConfirm(data?.showtime?.movieAgeRating)) {
+      setAgeConfirmOpen(true)
+      return
+    }
+    await doHoldSeats()
+  }
 
+  async function handleConfirmAge() {
+    setAgeConfirmOpen(false)
+    await doHoldSeats()
+  }
+
+  if (isLoading) return <Loading />
   if (isError || !data) {
     return (
-      <div className="min-h-screen bg-[#051424] flex items-center justify-center">
+      <div className="min-h-screen bg-[#181309] flex items-center justify-center">
         <p className="text-red-400">Không thể tải thông tin suất chiếu.</p>
       </div>
     )
@@ -189,227 +214,109 @@ export default function SeatSelectionPage() {
   const selectedSeats = getSelectedSeats()
 
   return (
-    <div className="min-h-screen bg-[#051424] text-white py-8 px-4">
+    <div className="min-h-screen bg-[#181309] text-white py-8 px-4">
       <div className="max-w-5xl mx-auto">
+        <ShowtimeInfoCard
+          movieTitle={showtime.movieTitle}
+          roomName={seatMap.roomName}
+          startTime={showtime.startTime}
+          totalSeats={seatMap.totalSeats}
+          appliedRules={showtime.appliedRules}
+        />
 
-        {/* Thông tin suất chiếu */}
-        <div className="bg-[#0a1929] border border-white/5 rounded-xl p-5 mb-6">
-          <h1 className="text-xl font-bold text-[#eab308] mb-1">{showtime.movieTitle}</h1>
-          <div className="flex flex-wrap gap-4 text-sm text-gray-300">
-            <span>Phòng: <span className="text-white font-medium">{seatMap.roomName}</span></span>
-            <span>Suất: <span className="text-white font-medium">
-              {new Date(showtime.startTime).toLocaleString('vi-VN', {
-                weekday: 'short', day: '2-digit', month: '2-digit',
-                year: 'numeric', hour: '2-digit', minute: '2-digit',
-              })}
-            </span></span>
-            <span>Tổng ghế: <span className="text-white font-medium">{seatMap.totalSeats}</span></span>
+        {/* Cảnh báo ghế chưa lock — user khác có thể giành mất nếu rời trang lâu */}
+        {selectedSeatIds.length > 0 && (
+          <div className="mb-4 flex items-start gap-2 bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 text-sm">
+            <span className="text-orange-400 text-base leading-none mt-0.5">⚠️</span>
+            <p className="text-orange-200/90 leading-relaxed">
+              Ghế bạn chọn <span className="font-semibold">chưa được giữ riêng</span>. Hãy bấm
+              <span className="text-[#ffc107] font-semibold"> "Giữ ghế" </span>
+              ở dưới để khóa ghế trong {holdMinutes} phút và tiến hành thanh toán.
+            </p>
           </div>
-        </div>
+        )}
 
-        {/* Màn chiếu */}
-        <div className="flex justify-center mb-8">
-          <div className="w-3/4 text-center">
-            <div className="h-1.5 bg-gradient-to-r from-transparent via-[#eab308] to-transparent rounded-full" />
-            <div className="h-8 bg-gradient-to-b from-[#eab308]/10 to-transparent" />
-            <p className="text-xs text-gray-500 tracking-[0.3em] uppercase -mt-4">Màn hình</p>
-          </div>
-        </div>
+        <SeatMap
+          rows={rows}
+          selectedSeatIds={selectedSeatIds}
+          occupiedSeatIds={occupiedSeatIds}
+          onToggle={toggleSeat}
+        />
 
-        {/* Sơ đồ ghế */}
-        <div className="overflow-x-auto pb-4">
-          <div className="inline-block min-w-full">
-            {rows.map(([rowLabel, seats]) => (
-              <div key={rowLabel} className="flex items-center gap-2 mb-2 justify-center">
-                <span className="w-6 text-center text-sm text-gray-500 font-mono">{rowLabel}</span>
-                <div className="flex gap-1.5 flex-wrap justify-center">
-                  {(() => {
-                    const rendered: React.ReactElement[] = []
-                    const skipCols = new Set<number>()
-                    for (let i = 0; i < seats.length; i++) {
-                      const seat = seats[i]
-                      if (skipCols.has(seat.colNumber)) continue
-                      const isSelected = selectedSeatIds.includes(seat.id)
-                      const isOccupied = occupiedSeatIds.includes(seat.id)
-
-                      // COUPLE: gộp 2 ô
-                      if (seat.seatType === 'COUPLE') {
-                        const partner = seats[i + 1]
-                        const partnerIsCouple = partner?.seatType === 'COUPLE'
-                        if (partnerIsCouple && seat.colNumber % 2 === 1) {
-                          skipCols.add(partner.colNumber)
-                          const pairSelected = isSelected && selectedSeatIds.includes(partner.id)
-                          const pairOccupied = isOccupied || occupiedSeatIds.includes(partner.id)
-                          const colorClass = pairOccupied
-                            ? 'bg-gray-600 cursor-not-allowed opacity-50'
-                            : pairSelected
-                              ? 'bg-[#eab308] text-black font-bold scale-105'
-                              : 'bg-purple-600 hover:bg-purple-500'
-                          rendered.push(
-                            <button key={seat.id}
-                              title={`${seat.seatNumber}-${partner.seatNumber} — Ghế đôi`}
-                              onClick={() => toggleSeat(seat, seats)}
-                              disabled={seat.status === 'BROKEN' || pairOccupied}
-                              className={`h-8 rounded-t-md text-xs font-medium transition-all duration-150 ${colorClass}`}
-                              style={{ width: `calc(2 * 2rem + 0.375rem)` }}>
-                              {seat.colNumber}-{partner.colNumber}
-                            </button>
-                          )
-                          continue
-                        }
-                      }
-
-                      // Ghế đơn
-                      const colorClass = getSeatColor(seat, isSelected, isOccupied)
-                      rendered.push(
-                        <button key={seat.id}
-                          title={`${seat.seatNumber} — ${label(SEAT_TYPE_LABELS, seat.seatType)}`}
-                          onClick={() => toggleSeat(seat, seats)}
-                          disabled={seat.status === 'BROKEN' || isOccupied}
-                          className={`w-8 h-8 rounded-t-md text-xs font-medium transition-all duration-150 ${colorClass}`}>
-                          {seat.colNumber}
-                        </button>
-                      )
-                    }
-                    return rendered
-                  })()}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Chú thích màu ghế */}
-        <div className="flex flex-wrap justify-center gap-4 mt-6 mb-8 text-xs text-gray-300">
-          <span className="flex items-center gap-1.5">
-            <span className="w-4 h-4 rounded bg-green-600 inline-block" /> Thường
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-4 h-4 rounded bg-yellow-600 inline-block" /> VIP
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-8 h-4 rounded bg-purple-600 inline-block" /> Đôi
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-4 h-4 rounded bg-[#eab308] inline-block" /> Đang chọn
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-4 h-4 rounded bg-gray-600 inline-block" /> Đã bán
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-4 h-4 rounded bg-red-600 inline-block" /> Hỏng
-          </span>
-        </div>
-
-        {/* Booking summary */}
-        <div className="bg-[#0a1929] border border-white/5 rounded-xl p-5 sticky bottom-4">
-          <h2 className="font-semibold text-gray-200 mb-3">
-            Ghế đã chọn {selectedSeats.length > 0 && `(${selectedSeats.length})`}
-          </h2>
-
-          {selectedSeats.length === 0 ? (
-            <p className="text-gray-500 text-sm mb-4">Chưa chọn ghế nào</p>
-          ) : (
-            <div className="flex flex-wrap gap-2 mb-4">
-              {selectedSeats.map(s => (
-                <Badge key={s.id} variant="warning" className="text-xs">
-                  {s.seatNumber} ({label(SEAT_TYPE_LABELS, s.seatType)}) — {formatPrice(getSeatPrice(s.seatType, showtime))}
-                </Badge>
-              ))}
-            </div>
-          )}
-
-          {/* Voucher */}
-          <div className="mb-4">
-            {voucherResult?.valid ? (
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-green-500/10 border border-green-500/20">
-                <Tag size={14} className="text-green-400" />
-                <div className="flex-1">
-                  <span className="text-sm text-green-400 font-medium">{voucherResult.code}</span>
-                  <span className="text-xs text-green-400/70 ml-2">— {voucherResult.message}</span>
-                </div>
-                <button onClick={clearVoucher} className="text-gray-400 hover:text-white"><X size={14} /></button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {/* Danh sách voucher khả dụng */}
-                {availableVouchers.length > 0 && selectedSeats.length > 0 && (
-                  <div>
-                    <button onClick={() => setShowVoucherList(!showVoucherList)}
-                      className="text-sm text-[#eab308] hover:underline flex items-center gap-1 mb-1">
-                      <Tag size={12} /> 🎟️ {availableVouchers.length} voucher khả dụng {showVoucherList ? '▲' : '▼'}
-                    </button>
-                    {showVoucherList && (
-                      <div className="mt-2 space-y-1.5 max-h-32 overflow-y-auto">
-                        {availableVouchers.map(v => (
-                          <button key={v.code} onClick={() => selectVoucher(v)}
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:border-[#eab308]/30 transition-colors text-left">
-                            <div>
-                              <span className="text-sm font-mono text-[#eab308] font-medium">{v.code}</span>
-                              <p className="text-xs text-gray-400 mt-0.5">{v.description}</p>
-                            </div>
-                            <span className="text-sm text-green-400 font-semibold shrink-0 ml-3">-{formatPrice(v.discountAmount)}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* Nhập mã thủ công */}
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Hoặc nhập mã voucher"
-                    value={voucherCode}
-                    onChange={e => { setVoucherCode(e.target.value.toUpperCase()); setVoucherResult(null) }}
-                    onKeyDown={e => e.key === 'Enter' && handleApplyVoucher()}
-                    className="flex-1 sm:w-56 sm:flex-none"
-                  />
-                  <Button
-                    onClick={handleApplyVoucher}
-                    disabled={!voucherCode.trim() || voucherLoading || selectedSeats.length === 0}
-                    variant="outline"
-                    className="border-[#eab308] text-[#eab308] hover:bg-[#eab308]/10 shrink-0"
-                  >
-                    {voucherLoading ? '...' : 'Áp dụng'}
-                  </Button>
-                </div>
-              </div>
-            )}
-            {voucherResult && !voucherResult.valid && (
-              <p className="text-red-400 text-xs mt-1">{voucherResult.message}</p>
-            )}
-          </div>
-
-          {/* Price breakdown */}
-          <div className="flex items-end justify-between">
-            <div className="space-y-1 text-sm">
-              <div className="flex items-center gap-4">
-                <span className="text-gray-400">Tổng tiền ghế:</span>
-                <span className="text-white">{formatPrice(calcTotal())}</span>
-              </div>
-              {voucherResult?.valid && (
-                <div className="flex items-center gap-4">
-                  <span className="text-gray-400">Giảm giá:</span>
-                  <span className="text-green-400">-{formatPrice(voucherResult.discountAmount)}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-4 pt-1 border-t border-white/10">
-                <span className="text-gray-300 font-medium">Thanh toán:</span>
-                <span className="text-xl font-bold text-[#eab308]">{formatPrice(getFinalTotal())}</span>
-              </div>
-            </div>
-            <Button
-              onClick={handleHoldSeats}
-              disabled={selectedSeats.length === 0 || holdSeats.isPending}
-              loading={holdSeats.isPending}
-              className="bg-[#eab308] hover:bg-[#ca8a04] text-black font-semibold px-6 h-11"
-            >
-              Giữ ghế
-            </Button>
-          </div>
-        </div>
-
+        <BookingSummary
+          selectedSeats={selectedSeats}
+          showtime={showtime}
+          total={total}
+          finalTotal={getFinalTotal()}
+          voucherCode={voucherCode}
+          onVoucherCodeChange={(code) => { setVoucherCode(code); setVoucherResult(null) }}
+          voucherResult={voucherResult}
+          voucherLoading={validateVoucherMut.isPending}
+          onApplyVoucher={handleApplyVoucher}
+          onClearVoucher={clearVoucher}
+          availableVouchers={availableVouchers}
+          showVoucherList={showVoucherList}
+          onToggleVoucherList={() => setShowVoucherList(s => !s)}
+          onSelectVoucher={selectVoucher}
+          onHoldSeats={handleHoldSeats}
+          holdSeatsPending={holdSeats.isPending}
+        />
       </div>
+
+      {data?.showtime?.movieAgeRating && (
+        <AgeConfirmDialog
+          open={ageConfirmOpen}
+          onOpenChange={setAgeConfirmOpen}
+          ageRating={data.showtime.movieAgeRating as AgeRating}
+          movieTitle={data.showtime.movieTitle}
+          onConfirm={handleConfirmAge}
+          loading={holdSeats.isPending}
+        />
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+//  Sub-components
+// ============================================================
+
+interface ShowtimeInfoCardProps {
+  movieTitle: string
+  roomName: string
+  startTime: string
+  totalSeats: number
+  appliedRules?: { code: string; name: string; discountPercent: number }[]
+}
+
+function ShowtimeInfoCard({ movieTitle, roomName, startTime, totalSeats, appliedRules }: ShowtimeInfoCardProps) {
+  return (
+    <div className="bg-[#201b11] border border-white/5 rounded-2xl p-5 mb-6">
+      <h1 className="text-xl font-bold text-[#ffc107] mb-1">{movieTitle}</h1>
+      <div className="flex flex-wrap gap-4 text-sm text-gray-300">
+        <span>Phòng: <span className="text-white font-medium">{roomName}</span></span>
+        <span>Suất: <span className="text-white font-medium">
+          {new Date(startTime).toLocaleString('vi-VN', {
+            weekday: 'short', day: '2-digit', month: '2-digit',
+            year: 'numeric', hour: '2-digit', minute: '2-digit',
+          })}
+        </span></span>
+        <span>Tổng ghế: <span className="text-white font-medium">{totalSeats}</span></span>
+      </div>
+      {/* Chỉ hiện chip giảm (discountPercent < 0) — chuẩn rạp VN ẩn rule tăng giá. */}
+      {appliedRules && appliedRules.some(r => r.discountPercent < 0) && (
+        <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-white/5">
+          {appliedRules.filter(r => r.discountPercent < 0).map(r => (
+            <span
+              key={r.code}
+              className="text-xs px-2 py-1 rounded-md border bg-green-500/10 text-green-400 border-green-500/30"
+              title={r.name}
+            >
+              {r.name} {r.discountPercent}%
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

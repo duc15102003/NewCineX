@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>CineX — Xác nhận đặt vé</title>
+</head>
+<body style="margin:0; padding:20px; font-family:'Inter', Arial, sans-serif; background:#051424; color:#e5e7eb;">
+    <div style="max-width:560px; margin:0 auto; background:#0a1929; border-radius:16px; padding:32px; border:1px solid rgba(255,255,255,0.05);">
+        <!-- Header CineX -->
+        <div style="text-align:center; margin-bottom:24px;">
+            <h1 style="margin:0; color:#eab308; font-size:28px; letter-spacing:2px; font-weight:bold;">CineX</h1>
+            <p style="margin:4px 0 0; color:#6b7280; font-size:12px; letter-spacing:1px;">HỆ THỐNG ĐẶT VÉ XEM PHIM</p>
+        </div>
+
+        <h2 style="color:#eab308; margin-top:0;">Đặt vé thành công!</h2>
+        <p style="color:#9ca3af; line-height:1.6;">
+            Cảm ơn bạn đã đặt vé tại CineX. Dưới đây là thông tin chi tiết vé của bạn:
+        </p>
+
+        <table style="width:100%; border-collapse:collapse; margin:20px 0;">
+            <tr>
+                <td style="padding:10px 0; color:#9ca3af;">Mã vé</td>
+                <td style="padding:10px 0; color:#eab308; font-weight:bold; text-align:right; font-family:monospace;"
+                    th:text="${bookingCode}">CINEX-001</td>
+            </tr>
+            <tr>
+                <td style="padding:10px 0; color:#9ca3af;">Phim</td>
+                <td style="padding:10px 0; color:#fff; text-align:right;" th:text="${movieTitle}">Tên phim</td>
+            </tr>
+            <tr>
+                <td style="padding:10px 0; color:#9ca3af;">Phòng chiếu</td>
+                <td style="padding:10px 0; color:#fff; text-align:right;" th:text="${roomName}">P1</td>
+            </tr>
+            <tr>
+                <td style="padding:10px 0; color:#9ca3af;">Suất chiếu</td>
+                <td style="padding:10px 0; color:#fff; text-align:right;" th:text="${startTime}">19:30 02/06/2026</td>
+            </tr>
+            <tr>
+                <td style="padding:10px 0; color:#9ca3af;">Ghế</td>
+                <td style="padding:10px 0; color:#fff; text-align:right;" th:text="${seats}">A1, A2</td>
+            </tr>
+            <tr style="border-top:1px solid rgba(255,255,255,0.1);">
+                <td style="padding:14px 0; color:#fff; font-weight:bold;">Tổng tiền</td>
+                <td style="padding:14px 0; color:#eab308; font-weight:bold; text-align:right; font-size:18px;"
+                    th:text="${totalAmount}">200.000đ</td>
+            </tr>
+        </table>
+
+        <!-- QR code inline qua Content-ID -->
+        <div style="text-align:center; margin:24px 0;">
+            <p style="color:#9ca3af; font-size:13px; margin-bottom:12px;">
+                Xuất trình mã QR tại quầy để vào rạp
+            </p>
+            <div style="background:#fff; display:inline-block; padding:12px; border-radius:12px;">
+                <img src="cid:qrcode" alt="QR Code" width="200" height="200"/>
+            </div>
+            <p style="color:#eab308; font-family:monospace; font-size:14px; letter-spacing:3px; margin-top:12px;"
+               th:text="${bookingCode}">CINEX-001</p>
+        </div>
+
+        <p style="color:#9ca3af; font-size:14px; text-align:center;">
+            Chúc bạn xem phim vui vẻ!
+        </p>
+
+        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.05); margin:24px 0;"/>
+
+        <!-- Footer -->
+        <p style="color:#6b7280; font-size:12px; text-align:center; margin:0;">
+            &copy; 2026 CineX. Hệ thống đặt vé xem phim online.<br/>
+            Email tự động, vui lòng không trả lời.
+        </p>
+    </div>
+</body>
+</html>

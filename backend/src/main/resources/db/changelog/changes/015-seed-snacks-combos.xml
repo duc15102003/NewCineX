@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Snacks + combos: 8 snacks + 3 combos per-theater × 5 theater = 40 snacks + 15 combos.
+        Mỗi chi nhánh menu giống nhau (chuẩn chuỗi rạp). image_url = PLACEHOLDER.
+    -->
+
+    <changeSet id="015-seed-snacks" author="cinex">
+        <sql>
+            -- Insert 8 snacks cho mỗi chi nhánh (sub-query CROSS JOIN)
+            INSERT INTO snacks (theater_id, name, description, price, image_url, category, available, storage_state)
+            SELECT t.id, N'Bắp rang bơ (Lớn)',     N'Size lớn 130g, vị bơ truyền thống',          55000, N'PLACEHOLDER_IMAGE_URL', N'Bắp rang',   1, N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+
+            INSERT INTO snacks (theater_id, name, description, price, image_url, category, available, storage_state)
+            SELECT t.id, N'Bắp rang phô mai',      N'Bắp rang vị phô mai béo ngậy',                65000, N'PLACEHOLDER_IMAGE_URL', N'Bắp rang',   1, N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+
+            INSERT INTO snacks (theater_id, name, description, price, image_url, category, available, storage_state)
+            SELECT t.id, N'Bắp rang caramel',      N'Bắp rang ngọt caramel kiểu Mỹ',               65000, N'PLACEHOLDER_IMAGE_URL', N'Bắp rang',   1, N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+
+            INSERT INTO snacks (theater_id, name, description, price, image_url, category, available, storage_state)
+            SELECT t.id, N'Coca-Cola (Lớn)',       N'Nước ngọt Coca-Cola 500ml',                    35000, N'PLACEHOLDER_IMAGE_URL', N'Nước uống', 1, N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+
+            INSERT INTO snacks (theater_id, name, description, price, image_url, category, available, storage_state)
+            SELECT t.id, N'Pepsi (Lớn)',           N'Nước ngọt Pepsi 500ml',                        35000, N'PLACEHOLDER_IMAGE_URL', N'Nước uống', 1, N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+
+            INSERT INTO snacks (theater_id, name, description, price, image_url, category, available, storage_state)
+            SELECT t.id, N'Trà sữa trân châu',     N'Trà sữa trân châu đường đen 500ml',           45000, N'PLACEHOLDER_IMAGE_URL', N'Nước uống', 1, N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+
+            INSERT INTO snacks (theater_id, name, description, price, image_url, category, available, storage_state)
+            SELECT t.id, N'Nước suối Aquafina',    N'Chai 500ml',                                   20000, N'PLACEHOLDER_IMAGE_URL', N'Nước uống', 1, N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+
+            INSERT INTO snacks (theater_id, name, description, price, image_url, category, available, storage_state)
+            SELECT t.id, N'Hot dog phô mai',       N'Bánh mì hot dog kèm phô mai và xốt',          55000, N'PLACEHOLDER_IMAGE_URL', N'Khác',      1, N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+        </sql>
+    </changeSet>
+
+    <changeSet id="015-seed-combos" author="cinex">
+        <sql>
+            -- 3 combo cho mỗi chi nhánh: SOLO, COUPLE, FAMILY
+            INSERT INTO combos (theater_id, code, name, description, price, image_url, active, storage_state)
+            SELECT t.id, N'SOLO',   N'Combo Solo',       N'1 bắp lớn + 1 nước ngọt lớn — tiết kiệm 10.000đ',   80000,  N'PLACEHOLDER_IMAGE_URL', 1, N'ACTIVE' FROM theaters t;
+
+            INSERT INTO combos (theater_id, code, name, description, price, image_url, active, storage_state)
+            SELECT t.id, N'COUPLE', N'Combo Couple',     N'2 bắp lớn + 2 nước ngọt lớn — tiết kiệm 30.000đ',  150000, N'PLACEHOLDER_IMAGE_URL', 1, N'ACTIVE' FROM theaters t;
+
+            INSERT INTO combos (theater_id, code, name, description, price, image_url, active, storage_state)
+            SELECT t.id, N'FAMILY', N'Combo Gia đình',   N'3 bắp lớn + 3 nước ngọt lớn — tiết kiệm 60.000đ',  210000, N'PLACEHOLDER_IMAGE_URL', 1, N'ACTIVE' FROM theaters t;
+        </sql>
+    </changeSet>
+
+    <changeSet id="015-seed-combo-items" author="cinex">
+        <sql>
+            -- SOLO: 1 bắp + 1 coca
+            INSERT INTO combo_items (combo_id, snack_id, quantity)
+            SELECT c.id, s.id, 1
+            FROM combos c JOIN snacks s ON s.theater_id = c.theater_id
+            WHERE c.code = N'SOLO' AND s.name = N'Bắp rang bơ (Lớn)';
+
+            INSERT INTO combo_items (combo_id, snack_id, quantity)
+            SELECT c.id, s.id, 1
+            FROM combos c JOIN snacks s ON s.theater_id = c.theater_id
+            WHERE c.code = N'SOLO' AND s.name = N'Coca-Cola (Lớn)';
+
+            -- COUPLE: 2 bắp + 2 coca
+            INSERT INTO combo_items (combo_id, snack_id, quantity)
+            SELECT c.id, s.id, 2
+            FROM combos c JOIN snacks s ON s.theater_id = c.theater_id
+            WHERE c.code = N'COUPLE' AND s.name = N'Bắp rang bơ (Lớn)';
+
+            INSERT INTO combo_items (combo_id, snack_id, quantity)
+            SELECT c.id, s.id, 2
+            FROM combos c JOIN snacks s ON s.theater_id = c.theater_id
+            WHERE c.code = N'COUPLE' AND s.name = N'Coca-Cola (Lớn)';
+
+            -- FAMILY: 3 bắp + 3 coca
+            INSERT INTO combo_items (combo_id, snack_id, quantity)
+            SELECT c.id, s.id, 3
+            FROM combos c JOIN snacks s ON s.theater_id = c.theater_id
+            WHERE c.code = N'FAMILY' AND s.name = N'Bắp rang bơ (Lớn)';
+
+            INSERT INTO combo_items (combo_id, snack_id, quantity)
+            SELECT c.id, s.id, 3
+            FROM combos c JOIN snacks s ON s.theater_id = c.theater_id
+            WHERE c.code = N'FAMILY' AND s.name = N'Coca-Cola (Lớn)';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

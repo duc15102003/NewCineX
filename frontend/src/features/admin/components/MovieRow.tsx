@@ -1,0 +1,95 @@
+import { Button } from '@/components/ui/button'
+import { TableCell, TableRow } from '@/components/ui/table'
+import { ImagePlus, Star, CalendarDays } from 'lucide-react'
+import { fmtRating, label, MOVIE_STATUS_LABELS } from '@/utils/labels'
+import { MOVIE_STATUS_COLORS as STATUS_COLORS } from '@/utils/colors'
+import type { MovieListItem } from '@/types/movie'
+
+export interface MovieRowProps {
+  movie: MovieListItem
+  index: number
+  selected: boolean
+  onToggleSelect: (id: number) => void
+  onEdit: (id: number) => void
+  onUpload: (id: number) => void
+  onOpenRuns: (movie: { id: number; title: string }) => void
+}
+
+/** Row trong bảng AdminMoviePage — poster, genres, status, rating, action buttons. */
+export default function MovieRow({
+  movie: m, index, selected, onToggleSelect, onEdit, onUpload, onOpenRuns,
+}: MovieRowProps) {
+  return (
+    <TableRow className="border-white/5 hover:bg-white/5 group">
+      <TableCell className="whitespace-nowrap">
+        <input type="checkbox" checked={selected}
+          onChange={() => onToggleSelect(m.id)} className="accent-[#ffc107]" />
+      </TableCell>
+      <TableCell className="text-gray-500 text-sm whitespace-nowrap">{index + 1}</TableCell>
+      <TableCell className="whitespace-nowrap">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => onEdit(m.id)}>
+          {m.posterUrl ? (
+            <img src={m.posterUrl} alt={m.title} className="w-9 h-13 object-cover rounded-md shrink-0" />
+          ) : (
+            <div className="w-9 h-13 bg-[#2a2317] rounded-md flex items-center justify-center shrink-0">
+              <ImagePlus size={12} className="text-gray-600" />
+            </div>
+          )}
+          <span className="text-[#ffc107] hover:underline font-medium">{m.title}</span>
+        </div>
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        <GenreBadges genres={m.genres} />
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[m.status] ?? ''}`}>
+          {label(MOVIE_STATUS_LABELS, m.status)}
+        </span>
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        <span className={`inline-flex items-center gap-1 ${m.rating ? 'text-[#ffc107]' : 'text-gray-500'}`}>
+          <Star size={12} fill={m.rating ? 'currentColor' : 'none'} />
+          {fmtRating(m.rating)}
+        </span>
+      </TableCell>
+      <TableCell className="text-right whitespace-nowrap">
+        <Button size="sm" variant="ghost"
+          onClick={() => onOpenRuns({ id: m.id, title: m.title })}
+          className="text-gray-400 hover:text-[#ffc107] h-8 w-8 p-0"
+          title="Xem đợt chiếu">
+          <CalendarDays size={14} />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => onUpload(m.id)}
+          className="text-gray-400 hover:text-[#ffc107] h-8 w-8 p-0"
+          title="Upload poster">
+          <ImagePlus size={14} />
+        </Button>
+      </TableCell>
+    </TableRow>
+  )
+}
+
+interface GenreBadgesProps {
+  genres: MovieListItem['genres']
+}
+
+/** Render genres dưới dạng badge. Archived genre → gạch chéo + xám. */
+function GenreBadges({ genres }: GenreBadgesProps) {
+  if (!genres || genres.length === 0) return <>—</>
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {genres.map(g => {
+        const isArchived = g.storageState === 'ARCHIVED'
+        return (
+          <span key={g.id} className={`text-xs px-2 py-1 rounded-md border ${
+            isArchived
+              ? 'bg-white/5 text-gray-500 border-white/10 line-through'
+              : 'bg-[#ffc107]/10 text-[#ffc107] border-[#ffc107]/20'
+          }`}>
+            {g.name}
+          </span>
+        )
+      })}
+    </div>
+  )
+}

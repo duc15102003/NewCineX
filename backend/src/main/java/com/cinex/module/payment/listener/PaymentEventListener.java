@@ -9,9 +9,10 @@ import com.cinex.module.payment.entity.Payment;
 import com.cinex.module.payment.event.PaymentCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
@@ -21,6 +22,11 @@ import java.util.stream.Collectors;
 /**
  * [Observer Pattern] Lắng nghe PaymentCompletedEvent.
  * Khi thanh toán thành công → tạo notification + gửi email vé.
+ *
+ * [B5] @TransactionalEventListener(AFTER_COMMIT): chỉ xử lý SAU KHI transaction
+ * publish event đã commit thành công. Nếu PaymentService rollback (vd: lưu DB lỗi)
+ * thì email/notification KHÔNG bị gửi — tránh email "thanh toán thành công" cho
+ * giao dịch thực tế đã fail.
  *
  * @Async: chạy trên thread riêng → không block response.
  */
@@ -37,7 +43,7 @@ public class PaymentEventListener {
     private static final NumberFormat VND_FMT = NumberFormat.getInstance(new Locale("vi", "VN"));
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handlePaymentCompleted(PaymentCompletedEvent event) {
         Payment payment = event.getPayment();
         Booking booking = payment.getBooking();
@@ -50,28 +56,51 @@ public class PaymentEventListener {
         }
 
         Long userId = booking.getUser().getId();
-
-        // 1. Tạo notification cho user
-        notificationService.createNotification(
-                userId,
-                "Thanh toán thành công",
-                "Vé " + bookingCode + " đã được xác nhận. Chúc bạn xem phim vui vẻ!",
-                NotificationType.BOOKING
-        );
-
-        // 2. Gửi email xác nhận vé
         String email = booking.getUser().getEmail();
-        String movieTitle = booking.getShowtime().getMovie().getTitle();
-        String roomName = booking.getShowtime().getRoom().getName();
-        String startTime = booking.getShowtime().getStartTime().format(DT_FMT);
-        String seats = booking.getBookingSeats().stream()
-                .map(bs -> bs.getSeat().getSeatNumber())
-                .collect(Collectors.joining(", "));
-        String totalAmount = VND_FMT.format(booking.getTotalAmount()) + "đ";
 
-        byte[] qrCode = qrCodeService.generateQrCode(bookingCode, 200);
-        emailService.sendBookingConfirmationEmail(email, bookingCode, movieTitle, roomName, startTime, seats, totalAmount, qrCode);
+        // Step 1: notification (DB) — log + isolate
+        try {
+            notificationService.createNotification(
+                    userId,
+                    "Thanh toán thành công",
+                    "Vé " + bookingCode + " đã được xác nhận. Chúc bạn xem phim vui vẻ!",
+                    NotificationType.BOOKING
+            );
+            log.info("[BOOKING_EMAIL] Notification created for booking {}", bookingCode);
+        } catch (Exception e) {
+            log.error("[BOOKING_EMAIL] Notification creation FAILED for booking {}: {}",
+                    bookingCode, e.getMessage(), e);
+            // Tiếp tục — email vẫn nên thử gửi
+        }
 
-        log.info("Payment completed → notification + email sent for booking {}", bookingCode);
+        // Step 2: gen QR — isolated try/catch để fail QR không block khả năng gửi email plain
+        byte[] qrCode = null;
+        try {
+            qrCode = qrCodeService.generateQrCode(booking.getQrToken(), 200);
+            log.info("[BOOKING_EMAIL] QR generated for booking {} ({} bytes)", bookingCode, qrCode.length);
+        } catch (Exception e) {
+            log.error("[BOOKING_EMAIL] QR generation FAILED for booking {}: {}",
+                    bookingCode, e.getMessage(), e);
+        }
+
+        // Step 3: gửi email — isolated try/catch để log clearly
+        try {
+            String movieTitle = booking.getShowtime().getMovie().getTitle();
+            String roomName = booking.getShowtime().getRoom().getName();
+            String startTime = booking.getShowtime().getStartTime().format(DT_FMT);
+            String seats = booking.getBookingSeats().stream()
+                    .map(bs -> bs.getSeat().getSeatNumber())
+                    .collect(Collectors.joining(", "));
+            String totalAmount = VND_FMT.format(booking.getTotalAmount()) + "đ";
+
+            emailService.sendBookingConfirmationEmail(
+                    email, bookingCode, movieTitle, roomName, startTime, seats, totalAmount, qrCode);
+            log.info("[BOOKING_EMAIL] Email enqueued for {} (booking {})", email, bookingCode);
+        } catch (Exception e) {
+            // Bắt mọi exception (Thymeleaf TemplateProcessingException, NPE, ...) — không để
+            // @Async swallow silently rồi user mất email mà không biết tại sao.
+            log.error("[BOOKING_EMAIL] Send FAILED for {} (booking {}): {}",
+                    email, bookingCode, e.getMessage(), e);
+        }
     }
 }

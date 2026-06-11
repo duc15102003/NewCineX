@@ -3,6 +3,7 @@ package com.cinex.module.user.mapper;
 import com.cinex.module.auth.entity.User;
 import com.cinex.module.user.dto.UserProfileResponse;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 /**
  * [Mapper Pattern - MapStruct] Tự động sinh code chuyển User entity sang DTO.
@@ -19,7 +20,11 @@ public interface UserMapper {
 
     /**
      * Chuyển User entity → UserProfileResponse DTO.
-     * MapStruct tự match field theo tên: user.getFullName() → response.fullName
+     * MapStruct tự match field theo tên: user.getFullName() → response.fullName.
+     * @Mapping cho theater fields — null-safe khi user.theater = null.
      */
+    @Mapping(source = "theater.id", target = "theaterId")
+    @Mapping(source = "theater.name", target = "theaterName")
+    @Mapping(source = "theater.city", target = "theaterCity")
     UserProfileResponse toProfileResponse(User user);
 }

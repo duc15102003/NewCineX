@@ -1,10 +1,14 @@
 package com.cinex.module.voucher.entity;
 
 import com.cinex.common.entity.BaseEntity;
+import com.cinex.module.theater.entity.Theater;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,7 +28,16 @@ import java.time.LocalDateTime;
 @Builder
 public class Voucher extends BaseEntity {
 
-    @Column(nullable = false, unique = true, length = 30)
+    /**
+     * Chi nhánh áp dụng. NULL = voucher toàn hệ thống (áp mọi rạp).
+     * Code uniqueness: filtered unique index riêng cho global vs per-theater
+     * (xem migration 064). Theater-specific code có thể trùng giữa 2 rạp.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "theater_id")
+    private Theater theater;
+
+    @Column(nullable = false, length = 30)
     private String code;
 
     @Column(length = 255)

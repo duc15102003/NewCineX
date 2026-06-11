@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- POS: snacks, combos, combo_items, snack_orders, snack_order_items -->
+
+    <changeSet id="005-create-snacks" author="cinex">
+        <createTable tableName="snacks">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="theater_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="NVARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="NVARCHAR(255)"/>
+            <column name="price" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="image_url" type="NVARCHAR(500)"/>
+            <column name="category" type="NVARCHAR(50)"/>
+            <column name="available" type="BIT" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="snacks" baseColumnNames="theater_id"
+                                 referencedTableName="theaters" referencedColumnNames="id"
+                                 constraintName="fk_snacks_theater"/>
+        <createIndex tableName="snacks" indexName="idx_snacks_theater_id">
+            <column name="theater_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="005-create-combos" author="cinex">
+        <createTable tableName="combos">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="theater_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code" type="NVARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="NVARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="NVARCHAR(500)"/>
+            <column name="image_url" type="NVARCHAR(500)"/>
+            <column name="price" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="active" type="BIT" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="combos" baseColumnNames="theater_id"
+                                 referencedTableName="theaters" referencedColumnNames="id"
+                                 constraintName="fk_combos_theater"/>
+        <addUniqueConstraint tableName="combos" columnNames="theater_id, code"
+                             constraintName="uq_combos_theater_code"/>
+        <createIndex tableName="combos" indexName="idx_combos_theater_id">
+            <column name="theater_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="005-create-combo-items" author="cinex">
+        <createTable tableName="combo_items">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="combo_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="snack_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quantity" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="combo_items" baseColumnNames="combo_id"
+                                 referencedTableName="combos" referencedColumnNames="id"
+                                 constraintName="fk_combo_items_combo"/>
+        <addForeignKeyConstraint baseTableName="combo_items" baseColumnNames="snack_id"
+                                 referencedTableName="snacks" referencedColumnNames="id"
+                                 constraintName="fk_combo_items_snack"/>
+        <createIndex tableName="combo_items" indexName="idx_combo_items_combo_id">
+            <column name="combo_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="005-create-snack-orders" author="cinex">
+        <createTable tableName="snack_orders">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="storage_state" type="NVARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="NVARCHAR(100)"/>
+            <column name="updated_by" type="NVARCHAR(100)"/>
+            <column name="created_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="theater_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="order_code" type="NVARCHAR(30)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="total_amount" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="note" type="NVARCHAR(200)"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="snack_orders" baseColumnNames="theater_id"
+                                 referencedTableName="theaters" referencedColumnNames="id"
+                                 constraintName="fk_snack_orders_theater"/>
+        <createIndex tableName="snack_orders" indexName="idx_snack_orders_theater_id">
+            <column name="theater_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="005-create-snack-order-items" author="cinex">
+        <createTable tableName="snack_order_items">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="snack_order_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="snack_id" type="BIGINT"/>
+            <column name="combo_id" type="BIGINT"/>
+            <column name="quantity" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price" type="DECIMAL(12,0)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="snack_order_items" baseColumnNames="snack_order_id"
+                                 referencedTableName="snack_orders" referencedColumnNames="id"
+                                 constraintName="fk_snack_order_items_order"/>
+        <addForeignKeyConstraint baseTableName="snack_order_items" baseColumnNames="snack_id"
+                                 referencedTableName="snacks" referencedColumnNames="id"
+                                 constraintName="fk_snack_order_items_snack"/>
+        <addForeignKeyConstraint baseTableName="snack_order_items" baseColumnNames="combo_id"
+                                 referencedTableName="combos" referencedColumnNames="id"
+                                 constraintName="fk_snack_order_items_combo"/>
+        <createIndex tableName="snack_order_items" indexName="idx_snack_order_items_order_id">
+            <column name="snack_order_id"/>
+        </createIndex>
+        <!-- Business rule: line item là EITHER snack OR combo, không cùng lúc cả 2/cả 2 NULL -->
+        <sql>
+            ALTER TABLE snack_order_items
+            ADD CONSTRAINT chk_snack_order_item_xor
+            CHECK ((snack_id IS NOT NULL AND combo_id IS NULL)
+                OR (snack_id IS NULL AND combo_id IS NOT NULL));
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

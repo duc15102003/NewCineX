@@ -1,13 +1,10 @@
 package com.cinex.module.favorite.entity;
 
+import com.cinex.common.entity.BaseEntity;
 import com.cinex.module.auth.entity.User;
 import com.cinex.module.movie.entity.Movie;
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -17,8 +14,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
-
+/**
+ * UserFavorite — extends BaseEntity để có đủ id/version/storageState/audit.
+ *
+ * Lưu ý: service hiện vẫn HARD DELETE khi unfavorite (UX toggle nhanh).
+ * Cột storageState có sẵn để tương lai có thể chuyển sang soft delete nếu cần.
+ */
 @Entity
 @Table(name = "user_favorites")
 @Getter
@@ -26,11 +27,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class UserFavorite {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class UserFavorite extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -39,8 +36,4 @@ public class UserFavorite {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "movie_id", nullable = false)
     private Movie movie;
-
-    @Column(name = "created_at")
-    @Builder.Default
-    private LocalDateTime createdAt = LocalDateTime.now();
 }

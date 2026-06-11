@@ -35,7 +35,8 @@ Module phức tạp nhất — xử lý **luồng đặt vé hoàn chỉnh**:
 | `module/booking/repository/BookingSeatRepository.java` | Custom query tìm ghế HELD/BOOKED | Repository + @Query |
 | `module/booking/specification/BookingSpecification.java` | Build WHERE động theo user + status | Specification Pattern |
 | `module/booking/service/BookingService.java` | Business logic: holdSeats, confirm, cancel, checkIn | Service |
-| `module/booking/service/BookingCleanupScheduler.java` | Scheduled task dọn booking hết hạn mỗi 60s | Scheduled Task |
+| `module/booking/service/BookingCleanupScheduler.java` | Scheduled task dọn booking HOLDING hết hạn mỗi 60s + refund voucher | Scheduled Task |
+| `module/booking/service/NoShowScheduler.java` | Scheduled task đánh dấu CONFIRMED-không-CHECKED_IN sau showtime + buffer = NO_SHOW (chạy mỗi giờ) | Scheduled Task |
 | `module/booking/service/SeatWebSocketService.java` | Push real-time cập nhật ghế qua WebSocket | Observer-like |
 | `module/booking/controller/BookingController.java` | 7 endpoints REST | Controller |
 
@@ -55,23 +56,35 @@ Module phức tạp nhất — xử lý **luồng đặt vé hoàn chỉnh**:
       │(đã TT)   │  │(hết hạn) │  │(user hủy)│
       └────┬─────┘  └──────────┘  └──────────┘
            │
-      ┌────▼─────┐
-      │CANCELLED │ ← User hủy sau khi confirm (trước giờ chiếu)
-      └──────────┘
-           │
-      (nếu không hủy)
-           ▼
-      ┌──────────┐
-      │CHECKED_IN│ ← Staff quét QR tại rạp
-      └──────────┘
+      ┌────┴──────────────────┐
+      ▼                       ▼
+┌──────────┐         ┌────────────────┐
+│CANCELLED │         │   CHECKED_IN   │ ← Staff quét QR tại rạp
+│ (hủy)    │         └────────────────┘
+└──────────┘                 ▲
+      │                      │ (đi xem đúng giờ)
+      │                      │
+      └── HOẶC ──→  ┌────────┴──────┐
+                    │   NO_SHOW     │ ← Sau showtime.endTime + 30 phút
+                    │  (không đến)  │   mà chưa CHECKED_IN → scheduler
+                    └───────────────┘   tự đánh dấu
 ```
 
 Quy tắc chuyển trạng thái (ai được làm gì):
 - `HOLDING → CONFIRMED` — thanh toán xong (PaymentService.handleCallback)
-- `HOLDING → EXPIRED` — hết 10 phút (BookingCleanupScheduler tự đổi)
-- `HOLDING → CANCELLED` — user hủy chủ động
-- `CONFIRMED → CANCELLED` — user hủy trước giờ chiếu
+- `HOLDING → EXPIRED` — hết 10 phút (BookingCleanupScheduler) → refund voucher
+- `HOLDING → CANCELLED` — user hủy chủ động (hoặc payment FAILED callback)
+- `CONFIRMED → CANCELLED` — user hủy trước giờ chiếu (phải trước cutoff)
 - `CONFIRMED → CHECKED_IN` — staff quét QR tại rạp
+- `CONFIRMED → NO_SHOW` — **MỚI**: sau `showtime.endTime + booking.no_show_buffer_minutes`
+  mà user vẫn CONFIRMED → `NoShowScheduler` (cron mỗi giờ) đánh dấu NO_SHOW
+
+**Vì sao cần NO_SHOW?** Nếu user thanh toán nhưng không đến rạp, booking giữ
+`CONFIRMED` mãi → báo cáo doanh thu vẫn coi vé "đã sử dụng" trong khi thực tế
+ghế trống suốt suất chiếu. Tách NO_SHOW giúp:
+- Báo cáo phân biệt được "vé bán ra" vs "vé sử dụng thực tế" (chỉ CHECKED_IN).
+- Có dữ liệu thống kê tỷ lệ no-show theo phim/khung giờ để tối ưu lịch chiếu.
+- Sau này có thể trigger gửi voucher bù cho user lỡ chuyến (nếu có lý do hợp lệ).
 
 ---
 
@@ -86,8 +99,9 @@ Cho phép Spring tự động gọi 1 method theo lịch — không cần client
 Giống như đồng hồ hẹn giờ trong lò vi sóng — bạn set 3 phút, sau 3 phút lò tự tắt. Bạn không cần đứng canh, không cần bấm gì thêm.
 
 ```java
-// BookingCleanupScheduler.java
+// BookingCleanupScheduler.java — phiên bản hiện tại có @SchedulerLock + refund voucher
 @Scheduled(fixedRate = 60000)  // Chạy mỗi 60.000ms = 60 giây
+@SchedulerLock(name = "bookingCleanup", lockAtLeastFor = "PT30S", lockAtMostFor = "PT5M")
 @Transactional
 public void cleanupExpiredHolds() {
     int holdMinutes = systemConfigService.getInt("booking.hold_minutes", 10);
@@ -101,6 +115,15 @@ public void cleanupExpiredHolds() {
         booking.getBookingSeats().forEach(bs -> bs.setStatus(BookingSeatStatus.CANCELLED));
         bookingRepository.save(booking);
 
+        // [G2] Trả lại voucher khi booking EXPIRED — atomic decrement used_count + xóa voucher_usage.
+        // Trước đây: booking EXPIRED nhưng voucher_usages còn nguyên → user bị "khóa" 1 voucher
+        // (đụng partial unique uk_voucher_usages_active) dù chưa thật sự dùng.
+        List<VoucherUsage> usages = voucherUsageRepository.findByBookingId(booking.getId());
+        for (VoucherUsage usage : usages) {
+            voucherRepository.decrementUsedCount(usage.getVoucher().getId());
+            voucherUsageRepository.delete(usage);
+        }
+
         // Real-time: ghế hết hạn → notify AVAILABLE cho tất cả user đang xem
         List<Long> seatIds = booking.getBookingSeats().stream()
                 .map(bs -> bs.getSeat().getId()).toList();
@@ -108,6 +131,13 @@ public void cleanupExpiredHolds() {
     }
 }
 ```
+
+**@SchedulerLock (ShedLock)** — vì sao cần?
+- Khi deploy nhiều instance backend (HA / blue-green), mỗi instance có scheduler riêng.
+- Cùng giây phút, cả 3 instance đều quét DB tìm HOLDING expired → cùng UPDATE → contention + voucher bị decrement 3 lần.
+- ShedLock dùng bảng `shedlock` (Liquibase 038) làm distributed lock: instance nào INSERT lock row trước thì chạy, 2 instance kia skip.
+- `lockAtLeastFor = PT30S`: giữ lock tối thiểu 30s (chống clock skew giữa các node).
+- `lockAtMostFor = PT5M`: tự release sau 5 phút (chống deadlock nếu node crash).
 
 **Ví dụ timeline:**
 ```
@@ -159,6 +189,128 @@ public class CineXApplication {
 
 ---
 
+### 4.1.b NoShowScheduler — Đánh dấu vé "đặt mà không đến"
+
+**Bài toán đời thường:** Bạn đặt nhà hàng 19h tối nhưng 20h vẫn chưa tới. Nhà hàng
+giữ bàn → mất khách khác. Sau 30 phút quá giờ, họ huỷ đặt bàn để phục vụ khách mới.
+
+Trong CineX:
+- User đã thanh toán → booking CONFIRMED. Đến giờ chiếu user không tới rạp.
+- Showtime kết thúc → booking VẪN ở status CONFIRMED → báo cáo coi vé "đã dùng" → sai.
+
+**Giải pháp:** Một scheduler chạy mỗi giờ tròn, tìm booking CONFIRMED có
+`showtime.endTime + buffer < now()` → đánh dấu `NO_SHOW`.
+
+```java
+// NoShowScheduler.java
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class NoShowScheduler {
+
+    private final BookingRepository bookingRepository;
+    private final SystemConfigService systemConfigService;
+
+    private static final int DEFAULT_NO_SHOW_BUFFER_MINUTES = 30;
+
+    /**
+     * Cron "0 0 * * * *" = giây 0, phút 0, mọi giờ → mỗi giờ tròn (00:00, 01:00, ...).
+     * KHÔNG cần real-time (chạy mỗi giây) vì NO_SHOW chỉ ảnh hưởng báo cáo.
+     */
+    @Scheduled(cron = "0 0 * * * *")
+    @SchedulerLock(name = "noShowMark", lockAtLeastFor = "PT1M", lockAtMostFor = "PT10M")
+    @Transactional
+    public void markNoShowBookings() {
+        int bufferMinutes = systemConfigService.getInt(
+                "booking.no_show_buffer_minutes", DEFAULT_NO_SHOW_BUFFER_MINUTES);
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(bufferMinutes);
+
+        List<Booking> candidates = bookingRepository
+                .findByStatusAndShowtime_EndTimeBefore(BookingStatus.CONFIRMED, cutoff);
+
+        for (Booking booking : candidates) {
+            booking.setStatus(BookingStatus.NO_SHOW);
+            bookingRepository.save(booking);
+            log.info("[NoShowScheduler] Marked booking {} as NO_SHOW (showtime ended at {})",
+                    booking.getBookingCode(), booking.getShowtime().getEndTime());
+        }
+    }
+}
+```
+
+**Cấu hình động qua `system_config` (Liquibase 050):**
+
+```sql
+INSERT INTO system_config (config_key, config_value, description)
+VALUES ('booking.no_show_buffer_minutes', '30',
+        'Buffer (phút) sau giờ chiếu kết thúc trước khi đánh booking là NO_SHOW');
+```
+
+Admin chỉnh runtime (vd: thay 30 → 60 phút cho rạp ở trung tâm thành phố hay kẹt xe)
+mà KHÔNG cần deploy lại.
+
+**Timeline ví dụ:**
+```
+14:00 — Suất chiếu bắt đầu (showtime.startTime)
+16:00 — Suất chiếu kết thúc (showtime.endTime) — chỉ tính thời lượng phim, KHÔNG có buffer
+16:30 — Hết buffer 30 phút → cutoff đạt được
+17:00 — NoShowScheduler chạy (cron mỗi giờ tròn) → tìm CONFIRMED + endTime < 16:30
+        → Booking #X (chưa CHECKED_IN) → NO_SHOW
+```
+
+**SQL được sinh ra:**
+```sql
+SELECT b.* FROM bookings b
+JOIN showtimes s ON b.showtime_id = s.id
+WHERE b.status = 'CONFIRMED'
+  AND s.end_time < '2026-06-08T16:30:00';
+-- Sau đó: UPDATE bookings SET status = 'NO_SHOW' WHERE id = ?
+```
+
+**Vì sao dùng `endTime` chứ KHÔNG dùng `slotEndTime`?** Xem section 4.1.c.
+
+---
+
+### 4.1.c `endTime` vs `slotEndTime` — Tách 2 nghĩa của "giờ kết thúc"
+
+**Bài toán cũ (trước Liquibase 037):** `showtime.endTime` gộp luôn buffer dọn dẹp
+phòng (mặc định 15 phút từ `system_config.showtime.buffer_minutes`).
+- Phim dài 2h (14:00 — 16:00) → `endTime` lưu = 16:15.
+- User xem vé thấy "Kết thúc: 16:15" → tưởng phim 2h15.
+- `endTime - startTime` ra thời lượng sai → báo cáo lệch.
+
+**Giải pháp (Liquibase 037):** Tách thành 2 cột:
+
+| Field | Ý nghĩa | Dùng cho |
+|---|---|---|
+| `end_time` | Chỉ thời lượng phim (= startTime + movie.duration) | Hiển thị cho user, báo cáo, NoShowScheduler |
+| `slot_end_time` | endTime + buffer dọn phòng | Conflict check khi xếp lịch (room phải free đến hết slot) |
+
+**Code Liquibase backfill** (đọc buffer động từ system_config, fallback 15):
+```sql
+DECLARE @buffer INT = (
+    SELECT TRY_CAST(config_value AS INT) FROM system_config
+    WHERE config_key = 'showtime.buffer_minutes'
+);
+SET @buffer = ISNULL(@buffer, 15);
+
+UPDATE showtimes
+SET slot_end_time = end_time,                                -- giữ giá trị cũ (đã có buffer)
+    end_time = DATEADD(minute, -@buffer, end_time);          -- end_time mới = trừ buffer
+```
+
+**Vì sao tách?**
+1. **Đúng nghĩa cho user:** End time hiện trên vé = giờ phim thực sự kết thúc.
+2. **Conflict check vẫn đúng:** Khi xếp suất tiếp theo cùng phòng, dùng `slotEndTime`
+   để đảm bảo có thời gian dọn dẹp (lau ghế, đổ rác, kiểm tra projector).
+3. **NoShowScheduler dùng `endTime`** (không phải `slotEndTime`) vì sau khi phim kết thúc
+   user không còn lý do ở lại — buffer dọn phòng KHÔNG phải buffer cho user.
+
+**Tradeoff:** Phải sửa cả entity Showtime, ShowtimeService.checkConflict, và một số
+report query để dùng đúng cột. Bù lại tránh ambiguity rất nguy hiểm trong báo cáo doanh thu.
+
+---
+
 ### 4.2 Pessimistic vs Optimistic Lock — Concurrency khi hold ghế
 
 **Bài toán:** 2 user A và B cùng lúc muốn giữ ghế E1 trong cùng suất chiếu.
@@ -183,39 +335,61 @@ User B: check E1 trống → ✅ → hold E1  ← Hai người check CÙNG LÚC 
 | **Annotation JPA** | `@Lock(LockModeType.PESSIMISTIC_WRITE)` | `@Version` trên field entity |
 | **Ví dụ đời thường** | Nhà vệ sinh có khóa cửa — vào được thì khóa, người sau phải chờ | Google Docs — ai save sau sẽ thấy conflict, phải resolve |
 
-#### Cách CineX xử lý (không dùng lock — tại sao?)
+#### Cách CineX xử lý — 3 LỚP defense in depth
 
-Thay vì lock, CineX dùng **check-before-insert trong cùng transaction**:
+Phase 3-5 đã nâng cấp từ "chỉ check-before-insert" lên **3 lớp bảo vệ**:
+
+**Lớp 1: Pessimistic Lock showtime row** (chống race ở mức showtime)
 
 ```java
-// BookingService.holdSeats()
-@Transactional  // Đảm bảo check + insert là ATOMIC
-public HoldSeatsResponse holdSeats(Long userId, HoldSeatsRequest request) {
-    // Check ghế trống
-    List<BookingSeat> occupied = bookingSeatRepository.findHeldOrBookedSeats(
-            request.getShowtimeId(), request.getSeatIds());
+// BookingService.holdSeats() — phiên bản hiện tại
+Showtime showtime = showtimeRepository.findByIdForUpdate(request.getShowtimeId())
+        .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+// SQL: SELECT * FROM showtimes WITH (UPDLOCK, ROWLOCK) WHERE id = ?
+// → Transaction B muốn lock showtime đó phải CHỜ transaction A commit
+// → Check + insert chạy tuần tự, không bị race condition (TOCTOU)
+```
 
-    if (!occupied.isEmpty()) {
-        throw new BusinessException(ErrorCode.SEAT_ALREADY_BOOKED, "Seats already taken: ...");
-    }
-
-    // Insert BookingSeat ngay trong cùng transaction
-    // Nếu 2 user check cùng lúc → DB constraint UNIQUE bắt lỗi
-    // Hoặc: user sau đến sẽ thấy ghế đã HELD từ user trước
-    ...
+**Lớp 2: Application-level check** (báo lỗi đẹp cho user)
+```java
+List<BookingSeat> occupied = bookingSeatRepository.findHeldOrBookedSeats(
+        request.getShowtimeId(), uniqueSeatIds);
+if (!occupied.isEmpty()) {
+    throw new BusinessException(ErrorCode.SEAT_ALREADY_BOOKED,
+            "Các ghế đã được đặt hoặc đang giữ: " + takenSeats);
 }
 ```
 
-**Tại sao approach này hoạt động?**
-- SQL Server mặc định **Read Committed** isolation → transaction A commit → transaction B mới thấy dữ liệu mới
-- 2 transaction kiểm tra ghế **song song** → có thể cùng thấy trống
-- Nhưng chỉ 1 transaction INSERT thành công (do UNIQUE constraint trên `booking_seats`)
-- Transaction còn lại → `DataIntegrityViolationException` → Spring bắt → trả lỗi cho user
+**Lớp 3: DB Partial Unique Index** (Liquibase 034 — safety net cuối cùng)
 
-**Khi nào nên dùng Pessimistic Lock thật sự?**
-- Hệ thống vé sự kiện lớn (concert, World Cup) — tranh chấp cực cao
-- Thêm `@Lock(LockModeType.PESSIMISTIC_WRITE)` vào query findHeldOrBookedSeats
-- SQL: `SELECT bs.* FROM booking_seats bs ... WITH (UPDLOCK, ROWLOCK)` (SQL Server)
+```sql
+-- Cột showtime_id denormalized vào booking_seats (vì SQL Server filtered index
+-- không tham chiếu được cột bảng khác). Trigger tự sync khi INSERT/UPDATE.
+CREATE UNIQUE NONCLUSTERED INDEX uk_booking_seats_active
+ON booking_seats (showtime_id, seat_id)
+WHERE status IN ('HELD', 'BOOKED');
+```
+
+Code catch khi vi phạm:
+```java
+try {
+    seatResponses = seats.stream().map(...).toList();
+    bookingSeatRepository.flush();   // Force flush để bắt exception NGAY (không đợi end-of-tx)
+} catch (DataIntegrityViolationException ex) {
+    log.warn("Double-booking attempt detected for showtime {} seats {}",
+            showtime.getId(), uniqueSeatIds);
+    throw new BusinessException(ErrorCode.SEAT_ALREADY_BOOKED,
+            "Một số ghế vừa bị người khác đặt, vui lòng chọn lại");
+}
+```
+
+**Vì sao đủ 3 lớp?**
+- Pessimistic lock đủ cho 99% case, nhưng nếu code đổi sang `Propagation.REQUIRES_NEW`
+  hoặc transaction context bị mất → lock không có hiệu lực.
+- Application check trả lỗi đẹp cho UX, không phải để bảo vệ.
+- Partial unique index là **lá chắn DB**: dù app logic sai cũng không cho 2 row HELD/BOOKED
+  cùng (showtime_id, seat_id).
+- Row CANCELLED/EXPIRED KHÔNG bị block → cho phép ghế tái sử dụng sau khi hủy.
 
 ---
 
@@ -1178,3 +1352,275 @@ useEffect(() => {
   return () => client.deactivate();
 }, [showtimeId]);
 ```
+
+---
+
+## 13. Concurrency Deep Dive — Race Condition với ví dụ đời thường
+
+### 13.1 Race Condition là gì?
+
+**Ví dụ đời thường siêu thị:** Còn 1 hộp sữa cuối cùng trên kệ. 2 khách hàng cùng đến quầy tính tiền, mỗi người cầm 1 hộp. Hệ thống POS check tồn kho:
+- POS A check: còn 1 → OK, trừ kho → tồn = 0 ✅
+- POS B check: còn 1 → OK, trừ kho → tồn = -1 ❌ (do POS A chưa kịp update khi B check)
+
+→ Siêu thị bán 2 hộp dù chỉ có 1. **Đây là race condition.**
+
+**Trong CineX:** "1 hộp sữa" = 1 ghế. "2 khách hàng" = 2 user click cùng ghế trong micro-giây.
+
+### 13.2 Time-Of-Check vs Time-Of-Use (TOCTOU)
+
+Race condition trên thuộc loại **TOCTOU bug**:
+```
+TIME_OF_CHECK:  User A check seat E1 → AVAILABLE
+                User B check seat E1 → AVAILABLE  ← cùng micro-giây
+TIME_OF_USE:    User A INSERT booking_seat E1
+                User B INSERT booking_seat E1  ← cũng OK vì check đã pass
+```
+
+**Giải pháp tổng quát:** rút ngắn khoảng cách CHECK → USE đến mức "atomic" (không ai chen vào được).
+
+### 13.3 So sánh 3 cách giải quyết — Khi nào dùng cái nào?
+
+| Approach | Cách hoạt động | Hiệu năng | Phù hợp | Dùng cho CineX? |
+|---|---|---|---|---|
+| **1. Pessimistic Lock** | `SELECT ... FOR UPDATE` lock row, ai vào sau phải chờ | Chậm (block) | Conflict thường xuyên, không thể fail | ✅ Lớp 1 |
+| **2. Optimistic Lock** | Thêm cột `version`, UPDATE check version, fail thì retry | Nhanh (non-block) | Conflict hiếm, đọc nhiều ghi ít | ❌ Không dùng cho seat |
+| **3. DB Unique Constraint** | DB từ chối INSERT vi phạm constraint | Trung bình | Defense in depth, safety net | ✅ Lớp 3 |
+| **4. Single-writer queue (Kafka/Redis)** | Tất cả request seri qua 1 worker | Chậm (latency) | Scale lớn, conflict cực cao | ❌ Overkill |
+
+**CineX chọn:** Pessimistic + Application check + Unique Constraint (3 lớp). KHÔNG dùng Optimistic vì:
+- Optimistic phù hợp khi conflict hiếm (vd: edit profile — 1 user 1 record)
+- Hold ghế **conflict cao** ở suất chiếu hot (Avengers premiere) → Optimistic fail nhiều → user phải retry liên tục
+- Pessimistic block → user thứ 2 chờ 100ms → thấy "ghế đã giữ" → UX tốt hơn
+
+### 13.4 Timeline 2 user cùng hold ghế E1
+
+```
+Thời điểm | User A                          | User B                          | DB state
+----------|----------------------------------|----------------------------------|----------
+T=0ms     | Click E1 → call /hold           |                                  |
+T=10ms    | Spring: bắt đầu @Transactional  |                                  |
+T=15ms    | SELECT * FROM showtimes         |                                  |
+          | WITH (UPDLOCK,ROWLOCK) WHERE id=1|                                  |
+T=20ms    | ← lock acquired                  |                                  | Showtime 1: LOCKED by A
+T=25ms    | Check E1: query SELECT...        |                                  |
+T=30ms    | E1 status = AVAILABLE ✅         | Click E1 → call /hold            |
+T=35ms    |                                  | Spring: bắt đầu @Transactional   |
+T=40ms    |                                  | SELECT * FROM showtimes          |
+          |                                  | WITH (UPDLOCK,ROWLOCK) WHERE id=1|
+T=45ms    |                                  | ← WAITING (A đang lock)          | B blocked
+T=50ms    | INSERT booking_seat E1 HELD     |                                  |
+T=55ms    | UPDATE booking status            |                                  |
+T=60ms    | COMMIT → release lock            |                                  | Showtime 1: UNLOCKED
+T=65ms    | ✅ Response 200: { bookingId: 1 }|                                  | E1 = HELD by A
+T=66ms    |                                  | ← lock acquired                  | Showtime 1: LOCKED by B
+T=70ms    |                                  | Check E1: query SELECT...        |
+T=75ms    |                                  | E1 status = HELD ❌              |
+T=80ms    |                                  | throw SEAT_ALREADY_BOOKED        |
+T=85ms    |                                  | ROLLBACK → release lock          | Showtime 1: UNLOCKED
+T=90ms    |                                  | ❌ Response 409: "E1 đã được giữ"|
+```
+
+**User B nhận lỗi sau 90ms** — UX vẫn chấp nhận được. Nếu lock lâu hơn 2-3 giây, cần optimize (lock granularity hẹp hơn, vd: chỉ lock seat row thay vì showtime).
+
+### 13.5 Khi nào Optimistic Lock phù hợp? — Example CineX có dùng
+
+Optimistic Lock CineX dùng cho **edit Booking metadata** (vd: ghi chú admin), không phải hold seat:
+
+```java
+@Entity
+public class Booking extends BaseEntity {
+    @Version
+    private Long version;  // ← BaseEntity đã có
+    // ...
+}
+```
+
+```java
+// Admin A và Admin B cùng edit booking #1 (sửa note)
+// T=0: A đọc booking { id:1, version:5, note:"VIP" }
+// T=1: B đọc booking { id:1, version:5, note:"VIP" }
+// T=2: A save note="VIP guest" → UPDATE WHERE id=1 AND version=5 → OK, version=6
+// T=3: B save note="Complimentary" → UPDATE WHERE id=1 AND version=5 → 0 rows affected
+//       → Hibernate throws OptimisticLockException
+//       → Spring map → BusinessException("Dữ liệu đã bị thay đổi bởi người khác")
+```
+
+**Code handler:**
+```java
+@Transactional
+public BookingResponse updateNote(Long id, String note) {
+    Booking booking = bookingRepository.findById(id).orElseThrow(...);
+    booking.setNote(note);
+    try {
+        return bookingMapper.toResponse(bookingRepository.save(booking));
+    } catch (OptimisticLockingFailureException e) {
+        throw new BusinessException(ErrorCode.CONCURRENT_MODIFICATION,
+            "Vé đã được sửa bởi admin khác, hãy refresh và thử lại");
+    }
+}
+```
+
+**Vì sao note dùng Optimistic mà seat dùng Pessimistic?**
+- Note: 2 admin sửa cùng booking là **hiếm** (1 ngày 10 admin × 1000 booking → trùng < 0.1%)
+- Seat: 2 user cùng ghế là **thường** ở suất chiếu hot (cùng micro-giây)
+- Optimistic chấp nhận fail rồi retry. User cuối cùng (B) phải retry.
+- Pessimistic block → không fail nhưng chậm hơn.
+- Conflict cao + UX không retry tốt → chọn Pessimistic.
+
+### 13.6 Anti-Pattern: Lock trên row không liên quan
+
+```java
+// ❌ SAI — lock trên User row vì "đang ở context của user A"
+@Lock(PESSIMISTIC_WRITE)
+@Query("SELECT u FROM User u WHERE u.id = :id")
+User findByIdForUpdate(Long id);
+
+// holdSeats() lock cả user → 2 user khác hold ghế cùng showtime cũng phải chờ
+// → 1 user spam click 10 lần → 10 transaction lock user → các user khác đợi
+```
+
+🤔 **Vấn đề:** Lock granularity quá rộng. User A lock chính mình → User B muốn hold (lock User B) thì OK nhưng cùng showtime vẫn race.
+
+✅ **Đúng:** Lock trên Showtime row (granularity vừa đủ — 1 showtime/lần).
+
+📚 **Đọc thêm:** [glossary.md#r-s](../glossary.md#r-s) (Race Condition), [database/01](../database/01-database-techniques.md) (Pessimistic/Optimistic chi tiết).
+
+---
+
+## 14. ZXing — Sinh QR Code chi tiết
+
+### 14.1 Tại sao chọn ZXing?
+
+ZXing (Zebra Crossing) là thư viện QR phổ biến nhất cho Java, được Google maintain. Alternatives:
+- **QRGen** (wrapper của ZXing) — đơn giản nhưng ít customize
+- **Aspose.BarCode** — thương mại, đắt
+- **ZXing native** — full control, miễn phí ✅ CineX dùng
+
+### 14.2 Code generate QR (QrCodeService)
+
+```java
+@Service
+@Slf4j
+public class QrCodeService {
+
+    /**
+     * Generate QR code base64-encoded PNG image.
+     *
+     * @param content nội dung encode trong QR (tối đa ~2900 ký tự alphanumeric ở EC level L)
+     * @param size kích thước ảnh (pixel), thường 200-400
+     * @return base64 string của PNG, dùng làm src cho <img>
+     */
+    public String generateQrCodeBase64(String content, int size) {
+        try {
+            // 1. Cấu hình encoder
+            Map<EncodeHintType, Object> hints = new HashMap<>();
+            hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);  // 15% redundancy
+            hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
+            hints.put(EncodeHintType.MARGIN, 1);  // Quiet zone 1 module
+
+            // 2. Sinh bit matrix (đen/trắng)
+            BitMatrix matrix = new QRCodeWriter().encode(
+                content,
+                BarcodeFormat.QR_CODE,
+                size,
+                size,
+                hints
+            );
+
+            // 3. Convert matrix → PNG image bytes
+            ByteArrayOutputStream pngOutput = new ByteArrayOutputStream();
+            MatrixToImageWriter.writeToStream(matrix, "PNG", pngOutput);
+
+            // 4. Encode base64 cho HTTP response
+            return Base64.getEncoder().encodeToString(pngOutput.toByteArray());
+        } catch (WriterException | IOException ex) {
+            log.error("QR generation failed for content [{}]", content, ex);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Không thể sinh QR");
+        }
+    }
+}
+```
+
+### 14.3 Error Correction Level — Chọn cấp nào?
+
+QR code có 4 cấp sửa lỗi (recovery khi ảnh bị mờ/rách):
+
+| Level | Recovery | Capacity | Phù hợp |
+|---|---|---|---|
+| **L** (Low) | 7% | Cao nhất | QR sạch, không bao giờ in giấy |
+| **M** (Medium) ✅ | 15% | Cao | CineX: QR trên màn hình điện thoại |
+| **Q** (Quartile) | 25% | Trung | QR trên giấy, có thể nhăn nhẹ |
+| **H** (High) | 30% | Thấp | Logo overlay giữa QR (che 1 phần) |
+
+**CineX chọn M** vì:
+- User scan từ màn hình điện thoại → ít bị mờ → 15% là đủ
+- Capacity cao hơn L → content `qrToken` (32 hex char) thoải mái
+
+### 14.4 QR Content — Không chứa `bookingCode`!
+
+```java
+// ❌ SAI — encode bookingCode dễ đoán
+return qrCodeService.generateQrCodeBase64(booking.getBookingCode(), 300);
+// → "CX-20260520-001" → hacker brute force
+
+// ✅ ĐÚNG — encode qrToken random
+return qrCodeService.generateQrCodeBase64(booking.getQrToken(), 300);
+// → "a8f3c2e9b4d7..." (32 hex char) → không brute force được
+```
+
+Đây là **Security through unguessability** — token random thay vì sequence.
+
+### 14.5 Test QR code
+
+Cài app "QR Code Scanner" trên điện thoại → scan ảnh `<img src="data:image/png;base64,...">` → xem decode ra `a8f3c2e9b4d7...` đúng `qrToken` của booking đó là OK.
+
+📚 **Đọc thêm:** [backend/09-email-cloudinary-qr.md](../backend/09-email-cloudinary-qr.md) (QR + Cloudinary + Email tổng quan).
+
+---
+
+## 15. Câu hỏi tự kiểm tra — Concurrency & Real-time
+
+Bổ sung 10 câu nâng cao về phần khó nhất của module:
+
+1. **TOCTOU bug là gì? Trong CineX, bước CHECK là gì và bước USE là gì?**
+   → Time-Of-Check vs Time-Of-Use. CHECK = `findHeldOrBookedSeats()` query xem ghế trống. USE = `INSERT booking_seats`. Bug xảy ra khi 2 transaction CHECK cùng micro-giây, sau đó USE đè nhau.
+
+2. **Tại sao Pessimistic Lock dùng `SELECT ... FOR UPDATE` thay vì `SELECT ... LOCK IN SHARE MODE`?**
+   → `FOR UPDATE` = exclusive lock (chỉ 1 transaction được lock cùng lúc, transaction khác chờ). `LOCK IN SHARE MODE` = shared lock (nhiều transaction cùng đọc nhưng không ai ghi). Hold ghế cần exclusive vì sau khi check sẽ ghi (INSERT booking_seats).
+
+3. **`@SchedulerLock` khác gì với `@Transactional`?**
+   → `@Transactional` lock trong 1 DB transaction (millisec). `@SchedulerLock` lock cross-instance qua bảng `shedlock` (giây-phút), để 3 instance app không cùng chạy cleanup. Khác scope.
+
+4. **Nếu bỏ Lớp 3 (DB Unique Constraint) thì có sao không, vì Lớp 1 đã lock?**
+   → Có sao. Nếu code đổi `Propagation.REQUIRES_NEW`, hoặc thiếu `@Transactional`, lock mất hiệu lực. Lớp 3 là safety net: dù app logic sai, DB vẫn từ chối. **Defense in depth** = nhiều lớp bảo vệ độc lập.
+
+5. **Optimistic Lock với `@Version`: nếu 2 transaction đồng thời, transaction nào win?**
+   → Transaction nào COMMIT trước win (UPDATE version=5 → 6). Transaction sau khi UPDATE WHERE version=5 → 0 rows affected → throw `OptimisticLockException`. Không phải "ai save sau win" mà "ai commit trước win".
+
+6. **WebSocket polling fallback (SockJS): khi nào trình duyệt fallback từ WebSocket xuống long-polling?**
+   → Khi proxy/firewall chặn WebSocket protocol (rare). SockJS auto-detect và fallback. CineX cho phép vì user có thể ở mạng công ty chặn WS.
+
+7. **STOMP broker `/topic` vs `/queue` khác nhau gì?**
+   → `/topic/*` = pub-sub (1 message → nhiều subscriber). `/queue/*` = point-to-point (1 message → 1 subscriber). CineX dùng `/topic/showtime/{id}/seats` vì cần broadcast cho mọi user xem showtime đó.
+
+8. **`messagingTemplate.convertAndSend()` vs `convertAndSendToUser()` khác nhau?**
+   → `convertAndSend` gửi tới topic (mọi subscriber nhận). `convertAndSendToUser` gửi tới user cụ thể qua `/user/{username}/queue/...` (chỉ user đó nhận). Notification module dùng cái sau (xem [13-notification](13-notification-explained.md)).
+
+9. **`@Scheduled(fixedRate=60000)` không chạy: 5 nguyên nhân?**
+   → (1) Thiếu `@EnableScheduling`. (2) Method không public. (3) Method có tham số (không hợp lệ). (4) Class chứa method không là Spring Bean (thiếu `@Component`). (5) Method throw exception → Spring log nhưng không stop scheduler.
+
+10. **NO_SHOW dùng cron mỗi giờ — nếu downtime 3 tiếng, có miss booking nào không?**
+    → Không. Scheduler query `endTime < (now - buffer)` — sau khi up lại, query bắt tất cả booking thỏa điều kiện kể từ lúc downtime. ShedLock đảm bảo chỉ 1 instance chạy nhưng không miss data.
+
+---
+
+## 16. Liên kết tới khái niệm khác
+
+- **`@Transactional` cơ chế (Proxy, AOP):** [backend/15-common-pitfalls.md](../backend/15-common-pitfalls.md)
+- **Pessimistic vs Optimistic Lock SQL chi tiết:** [database/01-database-techniques.md](../database/01-database-techniques.md)
+- **WebSocket STOMP protocol:** [backend/10-websocket.md](../backend/10-websocket.md), [glossary.md#h](../glossary.md#h) (HTTP Upgrade)
+- **Race Condition đời thường:** [glossary.md#r-s](../glossary.md#r-s)
+- **Self-Invocation bypass Proxy:** [common-mistakes.md](../common-mistakes.md) lỗi #11
+- **QR code error correction:** [backend/09-email-cloudinary-qr.md](../backend/09-email-cloudinary-qr.md)
+- **State Machine pattern:** [design-patterns/03-behavioral-patterns.md](../design-patterns/03-behavioral-patterns.md)

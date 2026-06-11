@@ -47,7 +47,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
     <div
       ref={ref}
       className={cn(
-        'relative bg-[#0a1929] rounded-xl shadow-xl w-full max-h-[90vh] overflow-y-auto border border-white/5 text-white',
+        'relative bg-[#201b11] rounded-2xl shadow-xl w-full max-h-[90vh] overflow-y-auto border border-[#3f382d] text-white',
         DIALOG_SIZES[size],
         className,
       )}

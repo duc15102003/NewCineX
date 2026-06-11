@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Mỗi chi nhánh: 4 phòng (1 IMAX + 1 3D + 2 phòng 2D thường).
+        Mỗi phòng: 8 hàng × 12 cột = 96 ghế (chuẩn rạp đô thị VN).
+        Layout: hàng A-F STANDARD, G VIP, H COUPLE (1 cặp = 2 ghế cạnh nhau).
+        Pricing rules: weekend, suất sáng giảm 20%.
+    -->
+
+    <changeSet id="014-seed-rooms" author="cinex">
+        <sql>
+            -- Mỗi rạp 4 phòng
+            INSERT INTO rooms (theater_id, name, type, total_seats, status, storage_state)
+            SELECT t.id, N'Phòng 1 - IMAX',  N'IMAX',    96, N'ACTIVE', N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+
+            INSERT INTO rooms (theater_id, name, type, total_seats, status, storage_state)
+            SELECT t.id, N'Phòng 2 - 3D',    N'THREE_D', 96, N'ACTIVE', N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+
+            INSERT INTO rooms (theater_id, name, type, total_seats, status, storage_state)
+            SELECT t.id, N'Phòng 3',         N'TWO_D',   96, N'ACTIVE', N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+
+            INSERT INTO rooms (theater_id, name, type, total_seats, status, storage_state)
+            SELECT t.id, N'Phòng 4',         N'TWO_D',   96, N'ACTIVE', N'ACTIVE' FROM theaters t WHERE t.code LIKE N'CNX-%';
+        </sql>
+    </changeSet>
+
+    <changeSet id="014-seed-seats" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            -- Sinh 96 ghế cho mỗi phòng: 8 hàng A-H × 12 cột 1-12
+            -- A-F (6 hàng × 12) = 72 STANDARD
+            -- G (1 hàng × 12) = 12 VIP
+            -- H (1 hàng × 12) = 12 COUPLE (mỗi 2 ghế liền = 1 cặp)
+
+            DECLARE @row_idx INT, @col_idx INT;
+            DECLARE @row_label NVARCHAR(2), @seat_type NVARCHAR(20);
+
+            DECLARE room_cursor CURSOR FOR SELECT id FROM rooms;
+            DECLARE @room_id BIGINT;
+            OPEN room_cursor;
+            FETCH NEXT FROM room_cursor INTO @room_id;
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+                SET @row_idx = 1;
+                WHILE @row_idx &lt;= 8
+                BEGIN
+                    SET @row_label = CHAR(64 + @row_idx);  -- A=65 → 'A'
+                    IF @row_idx &lt;= 6 SET @seat_type = N'STANDARD';
+                    ELSE IF @row_idx = 7 SET @seat_type = N'VIP';
+                    ELSE SET @seat_type = N'COUPLE';
+
+                    SET @col_idx = 1;
+                    WHILE @col_idx &lt;= 12
+                    BEGIN
+                        INSERT INTO seats (room_id, row_label, col_number, seat_number, seat_type, status, storage_state)
+                        VALUES (@room_id, @row_label, @col_idx, @row_label + CAST(@col_idx AS NVARCHAR(2)), @seat_type, N'AVAILABLE', N'ACTIVE');
+                        SET @col_idx = @col_idx + 1;
+                    END
+                    SET @row_idx = @row_idx + 1;
+                END
+                FETCH NEXT FROM room_cursor INTO @room_id;
+            END
+            CLOSE room_cursor;
+            DEALLOCATE room_cursor;
+        </sql>
+    </changeSet>
+
+    <changeSet id="014-seed-pricing-rules" author="cinex">
+        <sql>
+            -- Pricing rule global (theater_id = NULL) áp cho tất cả rạp
+            INSERT INTO pricing_rules (theater_id, code, name, description, rule_type, multiplier_percent, day_of_week, hour_start, hour_end, active, priority, storage_state)
+            VALUES
+            -- Suất sáng (8h-12h) giảm 20% — đánh tâm lý "giá rẻ buổi sáng"
+            (NULL, N'MORNING_DISCOUNT', N'Giảm 20% suất sáng', N'Suất chiếu 8h-12h giảm 20% giá vé', N'HOUR_RANGE', 80.00, NULL, 8, 12, 1, 100, N'ACTIVE'),
+            -- Thứ 3 phim Việt giảm 30% (CGV Tuesday-like)
+            (NULL, N'TUESDAY_DISCOUNT', N'Giảm 30% thứ 3', N'Mọi suất thứ 3 giảm 30%', N'DAY_OF_WEEK', 70.00, N'TUESDAY', NULL, NULL, 1, 110, N'ACTIVE'),
+            -- Weekend (T7+CN) tăng giá 20% — internal, KHÔNG hiển thị badge FE
+            (NULL, N'WEEKEND_SURGE', N'Phụ thu cuối tuần', N'Thứ 7 và Chủ Nhật tăng 20% giá vé', N'DAY_OF_WEEK', 120.00, N'SATURDAY,SUNDAY', NULL, NULL, 1, 50, N'ACTIVE'),
+            -- Giờ vàng (19h-22h) tăng 15% — internal
+            (NULL, N'PRIME_TIME', N'Phụ thu giờ vàng', N'Suất 19h-22h tăng 15%', N'HOUR_RANGE', 115.00, NULL, 19, 22, 1, 60, N'ACTIVE');
+
+            -- Rule riêng HN: học sinh giảm 10% suất nào (override weekend nếu áp)
+            INSERT INTO pricing_rules (theater_id, code, name, description, rule_type, multiplier_percent, day_of_week, hour_start, hour_end, active, priority, storage_state)
+            SELECT id, N'STUDENT_HN', N'Học sinh CineX HN -10%', N'Áp dụng riêng cho CineX Hà Nội', N'COMPOSITE', 90.00, NULL, NULL, NULL, 1, 90, N'ACTIVE'
+            FROM theaters WHERE code = N'CNX-HN';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        18 phim đa dạng + movie_genres (mỗi phim 1-3 genre) + movie_runs cho 5 chi nhánh.
+
+        poster_url/trailer_url để PLACEHOLDER URL — user tự thay sau khi setup
+        bằng UI admin (Upload poster) hoặc Cloudinary trực tiếp.
+    -->
+
+    <changeSet id="013-seed-movies" author="cinex">
+        <sql>
+            INSERT INTO movies (title, description, duration, poster_url, trailer_url, director, cast, language, rating, rating_count, age_rating, storage_state) VALUES
+            (N'Avatar 3: Lửa và Tro', N'Phần tiếp theo của series Avatar — gia đình Sully đối mặt với tộc Na''vi mới có sức mạnh nguyên tố lửa. Bom tấn sci-fi đỉnh cao của James Cameron.', 192, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'James Cameron', N'Sam Worthington, Zoe Saldana, Sigourney Weaver', N'Tiếng Anh - phụ đề Việt', 8.5, 245, N'T13', N'ACTIVE'),
+            (N'Mai 2',                N'Phần tiếp theo phim Mai của Trấn Thành — chuyện tình éo le ở Sài Gòn hiện đại với góc nhìn mới về phụ nữ.', 132, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Trấn Thành', N'Phương Anh Đào, Tuấn Trần, Hồng Đào', N'Tiếng Việt', 9.2, 1820, N'T16', N'ACTIVE'),
+            (N'Dune: Phần 3',         N'Kết thúc bộ ba phim sci-fi Dune của Denis Villeneuve. Paul Atreides đối đầu với định mệnh cuối cùng trên hành tinh Arrakis.', 165, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Denis Villeneuve', N'Timothée Chalamet, Zendaya, Florence Pugh', N'Tiếng Anh - phụ đề Việt', 8.8, 432, N'T13', N'ACTIVE'),
+            (N'Conan Movie 27',       N'Vụ án mới của thám tử Conan tại một sòng bạc nổi danh tại Las Vegas. Animation Nhật chiếu hè.', 110, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Yuzuru Tachikawa', N'Minami Takayama, Wakana Yamazaki', N'Tiếng Nhật - phụ đề Việt + lồng tiếng', 7.9, 312, N'K',   N'ACTIVE'),
+            (N'Quỷ Cẩu 2: Trở Lại',   N'Phần tiếp horror Việt — câu chuyện kinh dị mới ở vùng núi Tây Bắc.', 105, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Bùi Văn Hải', N'Quốc Cường, Nam Thư, Vân Trang', N'Tiếng Việt', 7.2, 580, N'T18', N'ACTIVE'),
+            (N'Doraemon: Hành Tinh Khủng Long', N'Doraemon và Nobita lạc vào kỷ phục hưng khủng long. Phim hoạt hình cho trẻ em.', 95, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Yukiyo Teramoto', N'Wasabi Mizuta', N'Tiếng Nhật - lồng tiếng Việt', 8.0, 421, N'P',   N'ACTIVE'),
+            (N'John Wick 5',          N'John Wick trở lại đối đầu với Hội đồng Cao cấp. Tuyệt phẩm action kinetic.', 138, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Chad Stahelski', N'Keanu Reeves, Donnie Yen, Ana de Armas', N'Tiếng Anh - phụ đề Việt', 8.6, 678, N'T16', N'ACTIVE'),
+            (N'Lật Mặt 8',            N'Lý Hải tiếp tục series Lật Mặt với câu chuyện gia đình ở miền Trung. Phim hài-hành động Việt.', 125, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Lý Hải', N'Lý Hải, Minh Hà, Quách Ngọc Tuyên', N'Tiếng Việt', 7.8, 892, N'T13', N'ACTIVE'),
+            (N'Marvel: Doctor Strange 3', N'Doctor Strange điều tra một thế giới song song mới. Marvel Phase 6.', 142, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Sam Raimi', N'Benedict Cumberbatch, Elizabeth Olsen', N'Tiếng Anh - phụ đề Việt', 8.1, 521, N'T13', N'ACTIVE'),
+            (N'Spirited Away (Bản remaster 4K)', N'Bản tái phát hành Spirited Away của Studio Ghibli (2001) với chất lượng 4K Dolby.', 125, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Hayao Miyazaki', N'Rumi Hiiragi, Miyu Irino', N'Tiếng Nhật - phụ đề Việt', 9.5, 1543, N'P',   N'ACTIVE'),
+            (N'Em và Trịnh',          N'Phim tiểu sử về cố nhạc sĩ Trịnh Công Sơn — bản chỉnh sửa 2026.', 136, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Phan Gia Nhật Linh', N'Avin Lu, Bùi Lan Hương, Trần Lực', N'Tiếng Việt', 7.5, 380, N'T13', N'ACTIVE'),
+            (N'Mission Impossible 9', N'Ethan Hunt nghỉ hưu hay tiếp tục? Phần cuối của series MI.', 155, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Christopher McQuarrie', N'Tom Cruise, Hayley Atwell', N'Tiếng Anh - phụ đề Việt', 8.4, 612, N'T13', N'ACTIVE'),
+            (N'Tom &amp; Jerry: Phim Mới', N'Phim hoạt hình cho trẻ em — Tom và Jerry phiêu lưu tại công viên giải trí.', 88, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Tim Story', N'Chloë Grace Moretz', N'Tiếng Anh - lồng tiếng Việt', 6.8, 145, N'P', N'ACTIVE'),
+            (N'Nhà Bà Nữ 2',          N'Phần tiếp theo Nhà Bà Nữ — câu chuyện 3 thế hệ phụ nữ.', 128, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Trấn Thành', N'NSND Lê Khanh, Khả Như, Uyển Ân', N'Tiếng Việt', 8.7, 1245, N'T13', N'ACTIVE'),
+            (N'Inception (Remaster)', N'Inception của Christopher Nolan tái phát hành kỷ niệm 15 năm.', 148, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Christopher Nolan', N'Leonardo DiCaprio, Joseph Gordon-Levitt', N'Tiếng Anh - phụ đề Việt', 9.4, 2891, N'T16', N'ACTIVE'),
+            (N'Joker 2: Folie à Deux (Re-issue)', N'Joker phần 2 — bản special edition chiếu lại tại các rạp art-house.', 138, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Todd Phillips', N'Joaquin Phoenix, Lady Gaga', N'Tiếng Anh - phụ đề Việt', 7.0, 489, N'T18', N'ACTIVE'),
+            (N'Liên Hoan Phim Pháp 2026', N'Tuyển tập 5 phim Pháp đoạt giải tại Cannes 2025, chiếu trong tuần liên hoan.', 600, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Đa đạo diễn', N'Đa diễn viên', N'Tiếng Pháp - phụ đề Việt', 8.2, 87, N'T16', N'ACTIVE'),
+            (N'Kungfu Panda 5',       N'Po và đội Furious Five trở lại trong cuộc phiêu lưu cứu Thung lũng Bình yên.', 102, N'PLACEHOLDER_POSTER_URL', N'PLACEHOLDER_TRAILER_URL', N'Mike Mitchell', N'Jack Black, Awkwafina', N'Tiếng Anh - lồng tiếng Việt', 7.6, 234, N'P', N'ACTIVE');
+        </sql>
+    </changeSet>
+
+    <changeSet id="013-seed-movie-genres" author="cinex">
+        <sql>
+            -- Map phim với thể loại bằng title + name (idempotent vì unique)
+            INSERT INTO movie_genres (movie_id, genre_id)
+            SELECT m.id, g.id FROM movies m, genres g WHERE
+              (m.title = N'Avatar 3: Lửa và Tro' AND g.name IN (N'Hành động', N'Phiêu lưu', N'Khoa học viễn tưởng')) OR
+              (m.title = N'Mai 2' AND g.name IN (N'Tâm lý', N'Lãng mạn')) OR
+              (m.title = N'Dune: Phần 3' AND g.name IN (N'Khoa học viễn tưởng', N'Phiêu lưu')) OR
+              (m.title = N'Conan Movie 27' AND g.name IN (N'Hoạt hình', N'Tội phạm', N'Hồi hộp')) OR
+              (m.title = N'Quỷ Cẩu 2: Trở Lại' AND g.name IN (N'Kinh dị', N'Hồi hộp')) OR
+              (m.title = N'Doraemon: Hành Tinh Khủng Long' AND g.name IN (N'Hoạt hình', N'Phiêu lưu')) OR
+              (m.title = N'John Wick 5' AND g.name IN (N'Hành động', N'Tội phạm')) OR
+              (m.title = N'Lật Mặt 8' AND g.name IN (N'Hài', N'Hành động')) OR
+              (m.title = N'Marvel: Doctor Strange 3' AND g.name IN (N'Hành động', N'Giả tưởng', N'Phiêu lưu')) OR
+              (m.title = N'Spirited Away (Bản remaster 4K)' AND g.name IN (N'Hoạt hình', N'Giả tưởng')) OR
+              (m.title = N'Em và Trịnh' AND g.name IN (N'Tâm lý', N'Âm nhạc', N'Lịch sử')) OR
+              (m.title = N'Mission Impossible 9' AND g.name IN (N'Hành động', N'Hồi hộp')) OR
+              (m.title = N'Tom &amp; Jerry: Phim Mới' AND g.name IN (N'Hoạt hình', N'Hài')) OR
+              (m.title = N'Nhà Bà Nữ 2' AND g.name IN (N'Tâm lý', N'Hài')) OR
+              (m.title = N'Inception (Remaster)' AND g.name IN (N'Hành động', N'Khoa học viễn tưởng', N'Hồi hộp')) OR
+              (m.title = N'Joker 2: Folie à Deux (Re-issue)' AND g.name IN (N'Tâm lý', N'Tội phạm')) OR
+              (m.title = N'Liên Hoan Phim Pháp 2026' AND g.name IN (N'Tâm lý', N'Tài liệu')) OR
+              (m.title = N'Kungfu Panda 5' AND g.name IN (N'Hoạt hình', N'Hài', N'Hành động'));
+        </sql>
+    </changeSet>
+
+    <changeSet id="013-seed-movie-runs" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            -- Helper: hôm nay = GETDATE(). Tạo run NOW_SHOWING cho phim đang chiếu,
+            -- SCHEDULED cho phim sắp chiếu, ENDED cho phim đã hết.
+
+            DECLARE @today DATE = CAST(GETDATE() AS DATE);
+
+            -- 5 phim đang NOW_SHOWING ở TẤT CẢ 5 chi nhánh
+            -- (Avatar 3, Mai 2, John Wick 5, Doctor Strange 3, Conan 27)
+            INSERT INTO movie_runs (movie_id, theater_id, start_date, end_date, run_type, status, storage_state)
+            SELECT m.id, t.id, DATEADD(DAY, -7, @today), DATEADD(DAY, 35, @today), N'FIRST_RUN', N'NOW_SHOWING', N'ACTIVE'
+            FROM movies m CROSS JOIN theaters t
+            WHERE m.title IN (N'Avatar 3: Lửa và Tro', N'Mai 2', N'John Wick 5', N'Marvel: Doctor Strange 3', N'Conan Movie 27');
+
+            -- 4 phim COMING_SOON cho TẤT CẢ 5 chi nhánh (Dune 3, MI9, Quỷ Cẩu 2, Lật Mặt 8)
+            INSERT INTO movie_runs (movie_id, theater_id, start_date, end_date, run_type, status, storage_state)
+            SELECT m.id, t.id, DATEADD(DAY, 14, @today), DATEADD(DAY, 60, @today), N'FIRST_RUN', N'SCHEDULED', N'ACTIVE'
+            FROM movies m CROSS JOIN theaters t
+            WHERE m.title IN (N'Dune: Phần 3', N'Mission Impossible 9', N'Quỷ Cẩu 2: Trở Lại', N'Lật Mặt 8');
+
+            -- Phim ENDED (Em và Trịnh đã chiếu xong) tại HN/HCM
+            INSERT INTO movie_runs (movie_id, theater_id, start_date, end_date, run_type, status, storage_state)
+            SELECT m.id, t.id, DATEADD(DAY, -90, @today), DATEADD(DAY, -30, @today), N'FIRST_RUN', N'ENDED', N'ACTIVE'
+            FROM movies m, theaters t
+            WHERE m.title = N'Em và Trịnh' AND t.code IN (N'CNX-HN', N'CNX-HCM');
+
+            -- REISSUE: Inception remaster đang chiếu ở HN + HCM (2 thành phố lớn)
+            INSERT INTO movie_runs (movie_id, theater_id, start_date, end_date, run_type, status, storage_state)
+            SELECT m.id, t.id, DATEADD(DAY, -14, @today), DATEADD(DAY, 7, @today), N'REISSUE', N'NOW_SHOWING', N'ACTIVE'
+            FROM movies m, theaters t
+            WHERE m.title = N'Inception (Remaster)' AND t.code IN (N'CNX-HN', N'CNX-HCM');
+
+            -- REISSUE: Spirited Away open-ended (không endDate) chỉ ở HN — phim cổ điển arthouse
+            INSERT INTO movie_runs (movie_id, theater_id, start_date, end_date, run_type, status, storage_state)
+            SELECT m.id, t.id, DATEADD(DAY, -30, @today), NULL, N'REISSUE', N'NOW_SHOWING', N'ACTIVE'
+            FROM movies m, theaters t
+            WHERE m.title = N'Spirited Away (Bản remaster 4K)' AND t.code = N'CNX-HN';
+
+            -- FESTIVAL: Liên Hoan Phim Pháp chiếu 7 ngày ở HN + HCM
+            INSERT INTO movie_runs (movie_id, theater_id, start_date, end_date, run_type, status, storage_state)
+            SELECT m.id, t.id, DATEADD(DAY, 30, @today), DATEADD(DAY, 37, @today), N'FESTIVAL', N'SCHEDULED', N'ACTIVE'
+            FROM movies m, theaters t
+            WHERE m.title = N'Liên Hoan Phim Pháp 2026' AND t.code IN (N'CNX-HN', N'CNX-HCM');
+
+            -- Trẻ em: Doraemon + Tom &amp; Jerry + Kungfu Panda 5 chiếu open-ended ở TẤT CẢ
+            INSERT INTO movie_runs (movie_id, theater_id, start_date, end_date, run_type, status, storage_state)
+            SELECT m.id, t.id, DATEADD(DAY, -14, @today), NULL, N'FIRST_RUN', N'NOW_SHOWING', N'ACTIVE'
+            FROM movies m CROSS JOIN theaters t
+            WHERE m.title IN (N'Doraemon: Hành Tinh Khủng Long', N'Tom &amp; Jerry: Phim Mới', N'Kungfu Panda 5');
+
+            -- Joker 2 reissue T18: chỉ chiếu HN art-house, ngắn 5 ngày
+            INSERT INTO movie_runs (movie_id, theater_id, start_date, end_date, run_type, status, storage_state)
+            SELECT m.id, t.id, DATEADD(DAY, 7, @today), DATEADD(DAY, 12, @today), N'REISSUE', N'SCHEDULED', N'ACTIVE'
+            FROM movies m, theaters t
+            WHERE m.title = N'Joker 2: Folie à Deux (Re-issue)' AND t.code = N'CNX-HN';
+
+            -- Nhà Bà Nữ 2 đang chiếu các thành phố lớn HN + HCM + DN
+            INSERT INTO movie_runs (movie_id, theater_id, start_date, end_date, run_type, status, storage_state)
+            SELECT m.id, t.id, DATEADD(DAY, -10, @today), DATEADD(DAY, 25, @today), N'FIRST_RUN', N'NOW_SHOWING', N'ACTIVE'
+            FROM movies m, theaters t
+            WHERE m.title = N'Nhà Bà Nữ 2' AND t.code IN (N'CNX-HN', N'CNX-HCM', N'CNX-DN');
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

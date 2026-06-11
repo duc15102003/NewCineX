@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { Bell, Check, CheckCheck } from 'lucide-react'
 import { useNotifications, useUnreadCount, useMarkAsRead, useMarkAllAsRead } from '@/hooks/useNotifications'
 import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket'
@@ -43,14 +44,14 @@ export default function NotificationBell() {
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute right-0 mt-3 w-80 bg-[#0d1c2d] border border-white/10 rounded-xl shadow-2xl shadow-black/40 z-50 overflow-hidden">
+        <div className="absolute right-0 mt-3 w-80 bg-[#201b11] border border-[#3f382d] rounded-2xl shadow-2xl shadow-black/40 z-50 overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-            <h3 className="text-sm font-semibold text-white">Thông báo</h3>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[#3f382d]">
+            <h3 className="text-sm font-semibold text-amber-50">Thông báo</h3>
             {unreadCount > 0 && (
               <button
                 onClick={() => markAllAsRead.mutate()}
-                className="text-xs text-[#eab308] hover:underline flex items-center gap-1"
+                className="text-xs text-[#ffc107] hover:underline flex items-center gap-1"
               >
                 <CheckCheck size={12} /> Đọc tất cả
               </button>
@@ -68,12 +69,12 @@ export default function NotificationBell() {
                 <div
                   key={n.id}
                   onClick={() => { if (!n.read) markAsRead.mutate(n.id) }}
-                  className={`px-4 py-3 border-b border-white/5 cursor-pointer transition-colors hover:bg-white/5 ${
-                    !n.read ? 'bg-[#eab308]/5' : ''
+                  className={`px-4 py-3 border-b border-[#3f382d] cursor-pointer transition-colors hover:bg-white/5 ${
+                    !n.read ? 'bg-[#ffc107]/5' : ''
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${!n.read ? 'bg-[#eab308]' : 'bg-transparent'}`} />
+                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${!n.read ? 'bg-[#ffc107]' : 'bg-transparent'}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-white truncate">{n.title}</p>
                       <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{n.content}</p>
@@ -82,7 +83,7 @@ export default function NotificationBell() {
                     {!n.read && (
                       <button
                         onClick={(e) => { e.stopPropagation(); markAsRead.mutate(n.id) }}
-                        className="text-gray-500 hover:text-[#eab308] transition-colors shrink-0 mt-1"
+                        className="text-gray-500 hover:text-[#ffc107] transition-colors shrink-0 mt-1"
                         title="Đánh dấu đã đọc"
                       >
                         <Check size={14} />
@@ -93,6 +94,15 @@ export default function NotificationBell() {
               ))
             )}
           </div>
+
+          {/* Footer: link sang trang xem tất cả */}
+          <Link
+            to="/notifications"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2.5 text-center text-xs font-medium text-[#ffc107] hover:bg-white/5 border-t border-[#3f382d] transition-colors"
+          >
+            Xem tất cả
+          </Link>
         </div>
       )}
     </div>

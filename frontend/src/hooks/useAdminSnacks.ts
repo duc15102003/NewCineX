@@ -13,13 +13,36 @@ export interface AdminSnack {
   imageUrl: string | null
   available: boolean
   storageState: string
+  /** Chi nhánh sở hữu snack — BE đã expose, dùng cho grouped view + form. */
+  theaterId: number | null
+  theaterName: string | null
+  theaterCity: string | null
 }
 
-export function useAdminSnacks(params: Record<string, any> = {}) {
+/**
+ * Params filter cho list snack — match BE SnackFilter.java.
+ * keyword search trên cả name + description (BE quy ước).
+ */
+export interface AdminSnackParams {
+  /** Chi nhánh — branch ADMIN auto-scope từ BE; SUPER_ADMIN có thể truyền để lọc. */
+  theaterId?: number
+  keyword?: string
+  category?: string       // POPCORN | DRINK | COMBO | SNACK
+  available?: boolean     // true / false / undefined = all
+  minPrice?: number
+  maxPrice?: number
+  includeDeleted?: boolean
+  page?: number
+  size?: number
+}
+
+export function useAdminSnacks(params: AdminSnackParams = {}) {
   return useQuery({
     queryKey: ['admin', 'snacks', params],
     queryFn: async () => {
-      const res = await api.get<ApiResponse<PageResponse<AdminSnack>>>('/api/snacks', { params: { ...params, includeDeleted: true } })
+      const res = await api.get<ApiResponse<PageResponse<AdminSnack>>>('/api/snacks', {
+        params: { includeDeleted: true, ...params },
+      })
       return res.data.data
     },
   })
@@ -64,5 +87,24 @@ export function useBulkRestoreSnacks() {
     mutationFn: async (ids: number[]) => { await api.post('/api/snacks/bulk-restore', { ids }) },
     onSuccess: () => { toast.success('Đã khôi phục thành công'); qc.invalidateQueries({ queryKey: ['admin', 'snacks'] }) },
     onError: (e) => toast.error(getErrorMessage(e, 'Lỗi')),
+  })
+}
+
+/** Upload ảnh cho 1 snack — action tách khỏi form (theo File Upload Rules). */
+export function useUploadSnackImage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: number; file: File }) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      await api.post(`/api/snacks/${id}/image`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    },
+    onSuccess: () => {
+      toast.success('Upload ảnh thành công')
+      qc.invalidateQueries({ queryKey: ['admin', 'snacks'] })
+    },
+    onError: () => toast.error('Upload ảnh thất bại'),
   })
 }

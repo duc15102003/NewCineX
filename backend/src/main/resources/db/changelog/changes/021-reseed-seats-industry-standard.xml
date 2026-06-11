@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Re-seed seats cho mọi phòng theo preset chuẩn industry (CGV/Lotte/BHD).
+        Áp dụng cho 4 RoomType:
+        - TWO_D   : 10×12, VIP C-G × 4-9, COUPLE row J, HANDICAP B1/B12, aisle 4/9
+        - THREE_D : 10×12, VIP C-H × 3-10, COUPLE row J, HANDICAP B1/B12, aisle 4/9
+        - IMAX    : 14×18, VIP D-J × 5-14, DELUXE F/G, HANDICAP C1/C18, aisle 5/14
+        - FOUR_DX : 8×10,  VIP C-F × 3-8,  HANDICAP B1/B10, aisle 5
+
+        CẢNH BÁO: Migration này XÓA toàn bộ seats + booking_seats hiện có. Chạy
+        trên DB có booking thật sẽ mất data. CineX dùng cho dev/staging — production
+        cần backup trước.
+    -->
+
+    <changeSet id="021-cleanup-old-seats" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            -- Bước 1: xóa booking_seats trước (FK đến seats)
+            DELETE FROM booking_seats;
+            -- Bước 2: xóa bookings (FK chain)
+            DELETE FROM bookings;
+            -- Bước 3: xóa seats
+            DELETE FROM seats;
+        </sql>
+    </changeSet>
+
+    <changeSet id="021-seed-seats-two-d" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            -- TWO_D: 10×12 = 120 vị trí
+            -- VIP zone C-G × 4-9, COUPLE row J, HANDICAP B1/B12, aisle cols 4 và 9
+            INSERT INTO seats (room_id, row_label, col_number, seat_number, seat_type, status, is_aisle, storage_state, version, created_at, updated_at)
+            SELECT
+                r.id,
+                CHAR(65 + rn.idx),
+                cn.num,
+                CHAR(65 + rn.idx) + CAST(cn.num AS NVARCHAR),
+                CASE
+                    WHEN CHAR(65 + rn.idx) = 'B' AND cn.num IN (1, 12) THEN 'HANDICAP'
+                    WHEN CHAR(65 + rn.idx) = 'J' THEN 'COUPLE'
+                    WHEN CHAR(65 + rn.idx) BETWEEN 'C' AND 'G' AND cn.num BETWEEN 4 AND 9 THEN 'VIP'
+                    ELSE 'STANDARD'
+                END,
+                'AVAILABLE',
+                CASE WHEN cn.num IN (4, 9) THEN 1 ELSE 0 END,
+                'ACTIVE', 0, GETDATE(), GETDATE()
+            FROM rooms r
+            CROSS JOIN (SELECT TOP 10 idx = ROW_NUMBER() OVER (ORDER BY (SELECT 1)) - 1
+                        FROM sys.all_objects) rn
+            CROSS JOIN (SELECT TOP 12 num = ROW_NUMBER() OVER (ORDER BY (SELECT 1))
+                        FROM sys.all_objects) cn
+            WHERE r.type = 'TWO_D' AND r.storage_state = 'ACTIVE';
+        </sql>
+    </changeSet>
+
+    <changeSet id="021-seed-seats-three-d" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            -- THREE_D: 10×12, VIP zone rộng hơn (kính 3D đắt) — C-H × 3-10
+            INSERT INTO seats (room_id, row_label, col_number, seat_number, seat_type, status, is_aisle, storage_state, version, created_at, updated_at)
+            SELECT
+                r.id,
+                CHAR(65 + rn.idx),
+                cn.num,
+                CHAR(65 + rn.idx) + CAST(cn.num AS NVARCHAR),
+                CASE
+                    WHEN CHAR(65 + rn.idx) = 'B' AND cn.num IN (1, 12) THEN 'HANDICAP'
+                    WHEN CHAR(65 + rn.idx) = 'J' THEN 'COUPLE'
+                    WHEN CHAR(65 + rn.idx) BETWEEN 'C' AND 'H' AND cn.num BETWEEN 3 AND 10 THEN 'VIP'
+                    ELSE 'STANDARD'
+                END,
+                'AVAILABLE',
+                CASE WHEN cn.num IN (4, 9) THEN 1 ELSE 0 END,
+                'ACTIVE', 0, GETDATE(), GETDATE()
+            FROM rooms r
+            CROSS JOIN (SELECT TOP 10 idx = ROW_NUMBER() OVER (ORDER BY (SELECT 1)) - 1
+                        FROM sys.all_objects) rn
+            CROSS JOIN (SELECT TOP 12 num = ROW_NUMBER() OVER (ORDER BY (SELECT 1))
+                        FROM sys.all_objects) cn
+            WHERE r.type = 'THREE_D' AND r.storage_state = 'ACTIVE';
+        </sql>
+    </changeSet>
+
+    <changeSet id="021-seed-seats-imax" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            -- IMAX: 14×18, VIP D-J × 5-14, DELUXE F/G (override VIP), HANDICAP C1/C18, aisle 5/14
+            INSERT INTO seats (room_id, row_label, col_number, seat_number, seat_type, status, is_aisle, storage_state, version, created_at, updated_at)
+            SELECT
+                r.id,
+                CHAR(65 + rn.idx),
+                cn.num,
+                CHAR(65 + rn.idx) + CAST(cn.num AS NVARCHAR),
+                CASE
+                    WHEN CHAR(65 + rn.idx) = 'C' AND cn.num IN (1, 18) THEN 'HANDICAP'
+                    WHEN CHAR(65 + rn.idx) IN ('F', 'G') THEN 'DELUXE'
+                    WHEN CHAR(65 + rn.idx) BETWEEN 'D' AND 'J' AND cn.num BETWEEN 5 AND 14 THEN 'VIP'
+                    ELSE 'STANDARD'
+                END,
+                'AVAILABLE',
+                CASE WHEN cn.num IN (5, 14) THEN 1 ELSE 0 END,
+                'ACTIVE', 0, GETDATE(), GETDATE()
+            FROM rooms r
+            CROSS JOIN (SELECT TOP 14 idx = ROW_NUMBER() OVER (ORDER BY (SELECT 1)) - 1
+                        FROM sys.all_objects) rn
+            CROSS JOIN (SELECT TOP 18 num = ROW_NUMBER() OVER (ORDER BY (SELECT 1))
+                        FROM sys.all_objects) cn
+            WHERE r.type = 'IMAX' AND r.storage_state = 'ACTIVE';
+        </sql>
+    </changeSet>
+
+    <changeSet id="021-seed-seats-four-dx" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            -- FOUR_DX: 8×10, VIP C-F × 3-8, HANDICAP B1/B10, aisle col 5
+            -- KHÔNG có COUPLE/SWEETBOX vì ghế đặc biệt rung/gió
+            INSERT INTO seats (room_id, row_label, col_number, seat_number, seat_type, status, is_aisle, storage_state, version, created_at, updated_at)
+            SELECT
+                r.id,
+                CHAR(65 + rn.idx),
+                cn.num,
+                CHAR(65 + rn.idx) + CAST(cn.num AS NVARCHAR),
+                CASE
+                    WHEN CHAR(65 + rn.idx) = 'B' AND cn.num IN (1, 10) THEN 'HANDICAP'
+                    WHEN CHAR(65 + rn.idx) BETWEEN 'C' AND 'F' AND cn.num BETWEEN 3 AND 8 THEN 'VIP'
+                    ELSE 'STANDARD'
+                END,
+                'AVAILABLE',
+                CASE WHEN cn.num = 5 THEN 1 ELSE 0 END,
+                'ACTIVE', 0, GETDATE(), GETDATE()
+            FROM rooms r
+            CROSS JOIN (SELECT TOP 8 idx = ROW_NUMBER() OVER (ORDER BY (SELECT 1)) - 1
+                        FROM sys.all_objects) rn
+            CROSS JOIN (SELECT TOP 10 num = ROW_NUMBER() OVER (ORDER BY (SELECT 1))
+                        FROM sys.all_objects) cn
+            WHERE r.type = 'FOUR_DX' AND r.storage_state = 'ACTIVE';
+        </sql>
+    </changeSet>
+
+    <changeSet id="021-update-rooms-total-seats" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            -- Cập nhật total_seats cho mỗi room — đếm seat thật bán được (loại trừ aisle/blocked)
+            UPDATE r
+            SET total_seats = (
+                SELECT COUNT(*)
+                FROM seats s
+                WHERE s.room_id = r.id
+                  AND s.is_aisle = 0
+                  AND s.status != 'BLOCKED'
+                  AND s.storage_state = 'ACTIVE'
+            )
+            FROM rooms r
+            WHERE r.storage_state = 'ACTIVE';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

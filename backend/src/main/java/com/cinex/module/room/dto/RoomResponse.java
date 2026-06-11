@@ -13,6 +13,12 @@ public class RoomResponse {
 
     private Long id;
     private String storageState;
+
+    /** Sau F1: phòng thuộc chi nhánh nào. FE dùng để hiển thị nhãn "Chi nhánh — Phòng". */
+    private Long theaterId;
+    private String theaterName;
+    private String theaterCity;
+
     private String name;
     private RoomType type;
     private Integer totalSeats;

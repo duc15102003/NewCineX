@@ -2,10 +2,12 @@ package com.cinex.module.statistics.repository;
 
 import com.cinex.module.statistics.dto.OccupancyStatistics;
 import com.cinex.module.statistics.dto.RevenueStatistics;
+import com.cinex.module.statistics.dto.TopMovieRunStatistics;
 import com.cinex.module.statistics.dto.TopMovieStatistics;
 import com.cinex.module.statistics.dto.TopSnackStatistics;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -14,89 +16,71 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * [Repository Pattern — Standalone @Repository]
+ * Custom Repository cho thống kê (không extends JpaRepository vì JOIN nhiều bảng).
  *
- * Đây là Custom Repository, KHÔNG extends JpaRepository vì:
- * - JpaRepository dành cho CRUD 1 entity (VD: MovieRepository quản lý Movie)
- * - Thống kê cần JOIN nhiều bảng (Booking + Payment + Snack + Movie + ...)
- *   → không thuộc 1 entity cụ thể nào
- *
- * Trong các dự án thực tế, analytics/reporting luôn dùng cách này:
- * - @Repository class + @PersistenceContext EntityManager
- * - Mỗi method = 1 query rõ ràng, có tên mô tả mục đích
- * - Service chỉ gọi repository, KHÔNG viết query
- *
- * So sánh với cách cũ (EntityManager trong Service):
- *   SAI:  Service chứa JPQL → vi phạm Single Responsibility
- *         Service vừa xử lý logic VỪA truy vấn DB
- *   ĐÚNG: Repository chứa JPQL → đúng vai trò "data access layer"
- *         Service chỉ gọi repository + xử lý business logic
+ * <p><b>theaterId param:</b> null = tất cả chi nhánh (SUPER_ADMIN "Tất cả");
+ * có giá trị = lọc theo chi nhánh cụ thể (SUPER_ADMIN chọn 1 hoặc branch ADMIN).
+ * Mỗi method nhận theaterId optional và thêm WHERE clause khi != null.
  */
 @Repository
 public class StatisticsRepository {
 
-    // [Dependency Injection] Spring tự inject EntityManager
-    // @PersistenceContext là cách chuẩn inject EntityManager (thay vì @Autowired)
-    // vì nó đảm bảo mỗi thread có EntityManager riêng (thread-safe)
     @PersistenceContext
     private EntityManager em;
 
     // ──────────────────────────────────────────────────────────────
-    // OVERVIEW — Các query đếm tổng quan cho dashboard
+    // OVERVIEW — đếm + tổng quan cho dashboard
     // ──────────────────────────────────────────────────────────────
 
-    /**
-     * Đếm số booking hôm nay (chỉ tính CONFIRMED + CHECKED_IN, bỏ qua CANCELLED/EXPIRED).
-     *
-     * Tại sao dùng confirmedAt thay vì createdAt?
-     * → Vì booking được tạo ở trạng thái HOLDING (chưa thanh toán),
-     *   chỉ khi thanh toán xong mới chuyển sang CONFIRMED và ghi confirmedAt.
-     *   Đếm theo confirmedAt mới phản ánh đúng doanh thu thực.
-     */
-    public Long countTodayBookings(LocalDateTime start, LocalDateTime end) {
-        return (Long) em.createQuery(
-                        "SELECT COUNT(b) FROM Booking b " +
-                                "WHERE b.status IN ('CONFIRMED', 'CHECKED_IN') " +
-                                "AND b.confirmedAt >= :start AND b.confirmedAt < :end")
+    public Long countTodayBookings(LocalDateTime start, LocalDateTime end, Long theaterId) {
+        String jpql = "SELECT COUNT(b) FROM Booking b " +
+                "WHERE b.status IN ('CONFIRMED', 'CHECKED_IN') " +
+                "AND b.confirmedAt >= :start AND b.confirmedAt < :end ";
+        if (theaterId != null) {
+            jpql += "AND b.theater.id = :theaterId ";
+        }
+        Query q = em.createQuery(jpql)
                 .setParameter("start", start)
-                .setParameter("end", end)
-                .getSingleResult();
+                .setParameter("end", end);
+        if (theaterId != null) q.setParameter("theaterId", theaterId);
+        return (Long) q.getSingleResult();
     }
 
     /**
-     * Doanh thu vé hôm nay — tính từ bảng Payment (chỉ status = COMPLETED).
-     *
-     * Tại sao không tính từ Booking.totalAmount?
-     * → Vì Booking có thể bị hủy (refund), Payment.status = COMPLETED
-     *   mới là tiền thực sự đã thu được.
-     *
-     * COALESCE(SUM(...), 0): nếu không có payment nào → trả 0 thay vì NULL.
+     * Doanh thu vé hôm nay — dùng Booking.theater direct field (snapshot immutable
+     * lúc booking tạo). Tránh JOIN chain showtime.room.theater dài + vỡ nếu showtime
+     * move room cross-theater sau khi booking thanh toán.
      */
-    public BigDecimal sumTodayRevenue(LocalDateTime start, LocalDateTime end) {
-        return (BigDecimal) em.createQuery(
-                        "SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +
-                                "WHERE p.status = 'COMPLETED' " +
-                                "AND p.paidAt >= :start AND p.paidAt < :end")
+    public BigDecimal sumTodayRevenue(LocalDateTime start, LocalDateTime end, Long theaterId) {
+        String jpql = "SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +
+                "WHERE p.status = 'COMPLETED' " +
+                "AND p.paidAt >= :start AND p.paidAt < :end ";
+        if (theaterId != null) {
+            jpql += "AND p.booking.theater.id = :theaterId ";
+        }
+        Query q = em.createQuery(jpql)
                 .setParameter("start", start)
-                .setParameter("end", end)
-                .getSingleResult();
+                .setParameter("end", end);
+        if (theaterId != null) q.setParameter("theaterId", theaterId);
+        return (BigDecimal) q.getSingleResult();
     }
 
-    /**
-     * Doanh thu snack POS hôm nay — tính từ bảng SnackOrder.
-     * Lọc bỏ đơn đã bị xóa mềm (ARCHIVED).
-     */
-    public BigDecimal sumTodaySnackRevenue(LocalDateTime start, LocalDateTime end) {
-        return (BigDecimal) em.createQuery(
-                        "SELECT COALESCE(SUM(o.totalAmount), 0) FROM SnackOrder o " +
-                                "WHERE o.createdAt >= :start AND o.createdAt < :end " +
-                                "AND (o.storageState IS NULL OR o.storageState <> 'ARCHIVED')")
+    /** SnackOrder có field theater trực tiếp (per-theater). */
+    public BigDecimal sumTodaySnackRevenue(LocalDateTime start, LocalDateTime end, Long theaterId) {
+        String jpql = "SELECT COALESCE(SUM(o.totalAmount), 0) FROM SnackOrder o " +
+                "WHERE o.createdAt >= :start AND o.createdAt < :end " +
+                "AND (o.storageState IS NULL OR o.storageState <> 'ARCHIVED') ";
+        if (theaterId != null) {
+            jpql += "AND o.theater.id = :theaterId ";
+        }
+        Query q = em.createQuery(jpql)
                 .setParameter("start", start)
-                .setParameter("end", end)
-                .getSingleResult();
+                .setParameter("end", end);
+        if (theaterId != null) q.setParameter("theaterId", theaterId);
+        return (BigDecimal) q.getSingleResult();
     }
 
-    /** Tổng user chưa bị xóa. */
+    /** User là SHARED entity (không thuộc chi nhánh) — KHÔNG filter theo theaterId. */
     public Long countActiveUsers() {
         return (Long) em.createQuery(
                         "SELECT COUNT(u) FROM User u " +
@@ -104,7 +88,7 @@ public class StatisticsRepository {
                 .getSingleResult();
     }
 
-    /** Tổng phim chưa bị xóa. */
+    /** Movie là SHARED entity (cùng phim chiếu nhiều rạp) — KHÔNG filter theo theaterId. */
     public Long countActiveMovies() {
         return (Long) em.createQuery(
                         "SELECT COUNT(m) FROM Movie m " +
@@ -112,49 +96,52 @@ public class StatisticsRepository {
                 .getSingleResult();
     }
 
-    /** Tổng phòng chiếu chưa bị xóa. */
-    public Long countActiveRooms() {
-        return (Long) em.createQuery(
-                        "SELECT COUNT(r) FROM Room r " +
-                                "WHERE r.storageState IS NULL OR r.storageState <> 'ARCHIVED'")
-                .getSingleResult();
+    public Long countActiveRooms(Long theaterId) {
+        String jpql = "SELECT COUNT(r) FROM Room r " +
+                "WHERE (r.storageState IS NULL OR r.storageState <> 'ARCHIVED') ";
+        if (theaterId != null) {
+            jpql += "AND r.theater.id = :theaterId ";
+        }
+        Query q = em.createQuery(jpql);
+        if (theaterId != null) q.setParameter("theaterId", theaterId);
+        return (Long) q.getSingleResult();
     }
 
-    /** Tổng suất chiếu hôm nay. */
-    public Long countTodayShowtimes(LocalDateTime start, LocalDateTime end) {
-        return (Long) em.createQuery(
-                        "SELECT COUNT(s) FROM Showtime s " +
-                                "WHERE s.startTime >= :start AND s.startTime < :end " +
-                                "AND (s.storageState IS NULL OR s.storageState <> 'ARCHIVED')")
+    public Long countTodayShowtimes(LocalDateTime start, LocalDateTime end, Long theaterId) {
+        String jpql = "SELECT COUNT(s) FROM Showtime s " +
+                "WHERE s.startTime >= :start AND s.startTime < :end " +
+                "AND (s.storageState IS NULL OR s.storageState <> 'ARCHIVED') ";
+        if (theaterId != null) {
+            jpql += "AND s.room.theater.id = :theaterId ";
+        }
+        Query q = em.createQuery(jpql)
                 .setParameter("start", start)
-                .setParameter("end", end)
-                .getSingleResult();
+                .setParameter("end", end);
+        if (theaterId != null) q.setParameter("theaterId", theaterId);
+        return (Long) q.getSingleResult();
     }
 
     // ──────────────────────────────────────────────────────────────
-    // REVENUE — Doanh thu theo ngày (FE vẽ chart)
+    // REVENUE — Doanh thu theo ngày
     // ──────────────────────────────────────────────────────────────
 
-    /**
-     * Doanh thu theo ngày — gom nhóm Payment.paidAt theo ngày.
-     *
-     * CAST(p.paidAt AS LocalDate): chuyển datetime → date để GROUP BY theo ngày.
-     * Ví dụ: 2026-05-27T10:30 và 2026-05-27T14:00 → cùng nhóm 2026-05-27.
-     *
-     * Kết quả: mỗi dòng = [ngày, tổng doanh thu, số giao dịch]
-     */
     @SuppressWarnings("unchecked")
-    public List<RevenueStatistics> findRevenueByDateRange(LocalDate from, LocalDate to) {
-        List<Object[]> rows = em.createQuery(
-                        "SELECT CAST(p.paidAt AS LocalDate), SUM(p.amount), COUNT(p) " +
-                                "FROM Payment p " +
-                                "WHERE p.status = 'COMPLETED' " +
-                                "AND p.paidAt >= :start AND p.paidAt < :end " +
-                                "GROUP BY CAST(p.paidAt AS LocalDate) " +
-                                "ORDER BY CAST(p.paidAt AS LocalDate)")
+    public List<RevenueStatistics> findRevenueByDateRange(LocalDate from, LocalDate to, Long theaterId) {
+        String jpql = "SELECT CAST(p.paidAt AS LocalDate), SUM(p.amount), COUNT(p) " +
+                "FROM Payment p " +
+                "WHERE p.status = 'COMPLETED' " +
+                "AND p.paidAt >= :start AND p.paidAt < :end ";
+        if (theaterId != null) {
+            jpql += "AND p.booking.theater.id = :theaterId ";
+        }
+        jpql += "GROUP BY CAST(p.paidAt AS LocalDate) " +
+                "ORDER BY CAST(p.paidAt AS LocalDate)";
+
+        Query q = em.createQuery(jpql)
                 .setParameter("start", from.atStartOfDay())
-                .setParameter("end", to.plusDays(1).atStartOfDay())
-                .getResultList();
+                .setParameter("end", to.plusDays(1).atStartOfDay());
+        if (theaterId != null) q.setParameter("theaterId", theaterId);
+        List<Object[]> rows = q.getResultList();
 
         return rows.stream()
                 .map(r -> new RevenueStatistics(
@@ -165,26 +152,11 @@ public class StatisticsRepository {
     }
 
     // ──────────────────────────────────────────────────────────────
-    // TOP MOVIES — Phim bán chạy nhất (theo số vé)
+    // TOP MOVIES
     // ──────────────────────────────────────────────────────────────
 
-    /**
-     * Top phim bán chạy — đếm số ghế đã đặt (BookingSeat) cho mỗi phim.
-     *
-     * Chuỗi JOIN: BookingSeat → Booking → Showtime → Movie
-     * Giải thích: mỗi BookingSeat thuộc 1 Booking, Booking thuộc 1 Showtime,
-     *             Showtime chiếu 1 Movie → đếm BookingSeat = đếm vé cho phim đó.
-     *
-     * Filter quan trọng:
-     * - b.status IN ('CONFIRMED', 'CHECKED_IN'): CHỈ tính vé hợp lệ
-     *   → loại bỏ CANCELLED (đã hủy), EXPIRED (hết hạn), HOLDING (chưa thanh toán)
-     * - bs.status = 'BOOKED': chỉ tính ghế đã xác nhận (không tính HELD/RELEASED)
-     *
-     * ((Number) r[x]).longValue(): SQL Server trả Integer cho COUNT/SUM,
-     * nhưng Java cần Long → dùng Number để tránh ClassCastException.
-     */
     @SuppressWarnings("unchecked")
-    public List<TopMovieStatistics> findTopMovies(int limit, LocalDate from, LocalDate to) {
+    public List<TopMovieStatistics> findTopMovies(int limit, LocalDate from, LocalDate to, Long theaterId) {
         String jpql = "SELECT m.id, m.title, m.posterUrl, COUNT(bs), SUM(bs.price) " +
                 "FROM BookingSeat bs " +
                 "JOIN bs.booking b " +
@@ -195,14 +167,18 @@ public class StatisticsRepository {
         if (from != null && to != null) {
             jpql += "AND b.confirmedAt >= :start AND b.confirmedAt < :end ";
         }
+        if (theaterId != null) {
+            jpql += "AND b.theater.id = :theaterId ";
+        }
         jpql += "GROUP BY m.id, m.title, m.posterUrl ORDER BY COUNT(bs) DESC";
 
-        var query = em.createQuery(jpql);
+        Query q = em.createQuery(jpql);
         if (from != null && to != null) {
-            query.setParameter("start", from.atStartOfDay());
-            query.setParameter("end", to.plusDays(1).atStartOfDay());
+            q.setParameter("start", from.atStartOfDay());
+            q.setParameter("end", to.plusDays(1).atStartOfDay());
         }
-        List<Object[]> rows = query.setMaxResults(limit).getResultList();
+        if (theaterId != null) q.setParameter("theaterId", theaterId);
+        List<Object[]> rows = q.setMaxResults(limit).getResultList();
 
         return rows.stream()
                 .map(r -> new TopMovieStatistics(
@@ -215,21 +191,57 @@ public class StatisticsRepository {
     }
 
     // ──────────────────────────────────────────────────────────────
-    // TOP SNACKS — Snack bán chạy nhất tại POS
+    // TOP MOVIE RUNS — group theo MovieRun (per-theater)
     // ──────────────────────────────────────────────────────────────
 
-    /**
-     * Top snack bán chạy — tính từ SnackOrderItem (mỗi dòng = 1 snack trong 1 đơn).
-     *
-     * JOIN oi.snackOrder o: để lọc đơn hàng đã bị xóa mềm (ARCHIVED).
-     * SUM(oi.quantity): tổng số lượng bán ra cho mỗi snack.
-     * SUM(oi.price * oi.quantity): tổng doanh thu (giá × số lượng).
-     *
-     * Lưu ý: oi.price là giá tại thời điểm đặt, không phải giá hiện tại.
-     * → Đảm bảo thống kê phản ánh đúng doanh thu thực (Price Snapshot pattern).
-     */
     @SuppressWarnings("unchecked")
-    public List<TopSnackStatistics> findTopSnacks(int limit, LocalDate from, LocalDate to) {
+    public List<TopMovieRunStatistics> findTopMovieRuns(int limit, LocalDate from, LocalDate to, Long theaterId) {
+        String jpql = "SELECT mr.id, m.id, m.title, m.posterUrl, mr.runType, mr.startDate, mr.endDate, " +
+                "       COUNT(bs), SUM(bs.price) " +
+                "FROM BookingSeat bs " +
+                "JOIN bs.booking b " +
+                "JOIN b.showtime s " +
+                "JOIN s.movieRun mr " +
+                "JOIN mr.movie m " +
+                "WHERE b.status IN ('CONFIRMED', 'CHECKED_IN') " +
+                "AND bs.status = 'BOOKED' ";
+        if (from != null && to != null) {
+            jpql += "AND b.confirmedAt >= :start AND b.confirmedAt < :end ";
+        }
+        if (theaterId != null) {
+            jpql += "AND b.theater.id = :theaterId ";
+        }
+        jpql += "GROUP BY mr.id, m.id, m.title, m.posterUrl, mr.runType, mr.startDate, mr.endDate " +
+                "ORDER BY COUNT(bs) DESC";
+
+        Query q = em.createQuery(jpql);
+        if (from != null && to != null) {
+            q.setParameter("start", from.atStartOfDay());
+            q.setParameter("end", to.plusDays(1).atStartOfDay());
+        }
+        if (theaterId != null) q.setParameter("theaterId", theaterId);
+        List<Object[]> rows = q.setMaxResults(limit).getResultList();
+
+        return rows.stream()
+                .map(r -> new TopMovieRunStatistics(
+                        ((Number) r[0]).longValue(),
+                        ((Number) r[1]).longValue(),
+                        (String) r[2],
+                        (String) r[3],
+                        r[4] != null ? r[4].toString() : null,
+                        (LocalDate) r[5],
+                        (LocalDate) r[6],
+                        ((Number) r[7]).longValue(),
+                        toBigDecimal(r[8])))
+                .toList();
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // TOP SNACKS
+    // ──────────────────────────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    public List<TopSnackStatistics> findTopSnacks(int limit, LocalDate from, LocalDate to, Long theaterId) {
         String jpql = "SELECT s.id, s.name, s.imageUrl, SUM(oi.quantity), SUM(oi.price * oi.quantity) " +
                 "FROM SnackOrderItem oi " +
                 "JOIN oi.snack s " +
@@ -238,14 +250,18 @@ public class StatisticsRepository {
         if (from != null && to != null) {
             jpql += "AND o.createdAt >= :start AND o.createdAt < :end ";
         }
+        if (theaterId != null) {
+            jpql += "AND o.theater.id = :theaterId ";
+        }
         jpql += "GROUP BY s.id, s.name, s.imageUrl ORDER BY SUM(oi.quantity) DESC";
 
-        var query = em.createQuery(jpql);
+        Query q = em.createQuery(jpql);
         if (from != null && to != null) {
-            query.setParameter("start", from.atStartOfDay());
-            query.setParameter("end", to.plusDays(1).atStartOfDay());
+            q.setParameter("start", from.atStartOfDay());
+            q.setParameter("end", to.plusDays(1).atStartOfDay());
         }
-        List<Object[]> rows = query.setMaxResults(limit).getResultList();
+        if (theaterId != null) q.setParameter("theaterId", theaterId);
+        List<Object[]> rows = q.setMaxResults(limit).getResultList();
 
         return rows.stream()
                 .map(r -> new TopSnackStatistics(
@@ -258,41 +274,34 @@ public class StatisticsRepository {
     }
 
     // ──────────────────────────────────────────────────────────────
-    // OCCUPANCY — Tỉ lệ lấp đầy ghế
+    // OCCUPANCY
     // ──────────────────────────────────────────────────────────────
 
-    /**
-     * Tỉ lệ lấp đầy ghế theo từng suất chiếu trong ngày.
-     *
-     * Subquery đếm ghế đã đặt cho mỗi suất chiếu:
-     * - JOIN BookingSeat qua booking.showtime.id
-     * - Chỉ tính ghế BOOKED thuộc booking CONFIRMED/CHECKED_IN
-     *   → loại bỏ vé đã hủy (CANCELLED) và hết hạn (EXPIRED)
-     *
-     * COALESCE(..., 0): suất chiếu chưa có ai đặt → bookedSeats = 0.
-     *
-     * Occupancy rate = bookedSeats / totalSeats × 100 (%).
-     */
     @SuppressWarnings("unchecked")
-    public List<OccupancyStatistics> findOccupancyByDate(LocalDate date) {
+    public List<OccupancyStatistics> findOccupancyByDate(LocalDate date, Long theaterId) {
         LocalDateTime dayStart = date.atStartOfDay();
         LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
 
-        List<Object[]> rows = em.createQuery(
-                        "SELECT s.id, m.title, r.name, s.startTime, r.totalSeats, " +
-                                "COALESCE((SELECT COUNT(bs) FROM BookingSeat bs " +
-                                "   WHERE bs.booking.showtime.id = s.id " +
-                                "   AND bs.status = 'BOOKED' " +
-                                "   AND bs.booking.status IN ('CONFIRMED', 'CHECKED_IN')), 0) " +
-                                "FROM Showtime s " +
-                                "JOIN s.movie m " +
-                                "JOIN s.room r " +
-                                "WHERE s.startTime >= :start AND s.startTime < :end " +
-                                "AND (s.storageState IS NULL OR s.storageState <> 'ARCHIVED') " +
-                                "ORDER BY s.startTime")
+        String jpql = "SELECT s.id, m.title, r.name, s.startTime, r.totalSeats, " +
+                "COALESCE((SELECT COUNT(bs) FROM BookingSeat bs " +
+                "   WHERE bs.booking.showtime.id = s.id " +
+                "   AND bs.status = 'BOOKED' " +
+                "   AND bs.booking.status IN ('CONFIRMED', 'CHECKED_IN')), 0) " +
+                "FROM Showtime s " +
+                "JOIN s.movie m " +
+                "JOIN s.room r " +
+                "WHERE s.startTime >= :start AND s.startTime < :end " +
+                "AND (s.storageState IS NULL OR s.storageState <> 'ARCHIVED') ";
+        if (theaterId != null) {
+            jpql += "AND r.theater.id = :theaterId ";
+        }
+        jpql += "ORDER BY s.startTime";
+
+        Query q = em.createQuery(jpql)
                 .setParameter("start", dayStart)
-                .setParameter("end", dayEnd)
-                .getResultList();
+                .setParameter("end", dayEnd);
+        if (theaterId != null) q.setParameter("theaterId", theaterId);
+        List<Object[]> rows = q.getResultList();
 
         return rows.stream()
                 .map(r -> {
@@ -314,18 +323,9 @@ public class StatisticsRepository {
     }
 
     // ──────────────────────────────────────────────────────────────
-    // HELPER — Chuyển đổi kiểu dữ liệu an toàn
+    // HELPER
     // ──────────────────────────────────────────────────────────────
 
-    /**
-     * SQL Server trả các kiểu số khác nhau cho SUM/COUNT:
-     * - SUM(bigint) → Long
-     * - SUM(int) → Integer
-     * - SUM(decimal) → BigDecimal
-     * - COUNT → Long hoặc Integer tùy driver
-     *
-     * Method này đảm bảo chuyển đổi an toàn sang BigDecimal.
-     */
     private BigDecimal toBigDecimal(Object value) {
         if (value == null) return BigDecimal.ZERO;
         if (value instanceof BigDecimal) return (BigDecimal) value;

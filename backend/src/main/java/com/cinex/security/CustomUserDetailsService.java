@@ -23,12 +23,15 @@ public class CustomUserDetailsService implements UserDetailsService {
         User user = userRepository.findActiveByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
-        return new org.springframework.security.core.userdetails.User(
+        // theaterId — gắn vào principal để SecurityService access không cần query DB
+        Long theaterId = user.getTheater() != null ? user.getTheater().getId() : null;
+
+        return new CinexUserPrincipal(
                 user.getUsername(),
                 user.getPassword(),
                 user.isEnabled(),
-                true, true, true,
-                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
+                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())),
+                theaterId
         );
     }
 }

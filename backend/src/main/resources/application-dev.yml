@@ -1,9 +1,28 @@
 spring:
+  # Load application-local.yml (gitignored) để override credentials.
+  # Nếu file không tồn tại, Spring vẫn chạy với default ở dưới.
+  #
+  # LƯU Ý: KHÔNG dùng `spring.profiles.include: local` trong file profile-specific
+  # (vi phạm Spring Boot 2.4+ rules → InvalidConfigDataPropertyException). Dùng
+  # `config.import` thay thế — đọc file trực tiếp, không cần activate profile.
+  config:
+    import: "optional:classpath:application-local.yml"
+
   datasource:
     url: jdbc:sqlserver://${DB_HOST:localhost}:${DB_PORT:1433};databaseName=${DB_NAME:cinex};encrypt=false;trustServerCertificate=true
     username: ${DB_USERNAME:sa}
     password: ${DB_PASSWORD:CineX@2026}
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+    # HikariCP — connection pool (mặc định Spring Boot)
+    # maximum-pool-size: giới hạn connection mở cùng lúc (tránh quá tải DB)
+    # leak-detection-threshold: log warning nếu connection giữ > 30s (giúp phát hiện connection leak)
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
 
   jpa:
     hibernate:
@@ -21,17 +40,64 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      # Lettuce pool — reuse connection thay vì mở mới mỗi op
+      # timeout: command timeout (3s là an toàn cho local dev)
+      timeout: 3000ms
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
 
   mail:
+    # KHÔNG default credentials — mỗi dev tự set Mailtrap account riêng trong
+    # application-local.yml (gitignored). Tránh:
+    #   - 2 dev test cùng lúc → inbox chung → confused
+    #   - 1 dev hit rate limit → block hết
+    #   - Compromised credentials → khó rotate vì rải khắp git history
+    # Xem application-local.yml.example để biết template Mailtrap / Gmail.
     host: ${MAIL_HOST:sandbox.smtp.mailtrap.io}
     port: ${MAIL_PORT:2525}
-    username: ${MAIL_USERNAME:b80f8260dfbae4}
-    password: ${MAIL_PASSWORD:f3596ae5d769d4}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
 
+# ============================================================
+# DEV-ONLY DEFAULTS — restore lại để local DX không bị block
+# ============================================================
+# Trade-off: dev profile có default cho secrets sandbox; PRODUCTION KHÔNG bị
+# ảnh hưởng vì application.yml (baseline) đã yêu cầu env không default — chỉ
+# load khi SPRING_PROFILES_ACTIVE=prod (không load file dev này).
+#
+# CẢNH BÁO QUAN TRỌNG khi deploy production:
+#   - PHẢI set SPRING_PROFILES_ACTIVE=prod (KHÔNG để mặc định dev)
+#   - PHẢI set env JWT_SECRET, MOMO_ACCESS_KEY, MOMO_SECRET_KEY, DB_PASSWORD,
+#     MAIL_USERNAME, MAIL_PASSWORD, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+#   - Application.yml KHÔNG có default cho các secret này → fail-fast nếu thiếu
+#
+# Dev local: nếu muốn override default, tạo application-local.yml (gitignored)
+# với key tương ứng — xem application-local.yml.example.
+app:
+  jwt:
+    # JWT secret dev — base64 encoded 256-bit. ⚠️ KHÔNG dùng giá trị này ở prod.
+    # Production: set env JWT_SECRET (gen bằng: openssl rand -base64 32)
+    secret: ${JWT_SECRET:Y2luZXgtZGV2LWp3dC1zZWNyZXQta2V5LTI1Ni1iaXQtZG8tbm90LXVzZS1pbi1wcm9kdWN0aW9u}
+
+momo:
+  # MoMo sandbox keys (public test credentials từ MoMo docs — không phải production).
+  # Đăng ký partner thật tại MoMo Business để có keys riêng cho prod.
+  access-key: ${MOMO_ACCESS_KEY:F8BBA842ECF85}
+  secret-key: ${MOMO_SECRET_KEY:K951B6PE1waDMi640xX08PD3vg6EkVlz}
+
+cloudinary:
+  # Placeholder — set env nếu cần dùng upload ảnh thật
+  api-key: ${CLOUDINARY_API_KEY:dev-placeholder-set-CLOUDINARY_API_KEY-env}
+  api-secret: ${CLOUDINARY_API_SECRET:dev-placeholder-set-CLOUDINARY_API_SECRET-env}
+
 logging:
   level:
-    com.vancinema: DEBUG
+    com.cinex: DEBUG
     org.springframework.security: DEBUG

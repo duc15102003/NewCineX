@@ -13,6 +13,10 @@ import lombok.Setter;
 @Setter
 public class RoomRequest {
 
+    /** Sau F1: phòng phải thuộc 1 chi nhánh cụ thể. */
+    @NotNull(message = "Chi nhánh là bắt buộc")
+    private Long theaterId;
+
     @NotBlank(message = "Tên phòng là bắt buộc")
     @Size(max = 50, message = "Tên phòng tối đa 50 ký tự")
     private String name;

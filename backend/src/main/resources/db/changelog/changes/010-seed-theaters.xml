@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- 5 chi nhánh CineX: HN, HP, QN, DN, HCM -->
+
+    <changeSet id="010-seed-theaters" author="cinex">
+        <sql>
+            INSERT INTO theaters (code, name, address, city, hotline, email, latitude, longitude, status, storage_state)
+            VALUES
+            (N'CNX-HN',  N'CineX - Hà Nội',     N'Tầng 5, Vincom Bà Triệu, 191 Bà Triệu, Hai Bà Trưng, Hà Nội',           N'Hà Nội',      N'1900-1900',  N'hn@cinex.vn',  21.011223, 105.847878, N'ACTIVE', N'ACTIVE'),
+            (N'CNX-HP',  N'CineX - Hải Phòng',   N'Tầng 4, Vincom Plaza Hải Phòng, 1 Lê Thánh Tông, Ngô Quyền, Hải Phòng', N'Hải Phòng',   N'1900-1901',  N'hp@cinex.vn',  20.856578, 106.683333, N'ACTIVE', N'ACTIVE'),
+            (N'CNX-QN',  N'CineX - Quảng Ninh',  N'Tầng 3, Vincom Hạ Long, đường Trần Hưng Đạo, Hồng Hải, TP Hạ Long, Quảng Ninh', N'Quảng Ninh', N'1900-1902', N'qn@cinex.vn', 20.954167, 107.075556, N'ACTIVE', N'ACTIVE'),
+            (N'CNX-DN',  N'CineX - Đà Nẵng',     N'Tầng 4, Vincom Plaza Đà Nẵng, 910A Ngô Quyền, An Hải Bắc, Sơn Trà, Đà Nẵng', N'Đà Nẵng',  N'1900-1903', N'dn@cinex.vn',  16.067499, 108.224400, N'ACTIVE', N'ACTIVE'),
+            (N'CNX-HCM', N'CineX - Hồ Chí Minh', N'Tầng 5, Vincom Center Đồng Khởi, 72 Lê Thánh Tôn, Bến Nghé, Quận 1, TP HCM', N'TP Hồ Chí Minh', N'1900-1904', N'hcm@cinex.vn', 10.777333, 106.701811, N'ACTIVE', N'ACTIVE');
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

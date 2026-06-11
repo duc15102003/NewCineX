@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Fix-forward cho migration 019:
+        Migration 019 cố DROP constraint với tên CK_seats_seat_type / CK_seats_status,
+        nhưng constraint THỰC TẾ trong migration 008 có tên chk_seats_type / chk_seats_status.
+
+        Hậu quả: 019 DROP fail (MARK_RAN qua preCondition) → old constraint với 3 type
+        (STANDARD/VIP/COUPLE) vẫn active → INSERT SWEETBOX/DELUXE/HANDICAP → vi phạm CHECK.
+
+        Migration 020 này drop ĐÚNG TÊN + add lại constraint với 6 type mới.
+    -->
+
+    <changeSet id="020-drop-old-chk-seats-type" author="cinex">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'chk_seats_type'
+            </sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE seats DROP CONSTRAINT chk_seats_type;</sql>
+    </changeSet>
+
+    <changeSet id="020-drop-old-chk-seats-status" author="cinex">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'chk_seats_status'
+            </sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE seats DROP CONSTRAINT chk_seats_status;</sql>
+    </changeSet>
+
+    <!-- Cleanup: nếu 019 đã add CK_seats_seat_type/CK_seats_status với cùng nội dung,
+         drop để tránh có 2 constraint cùng kiểm tra (gây nhiễu khi debug). -->
+    <changeSet id="020-cleanup-CK-seats-type-from-019" author="cinex">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_seats_seat_type'
+            </sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE seats DROP CONSTRAINT CK_seats_seat_type;</sql>
+    </changeSet>
+
+    <changeSet id="020-cleanup-CK-seats-status-from-019" author="cinex">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_seats_status'
+            </sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE seats DROP CONSTRAINT CK_seats_status;</sql>
+    </changeSet>
+
+    <!-- Add lại constraint với tên đồng bộ convention (chk_*) và 6 values mới -->
+    <changeSet id="020-add-chk-seats-type-v2" author="cinex">
+        <sql>
+            ALTER TABLE seats ADD CONSTRAINT chk_seats_type
+            CHECK (seat_type IN ('STANDARD','VIP','COUPLE','SWEETBOX','DELUXE','HANDICAP'));
+        </sql>
+    </changeSet>
+
+    <changeSet id="020-add-chk-seats-status-v2" author="cinex">
+        <sql>
+            ALTER TABLE seats ADD CONSTRAINT chk_seats_status
+            CHECK (status IN ('AVAILABLE','BROKEN','BLOCKED'));
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

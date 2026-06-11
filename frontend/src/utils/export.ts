@@ -73,7 +73,7 @@ export function exportPDF({ title, subtitle, columns, rows, fileName, sections }
       body: data.map(row =>
         columns.map(c => {
           const val = row[c.key]
-          return c.format ? c.format(val) : String(val ?? '—')
+          return c.format ? c.format(val) : String(val ?? '')
         })
       ),
     })
@@ -81,7 +81,7 @@ export function exportPDF({ title, subtitle, columns, rows, fileName, sections }
 
   if (sections && sections.length > 0) {
     let cursorY = 34
-    sections.forEach((section, idx) => {
+    sections.forEach((section) => {
       if (section.rows.length === 0) return
 
       // Section label

@@ -1,12 +1,16 @@
 package com.cinex.module.statistics.service;
 
+import com.cinex.common.service.SecurityService;
 import com.cinex.module.statistics.dto.OccupancyStatistics;
 import com.cinex.module.statistics.dto.OverviewStatistics;
 import com.cinex.module.statistics.dto.RevenueStatistics;
+import com.cinex.module.statistics.dto.TopMovieRunStatistics;
 import com.cinex.module.statistics.dto.TopMovieStatistics;
 import com.cinex.module.statistics.dto.TopSnackStatistics;
 import com.cinex.module.statistics.repository.StatisticsRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,83 +19,81 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * [Single Responsibility Principle]
- * Service CHỈ chứa business logic (tính toán, phối hợp gọi repository).
- * KHÔNG chứa JPQL/SQL — query nằm ở StatisticsRepository.
+ * Statistics service — per-theater filter.
  *
- * So sánh TRƯỚC và SAU refactor:
+ * <p><b>RBAC scope:</b> branch ADMIN auto-override theaterId từ JWT —
+ * không thể xem doanh thu rạp khác bằng cách truyền theaterId thủ công.
+ * SUPER_ADMIN tự do chọn theaterId (null = tất cả rạp).
  *
- * TRƯỚC (sai):
- *   Service inject EntityManager → viết JPQL trực tiếp
- *   → Service vừa xử lý logic VỪA truy vấn DB → vi phạm SRP
- *
- * SAU (đúng):
- *   Service inject StatisticsRepository → gọi method có tên rõ ràng
- *   → Service chỉ lo business logic, Repository lo data access
- *
- * Tại sao quan trọng?
- * - Dễ test: mock Repository, không cần mock EntityManager
- * - Dễ đọc: nhìn Service biết ngay logic gì, nhìn Repository biết query gì
- * - Dễ sửa: đổi query → chỉ sửa Repository, Service không bị ảnh hưởng
+ * <p><b>Cache key:</b> mọi method include theaterId trong key để tránh
+ * cross-theater cache leak (vd SUPER_ADMIN xem HN rồi xem HCM → 2 cache entry).
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class StatisticsService {
 
     private final StatisticsRepository statisticsRepository;
+    private final SecurityService securityService;
 
     /**
-     * Tổng quan dashboard: booking hôm nay, doanh thu hôm nay, tổng user/movie/room.
-     * Service chỉ lo: xác định khoảng thời gian + gọi repository + ghép kết quả.
+     * Auto-scope theaterId. Pattern đồng nhất các service: getCurrentUserTheaterId()
+     * đã return null cho SUPER_ADMIN ở nguồn → branch admin lấy từ JWT, SUPER_ADMIN
+     * dùng request param.
      */
+    private Long resolveTheaterId(Long requested) {
+        Long scopedTheaterId = securityService.getCurrentUserTheaterId();
+        return scopedTheaterId != null ? scopedTheaterId : requested;
+    }
+
     @Transactional(readOnly = true)
-    public OverviewStatistics getOverview() {
+    @Cacheable(value = "stats-overview", key = "'today_' + (#theaterId != null ? #theaterId : 'all')")
+    public OverviewStatistics getOverview(Long theaterId) {
+        Long effectiveTheaterId = resolveTheaterId(theaterId);
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
         LocalDateTime todayEnd = todayStart.plusDays(1);
 
         return OverviewStatistics.builder()
-                .todayBookings(statisticsRepository.countTodayBookings(todayStart, todayEnd))
-                .todayRevenue(statisticsRepository.sumTodayRevenue(todayStart, todayEnd))
-                .todaySnackRevenue(statisticsRepository.sumTodaySnackRevenue(todayStart, todayEnd))
+                .todayBookings(statisticsRepository.countTodayBookings(todayStart, todayEnd, effectiveTheaterId))
+                .todayRevenue(statisticsRepository.sumTodayRevenue(todayStart, todayEnd, effectiveTheaterId))
+                .todaySnackRevenue(statisticsRepository.sumTodaySnackRevenue(todayStart, todayEnd, effectiveTheaterId))
                 .totalUsers(statisticsRepository.countActiveUsers())
                 .totalMovies(statisticsRepository.countActiveMovies())
-                .totalRooms(statisticsRepository.countActiveRooms())
-                .totalShowtimesToday(statisticsRepository.countTodayShowtimes(todayStart, todayEnd))
+                .totalRooms(statisticsRepository.countActiveRooms(effectiveTheaterId))
+                .totalShowtimesToday(statisticsRepository.countTodayShowtimes(todayStart, todayEnd, effectiveTheaterId))
                 .build();
     }
 
-    /**
-     * Doanh thu theo ngày — FE dùng để vẽ biểu đồ doanh thu.
-     */
     @Transactional(readOnly = true)
-    public List<RevenueStatistics> getRevenue(LocalDate from, LocalDate to) {
-        return statisticsRepository.findRevenueByDateRange(from, to);
+    @Cacheable(value = "stats-revenue",
+            key = "#from.toString() + '_' + #to.toString() + '_' + (#theaterId != null ? #theaterId : 'all')")
+    public List<RevenueStatistics> getRevenue(LocalDate from, LocalDate to, Long theaterId) {
+        return statisticsRepository.findRevenueByDateRange(from, to, resolveTheaterId(theaterId));
     }
 
-    /**
-     * Top phim bán chạy nhất (theo số vé đã bán).
-     * Chỉ tính vé hợp lệ: CONFIRMED + CHECKED_IN (không tính CANCELLED/EXPIRED).
-     */
     @Transactional(readOnly = true)
-    public List<TopMovieStatistics> getTopMovies(int limit, LocalDate from, LocalDate to) {
-        return statisticsRepository.findTopMovies(limit, from, to);
+    @Cacheable(value = "stats-top-movies",
+            key = "#limit + '_' + (#from != null ? #from.toString() : 'null') + '_' + (#to != null ? #to.toString() : 'null') + '_' + (#theaterId != null ? #theaterId : 'all')")
+    public List<TopMovieStatistics> getTopMovies(int limit, LocalDate from, LocalDate to, Long theaterId) {
+        return statisticsRepository.findTopMovies(limit, from, to, resolveTheaterId(theaterId));
     }
 
-    /**
-     * Top snack bán chạy nhất tại quầy POS (theo tổng số lượng).
-     * Chỉ tính đơn hàng chưa bị xóa (ARCHIVED).
-     */
     @Transactional(readOnly = true)
-    public List<TopSnackStatistics> getTopSnacks(int limit, LocalDate from, LocalDate to) {
-        return statisticsRepository.findTopSnacks(limit, from, to);
+    @Cacheable(value = "stats-top-movie-runs",
+            key = "#limit + '_' + (#from != null ? #from.toString() : 'null') + '_' + (#to != null ? #to.toString() : 'null') + '_' + (#theaterId != null ? #theaterId : 'all')")
+    public List<TopMovieRunStatistics> getTopMovieRuns(int limit, LocalDate from, LocalDate to, Long theaterId) {
+        return statisticsRepository.findTopMovieRuns(limit, from, to, resolveTheaterId(theaterId));
     }
 
-    /**
-     * Tỉ lệ lấp đầy ghế theo suất chiếu trong ngày.
-     * Chỉ tính ghế của booking hợp lệ (CONFIRMED + CHECKED_IN).
-     */
     @Transactional(readOnly = true)
-    public List<OccupancyStatistics> getOccupancy(LocalDate date) {
-        return statisticsRepository.findOccupancyByDate(date);
+    @Cacheable(value = "stats-top-snacks",
+            key = "#limit + '_' + (#from != null ? #from.toString() : 'null') + '_' + (#to != null ? #to.toString() : 'null') + '_' + (#theaterId != null ? #theaterId : 'all')")
+    public List<TopSnackStatistics> getTopSnacks(int limit, LocalDate from, LocalDate to, Long theaterId) {
+        return statisticsRepository.findTopSnacks(limit, from, to, resolveTheaterId(theaterId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<OccupancyStatistics> getOccupancy(LocalDate date, Long theaterId) {
+        return statisticsRepository.findOccupancyByDate(date, resolveTheaterId(theaterId));
     }
 }

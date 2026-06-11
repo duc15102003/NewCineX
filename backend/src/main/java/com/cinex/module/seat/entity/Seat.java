@@ -57,4 +57,17 @@ public class Seat extends BaseEntity {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private SeatStatus status = SeatStatus.AVAILABLE;
+
+    /**
+     * Đánh dấu vị trí là LỐI ĐI (aisle) — không phải ghế thật.
+     * Render FE: khoảng trống giữa các block ghế.
+     * BE: KHÔNG cho book, KHÔNG tính vào totalSeats.
+     *
+     * <p>Field tên {@code aisle} (KHÔNG "is" prefix) để Lombok + Jackson +
+     * MapStruct đồng bộ — Lombok sinh getter {@code isAisle()}, Jackson serialize
+     * thành JSON key {@code "aisle"}, MapStruct map đúng vào DTO field {@code aisle}.
+     */
+    @Column(name = "is_aisle", nullable = false)
+    @Builder.Default
+    private boolean aisle = false;
 }

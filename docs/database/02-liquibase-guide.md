@@ -1,375 +1,315 @@
-# Liquibase — Quản lý schema database chi tiết
+# Liquibase — Quản lý schema database
 
-## 1. Liquibase là gì?
-
-Liquibase là công cụ **quản lý version cho database schema** (bảng, cột, index, ...).
-Giống Git quản lý version code → Liquibase quản lý version DB.
-
-### Ví dụ đời thường
-
-**Không có Liquibase:** Thợ xây tự ý sửa nhà, không ghi chép. Ai muốn biết nhà đã sửa gì → không biết.
-**Có Liquibase:** Mỗi lần sửa nhà → ghi vào sổ (changeset). Ai đọc sổ đều biết: ngày nào sửa gì, ai sửa.
-
-### Tại sao không dùng `ddl-auto=update`?
-
-| Vấn đề | ddl-auto=update | Liquibase |
-|---|---|---|
-| Xóa cột | Có thể xóa → **MẤT DATA** | Phải viết changeset rõ ràng |
-| Track lịch sử | Không biết ai sửa gì | Bảng DATABASECHANGELOG ghi lại |
-| Rollback | Không thể | Có thể rollback từng changeset |
-| Team nhiều dev | Dev A thêm cột, Dev B không biết | Mỗi dev tạo changeset, merge qua Git |
-| Production | **TUYỆT ĐỐI KHÔNG DÙNG** | An toàn, kiểm soát được |
-
-**CineX dùng:** `ddl-auto=validate` — Hibernate chỉ **kiểm tra** schema khớp entity, KHÔNG tự sửa.
+> **Cập nhật 2026-06-10:** Schema đã được consolidate từ 72 changesets evolution → **17 file sạch** theo domain. Tài liệu này phản ánh cấu trúc hiện tại.
 
 ---
 
-## 2. DATABASECHANGELOG — "Sổ ghi chép" của Liquibase
+## 1. Liquibase là gì? Tại sao dùng?
 
-### Bảng này để làm gì?
+Liquibase là công cụ **versioned migration cho database schema** — tương tự cách Git versioned source code.
 
-Liquibase **tự tạo** bảng `DATABASECHANGELOG` trong DB khi chạy lần đầu. Bảng này ghi lại **mỗi changeset đã chạy**:
+### So sánh với các cách khác
 
-```
-┌─────┬────────┬──────────────────────────────────────────────┬────────────────────┬──────────────────┐
-│ ID  │ AUTHOR │ FILENAME                                     │ DATEEXECUTED       │ MD5SUM           │
-├─────┼────────┼──────────────────────────────────────────────┼────────────────────┼──────────────────┤
-│ 001 │ cinex  │ db/changelog/changes/001-create-users.xml    │ 2026-05-12 20:00   │ 8:abc123...      │
-│ 002 │ cinex  │ db/changelog/changes/002-create-refresh.xml  │ 2026-05-12 20:00   │ 8:def456...      │
-│ 003 │ cinex  │ db/changelog/changes/003-create-id-track.xml │ 2026-05-12 20:01   │ 8:ghi789...      │
-│ ... │ ...    │ ...                                          │ ...                │ ...              │
-│ 015 │ cinex  │ db/changelog/changes/015-create-password.xml │ 2026-05-20 14:00   │ 8:xyz999...      │
-└─────┴────────┴──────────────────────────────────────────────┴────────────────────┴──────────────────┘
-```
+| Vấn đề | `ddl-auto=update` | SQL script tay | Liquibase |
+|---|---|---|---|
+| **Xóa cột** | Có thể xóa → MẤT DATA | Phải nhớ đã chạy chưa | Track tự động, idempotent |
+| **Track lịch sử** | ❌ | ❌ (trừ khi tự đặt convention) | ✓ Bảng DATABASECHANGELOG |
+| **Rollback** | ❌ | Phải viết SQL ngược tay | ✓ Tự sinh nếu khai báo `rollback` |
+| **Multi-dev** | Conflict im lặng | Phải coordinate manual | Mỗi changeset có ID unique, fail-fast nếu trùng |
+| **CI/CD production** | TUYỆT ĐỐI KHÔNG DÙNG | Risky | Industry standard |
 
-### Cách Liquibase dùng bảng này
-
-```
-Backend start (./gradlew bootRun)
-    │
-    ▼
-Liquibase đọc db.changelog-master.xml → tìm 15 changeset files
-    │
-    ▼
-Query: SELECT * FROM DATABASECHANGELOG
-    │
-    ▼
-So sánh:
-    001 → có trong DB → BỎ QUA ✅
-    002 → có trong DB → BỎ QUA ✅
-    ...
-    013 → có trong DB → BỎ QUA ✅
-    014 → CHƯA CÓ → CHẠY! (CREATE TABLE vouchers)
-    015 → CHƯA CÓ → CHẠY! (CREATE TABLE password_reset_tokens)
-    │
-    ▼
-Sau khi chạy xong → INSERT vào DATABASECHANGELOG:
-    (014, cinex, ..., 2026-05-20, md5sum)
-    (015, cinex, ..., 2026-05-20, md5sum)
-    │
-    ▼
-Lần start tiếp theo: 014, 015 đã có → bỏ qua → KHÔNG chạy lại
-```
-
-### MD5SUM — Checksum chống sửa changeset đã chạy
-
-```
-MD5SUM = hash nội dung changeset file
-
-Changeset 001 đã chạy với MD5SUM = "8:abc123"
-
-Nếu ai đó SỬA file 001-create-users.xml:
-    → Liquibase tính lại MD5SUM = "8:xyz999" (khác!)
-    → So sánh với DB: "8:abc123" ≠ "8:xyz999"
-    → LỖI: "Validation Failed: checksum mismatch for changeset 001"
-    → Backend KHÔNG START!
-
-Tại sao: vì changeset đã chạy rồi, DB đã thay đổi rồi.
-Sửa file = nói dối "tôi chưa thay đổi gì" → nguy hiểm.
-Muốn thay đổi → TẠO CHANGESET MỚI (016, 017, ...)
-```
+**CineX:**
+- `spring.jpa.hibernate.ddl-auto=validate` — Hibernate CHỈ verify schema khớp entity, không tự sửa
+- `spring.liquibase.change-log=classpath:db/changelog/db.changelog-master.xml` — Liquibase tự run lúc startup
 
 ---
 
-## 3. DATABASECHANGELOGLOCK — Chống chạy đồng thời
-
-### Bảng này để làm gì?
-
-Khi Liquibase chạy, nó **lock** bảng này để đảm bảo **chỉ 1 instance chạy migration tại 1 thời điểm**.
+## 2. Cấu trúc thư mục
 
 ```
-┌────┬────────┬────────────────────┬─────────────────────┐
-│ ID │ LOCKED │ LOCKGRANTED        │ LOCKEDBY            │
-├────┼────────┼────────────────────┼─────────────────────┤
-│ 1  │ true   │ 2026-05-20 14:00   │ MacBook-Air (ip)    │
-└────┴────────┴────────────────────┴─────────────────────┘
-```
-
-### Tại sao cần lock?
-
-```
-Tình huống: 2 server start cùng lúc (scale 2 instances)
-
-KHÔNG có lock:
-    Server A: CREATE TABLE vouchers     ← đang chạy
-    Server B: CREATE TABLE vouchers     ← cũng chạy → LỖI: table already exists!
-
-CÓ lock:
-    Server A: LOCK → CREATE TABLE vouchers → UNLOCK
-    Server B: chờ... → lock available → check DATABASECHANGELOG → 014 đã chạy → BỎ QUA ✅
-```
-
-### Lỗi thường gặp: Lock bị kẹt
-
-```
-Tình huống: backend crash giữa chừng migration → lock KHÔNG được release
-Lần start tiếp: "Waiting for changelog lock..."  → chờ mãi
-
-Fix:
--- Chạy SQL thủ công:
-UPDATE DATABASECHANGELOGLOCK SET LOCKED = 0 WHERE ID = 1
--- Hoặc:
-DELETE FROM DATABASECHANGELOGLOCK
-```
-
----
-
-## 4. Team nhiều dev — Xung đột changeset
-
-### Tình huống: 2 dev cùng tạo file 016
-
-```
-Dev A: tạo 016-create-reviews-table.xml → push lên Git
-Dev B: tạo 016-create-comments-table.xml → push lên Git
-
-→ Git merge conflict! (2 file cùng tên 016-...)
-  hoặc cả 2 đều thêm dòng <include file="016-..."> vào master.xml
-```
-
-### Giải pháp: Quy tắc đặt tên
-
-**Cách 1: Đặt tên theo chức năng (khuyến khích)**
-
-```
-Dev A: 016-create-reviews-table.xml     (changeset id="016-reviews")
-Dev B: 016-create-comments-table.xml    (changeset id="016-comments")
-```
-
-- Tên file khác nhau → không conflict
-- Changeset id KHÁC nhau → Liquibase coi là 2 changeset độc lập
-- Cả 2 đều thêm vào `master.xml`, thứ tự nào cũng được (không phụ thuộc nhau)
-
-**Cách 2: Dùng timestamp thay vì số thứ tự**
-
-```
-Dev A: 20260520-1400-create-reviews.xml
-Dev B: 20260520-1530-create-comments.xml
-```
-
-- Timestamp không bao giờ trùng → không conflict
-
-**Cách 3: Dùng prefix theo module**
-
-```
-Dev A: review-001-create-table.xml
-Dev B: comment-001-create-table.xml
-```
-
-### Trường hợp xấu: cùng changeset id
-
-```
-Dev A tạo: <changeSet id="016" author="cinex"> CREATE TABLE reviews
-Dev B tạo: <changeSet id="016" author="cinex"> CREATE TABLE comments
-
-Server A chạy trước → DATABASECHANGELOG ghi: id=016, file=016-reviews
-Server B kéo code → Liquibase thấy: id=016 đã chạy (theo DB)
-    nhưng file khác (016-comments vs 016-reviews)
-    → LỖI: checksum mismatch hoặc file mismatch!
-```
-
-**Quy tắc:** Changeset `id + author + filename` phải UNIQUE. Nếu 2 dev cùng id → lỗi khi merge.
-
-### Workflow đúng cho team
-
-```
-1. Dev A kéo code mới nhất: git pull
-2. Xem changeset cuối: 015-create-password-reset-tokens.xml
-3. Tạo changeset MỚI: 016-create-reviews-table.xml
-4. Thêm vào master.xml
-5. Commit + Push
-6. Dev B kéo code: git pull → thấy changeset 016 mới
-7. Dev B tạo changeset: 017-create-comments-table.xml
-8. → KHÔNG BAO GIỜ trùng số
-
-Nếu cả 2 cùng tạo 016 (chưa pull):
-    → Git merge conflict ở master.xml → resolve thủ công
-    → 1 người đổi thành 017
-```
-
----
-
-## 5. Cấu trúc file CineX hiện tại
-
-```
-db/changelog/
-├── db.changelog-master.xml          ← Include tất cả file con
+backend/src/main/resources/db/changelog/
+├── db.changelog-master.xml           # Master file include 17 changelog
 └── changes/
-    ├── 001-create-users-table.xml
-    ├── 002-create-refresh-tokens-table.xml
-    ├── 003-create-id-tracker-table.xml
-    ├── 004-create-system-config-table.xml
-    ├── 005-create-audit-log-table.xml
-    ├── 006-create-genres-table.xml
-    ├── 007-create-movies-table.xml      + movie_genres (join table)
-    ├── 008-create-rooms-table.xml
-    ├── 009-create-seats-table.xml       + FK + index
-    ├── 010-create-showtimes-table.xml   + FK + indexes
-    ├── 011-create-bookings-table.xml    + booking_seats
-    ├── 012-create-payments-table.xml
-    ├── 013-seed-default-data.xml        ← Admin account + 10 genres + IdTracker + SystemConfig
-    ├── 014-create-vouchers-table.xml    + voucher_usages
-    ├── 015-create-password-reset-tokens-table.xml
-    ├── 016-create-reviews-table.xml
-    ├── 017-create-snacks-table.xml
-    ├── 018-create-notifications-table.xml
-    ├── 019-create-user-favorites-table.xml
-    ├── 020-seed-movies-data.xml         ← Seed dữ liệu phim mẫu
-    ├── 021-seed-booking-data.xml        ← Seed booking mẫu
-    ├── 022-seed-more-bookings.xml
-    ├── 023-seed-vutuongan-bookings.xml
-    ├── 024-rename-deleted-to-archived.xml ← Đổi storage_state='DELETED' → 'ARCHIVED'
-    ├── 025-drop-review-unique-constraint.xml
-    ├── 026-create-snack-orders-table.xml
-    ├── 027-booking-user-nullable.xml    ← booking.user_id cho phép NULL (khách vãng lai)
-    ├── 028-seed-new-configs.xml         ← Thêm system_config mới
-    ├── 029-update-config-descriptions.xml
-    ├── 030-seed-demo-data.xml           ← Seed data demo
-    └── 031-fix-null-storage-state.xml   ← Backfill storage_state cho row cũ
+    ├── 001-core-tables.xml           # SCHEMA — users, theaters, auth tokens, system_config, ...
+    ├── 002-catalog-tables.xml        # SCHEMA — genres, movies, movie_runs
+    ├── 003-cinema-tables.xml         # SCHEMA — rooms, seats, showtimes, pricing_rules
+    ├── 004-booking-tables.xml        # SCHEMA — bookings, booking_seats, payments
+    ├── 005-pos-tables.xml            # SCHEMA — snacks, combos, snack_orders
+    ├── 006-engagement-tables.xml     # SCHEMA — reviews, favorites, notifications, loyalty
+    ├── 007-voucher-tables.xml        # SCHEMA — vouchers, voucher_usages
+    ├── 008-check-constraints.xml     # SCHEMA — CHECK constraint cho 20+ enum columns
+    ├── 009-seed-system-config.xml    # SEED — 21 config keys + 3 id_tracker prefixes
+    ├── 010-seed-theaters.xml         # SEED — 5 chi nhánh HN/HP/QN/DN/HCM
+    ├── 011-seed-users.xml            # SEED — admin tổng + 5 branch admins + 8 customers
+    ├── 012-seed-genres.xml           # SEED — 15 thể loại phim
+    ├── 013-seed-movies-and-runs.xml  # SEED — 18 phim + movie_genres + movie_runs đa dạng
+    ├── 014-seed-rooms-seats-pricing.xml # SEED — 20 phòng + 1920 ghế + 5 pricing rules
+    ├── 015-seed-snacks-combos.xml    # SEED — 40 snack + 15 combo per-theater
+    ├── 016-seed-showtimes-vouchers.xml # SEED — ~1000 showtimes 14 ngày + 7 voucher
+    └── 017-fix-system-config-encoding.xml # FIX-FORWARD — sửa encoding tiếng Việt
+```
+
+**Quy ước:** mỗi file = 1 domain. Số đầu là thứ tự apply (Liquibase đọc theo `<include>` order trong master).
+
+---
+
+## 3. Anatomy một changelog file
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- 1 file có nhiều changeSet, mỗi cái là 1 unit atomic -->
+    <changeSet id="001-create-theaters" author="cinex">
+        <createTable tableName="theaters">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="code" type="NVARCHAR(30)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <!-- ... -->
+        </createTable>
+
+        <createIndex tableName="theaters" indexName="idx_theaters_city">
+            <column name="city"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+```
+
+**Attribute quan trọng:**
+
+| Attribute | Vai trò |
+|---|---|
+| `id` | Unique trong file + author. Liquibase dùng để detect đã apply chưa |
+| `author` | Người tạo (convention: "cinex") |
+| `runOnChange="true"` | Re-run mỗi khi nội dung file đổi (cho stored proc/views) |
+| `failOnError="false"` | Tiếp tục dù changeset này fail |
+| `context="dev"` | Chỉ chạy ở môi trường dev (qua `spring.liquibase.contexts=dev`) |
+
+---
+
+## 4. DATABASECHANGELOG — "Sổ ghi chép"
+
+Liquibase tự tạo bảng `DATABASECHANGELOG` trong DB lúc chạy lần đầu, ghi lại mọi changeset đã apply:
+
+```
+┌────────────────────────┬────────┬──────────────────────────────────────────┬──────────────────────────┬──────────────────────┐
+│ ID                     │ AUTHOR │ FILENAME                                 │ DATEEXECUTED             │ MD5SUM               │
+├────────────────────────┼────────┼──────────────────────────────────────────┼──────────────────────────┼──────────────────────┤
+│ 001-create-theaters    │ cinex  │ db/changelog/changes/001-core-tables.xml │ 2026-06-10 22:31:15.567  │ 9:abc123...          │
+│ 001-create-users       │ cinex  │ db/changelog/changes/001-core-tables.xml │ 2026-06-10 22:31:15.789  │ 9:def456...          │
+│ ...                    │ ...    │ ...                                      │ ...                      │ ...                  │
+└────────────────────────┴────────┴──────────────────────────────────────────┴──────────────────────────┴──────────────────────┘
+```
+
+**MD5SUM** = checksum của nội dung changeset. Liquibase verify lúc run:
+- File hash khớp → SKIP (đã apply rồi)
+- File hash không khớp → throw `ValidationFailedException`
+
+**→ Quy tắc vàng:** **TUYỆT ĐỐI KHÔNG sửa nội dung changeset đã apply**. Thay vào đó thêm changeset mới (fix-forward pattern — xem mục 7).
+
+---
+
+## 5. Lý do consolidate 72 → 17 file
+
+### Vấn đề ban đầu
+
+Dự án evolution qua nhiều giai đoạn, mỗi feature/refactor sinh ra 1-2 changeset:
+- 001-create-users-table
+- 002-create-refresh-tokens
+- ... (60 changeset đầu)
+- 060-add-user-theater-and-super-admin-role (add column theater_id vào users)
+- 061-add-snack-theater-id (rename + index lại)
+- 066-movie-run-per-theater (refactor lớn)
+- 070-add-booking-theater-id
+- 071-add-user-date-of-birth
+- 072-migrate-age-rating-c-to-t18
+
+**Tổng cộng 72 file** — pain points:
+- Khó đọc: muốn hiểu schema hiện tại phải đọc 72 file rồi mental-merge
+- Dev mới onboard: ngợp
+- DB mới: phải chạy 72 migration mất 30+ giây startup time
+- Track history: chỉ cần xem git log của file, không cần lưu trong DB migration
+
+### Quyết định: consolidate
+
+Lúc dev project + không có production DB cần preserve → **safe to wipe and re-init**.
+
+**Cách làm:** xóa toàn bộ 72 file → viết lại 8 file SCHEMA + 9 file SEED + FIX, gom theo domain.
+
+### Khi nào KHÔNG nên consolidate?
+
+- **Có production DB đang chạy** → consolidate sẽ phá DB. Phải dùng `<changeSetIgnore>` hoặc `liquibase.databasechangelog` manual hack
+- **Team nhiều dev cùng pull/merge** → có thể có dev đang dùng schema cũ
+
+CineX là dự án dev local → wipe-and-rebuild OK. Production cần strategy khác (xem `docs/database/consolidation-strategy.md`).
+
+---
+
+## 6. Một số "gotcha" thường gặp
+
+### 6.1. SQL Server NVARCHAR cần `N'...'` prefix cho Unicode
+
+```xml
+<!-- SAI — tiếng Việt mất dấu khi lưu vào NVARCHAR -->
+<sql>INSERT INTO genres (name) VALUES ('Hành động');</sql>
+
+<!-- ĐÚNG — N' báo SQL Server đây là Unicode literal -->
+<sql>INSERT INTO genres (name) VALUES (N'Hành động');</sql>
+```
+
+CineX đã từng bị (commit `3415e29` fix file 017): seed `system_config` quên `N'` → description bị "S? phút gi? gh?".
+
+### 6.2. `splitStatements="false"` cho T-SQL có biến local
+
+Liquibase mặc định split SQL theo `;` thành nhiều statement → mỗi statement chạy độc lập. T-SQL biến local `@today` declared ở statement 1 KHÔNG tồn tại ở statement sau:
+
+```xml
+<!-- SAI — DECLARE và INSERT bị tách → @today không recognize -->
+<sql>
+    DECLARE @today DATE = CAST(GETDATE() AS DATE);
+    INSERT INTO movie_runs (start_date) VALUES (@today);
+</sql>
+
+<!-- ĐÚNG — cả block 1 batch -->
+<sql splitStatements="false" endDelimiter="GO">
+    DECLARE @today DATE = CAST(GETDATE() AS DATE);
+    INSERT INTO movie_runs (start_date) VALUES (@today);
+</sql>
+```
+
+### 6.3. XML escape `&`, `<`, `>`
+
+```xml
+<!-- SAI — XML parser fail -->
+<sql>INSERT INTO movies (title) VALUES (N'Tom & Jerry');</sql>
+
+<!-- ĐÚNG — escape -->
+<sql>INSERT INTO movies (title) VALUES (N'Tom &amp; Jerry');</sql>
+
+<!-- Hoặc bọc trong CDATA -->
+<sql><![CDATA[
+    INSERT INTO movies (title) VALUES (N'Tom & Jerry');
+]]></sql>
+```
+
+### 6.4. SQL Server filtered unique index — phải dùng raw SQL
+
+Liquibase không có abstraction cho filtered unique index. Phải dùng `<sql>`:
+
+```xml
+<changeSet id="004-create-booking-seats" author="cinex">
+    <!-- ... createTable ... -->
+    <sql>
+        CREATE UNIQUE INDEX uq_booking_seats_active
+        ON booking_seats(showtime_id, seat_id)
+        WHERE status IN ('HELD', 'BOOKED');
+    </sql>
+</changeSet>
+```
+
+### 6.5. CHECK constraint multi-line — phải dùng raw SQL
+
+```xml
+<sql>
+    ALTER TABLE snack_order_items
+    ADD CONSTRAINT chk_snack_order_item_xor
+    CHECK ((snack_id IS NOT NULL AND combo_id IS NULL)
+        OR (snack_id IS NULL AND combo_id IS NOT NULL));
+</sql>
 ```
 
 ---
 
-## 6. Hướng dẫn thao tác
+## 7. Fix-forward pattern khi data bị bug
 
-### Thêm bảng mới
+**Tình huống:** Đã wipe DB + apply 017 changeset. Phát hiện file 009 có bug (vd thiếu `N'` prefix cho tiếng Việt).
+
+**KHÔNG được:** sửa file 009 → checksum mismatch → Liquibase throw `ValidationFailedException`.
+
+**Pattern đúng (fix-forward):**
+1. File 009 giữ NGUYÊN (data insert ban đầu bị bug)
+2. Thêm file mới `017-fix-system-config-encoding.xml`:
+   ```xml
+   <changeSet id="017-fix-system-config-encoding" author="cinex">
+       <sql splitStatements="false" endDelimiter="GO">
+           UPDATE system_config SET description = N'Số phút giữ ghế chờ thanh toán'
+           WHERE config_key = 'booking.hold_minutes';
+           -- ...
+       </sql>
+   </changeSet>
+   ```
+3. Update master `db.changelog-master.xml` include thêm 017
+4. Restart BE → Liquibase apply 017 → UPDATE chạy đúng với `N'` → data fix
+
+**Net effect cho dev mới wipe DB:**
+- 009 insert data bị bug (description sai encoding)
+- 017 ngay sau UPDATE đúng
+- Kết quả cuối: data sạch
+
+Đây là pattern Liquibase official khuyên — KHÔNG bao giờ sửa nội dung apply đã chạy.
+
+---
+
+## 8. Khi nào nên thêm changeset mới?
+
+| Thay đổi | Changeset cần |
+|---|---|
+| Thêm cột | `<addColumn>` |
+| Đổi tên cột | `<renameColumn>` + `<sql>` cập nhật data nếu cần |
+| Đổi kiểu cột | `<modifyDataType>` (cẩn thận data loss) |
+| Thêm index | `<createIndex>` |
+| Thêm FK | `<addForeignKeyConstraint>` |
+| Sửa data hiện có | `<sql>UPDATE ...</sql>` |
+| Insert seed mới | `<sql>INSERT ...</sql>` hoặc `<insert>` |
+| Drop column/table | `<dropColumn>` / `<dropTable>` (cảnh báo: irreversible nếu không rollback) |
+
+### Quy tắc đặt tên file mới
+
+- Format: `NNN-description-kebab-case.xml`
+- `NNN` = số tiếp theo (017 hiện tại → 018 tiếp theo)
+- Description ngắn gọn: `018-add-user-phone-verified.xml`, `019-fix-snack-prices.xml`
+
+### Steps thêm migration:
+
+1. Tạo file `backend/src/main/resources/db/changelog/changes/NNN-something.xml`
+2. Update `db.changelog-master.xml`:
+   ```xml
+   <include file="db/changelog/changes/NNN-something.xml"/>
+   ```
+3. Restart BE → Liquibase tự apply
+
+---
+
+## 9. Lệnh CLI hữu ích (debug)
+
+Liquibase tích hợp Spring Boot tự chạy lúc startup. Nhưng khi debug, dùng CLI:
 
 ```bash
-# 1. Tạo file changeset
-# Xem số thứ tự cuối: 015 → tạo 016
-touch backend/src/main/resources/db/changelog/changes/016-create-xxx-table.xml
+# Status — xem migrations nào chưa apply
+./gradlew liquibaseStatus
 
-# 2. Viết nội dung (copy template từ file có sẵn)
+# Validate — verify checksum
+./gradlew liquibaseValidate
 
-# 3. Thêm vào master.xml
-<include file="db/changelog/changes/016-create-xxx-table.xml"/>
+# Rollback 1 changeset cuối
+./gradlew liquibaseRollbackCount -PliquibaseCommandValue=1
 
-# 4. Restart backend → Liquibase tự chạy
-```
-
-### Thêm cột vào bảng có sẵn
-
-```xml
-<!-- KHÔNG sửa file cũ, tạo file MỚI -->
-<changeSet id="016" author="cinex">
-    <addColumn tableName="users">
-        <column name="phone_verified" type="BIT" defaultValueBoolean="false"/>
-    </addColumn>
-</changeSet>
-```
-
-### Tạo index
-
-```xml
-<changeSet id="017" author="cinex">
-    <createIndex tableName="bookings" indexName="idx_bookings_status">
-        <column name="status"/>
-    </createIndex>
-</changeSet>
-```
-
-### Insert seed data
-
-```xml
-<changeSet id="018" author="cinex">
-    <insert tableName="system_config">
-        <column name="config_key" value="booking.max_cancel_minutes"/>
-        <column name="config_value" value="60"/>
-        <column name="description" value="Số phút trước suất chiếu cho phép hủy"/>
-    </insert>
-</changeSet>
+# Drop all + reapply (nguy hiểm production)
+./gradlew liquibaseDropAll
+./gradlew liquibaseUpdate
 ```
 
 ---
 
-## 7. Quy tắc quan trọng
+## 10. Tham khảo thêm
 
-| Quy tắc | Giải thích | Vi phạm thì sao |
-|---|---|---|
-| **KHÔNG SỬA changeset đã chạy** | Liquibase check MD5SUM | Lỗi checksum → backend không start |
-| **id + author + filename unique** | Liquibase nhận diện changeset | Trùng → lỗi hoặc bỏ qua sai |
-| **Số thứ tự tăng dần** | Chạy theo thứ tự | Nhảy số = OK, trùng số = conflict |
-| **1 changeset = 1 thay đổi logic** | Dễ rollback, dễ đọc | Gộp nhiều → rollback khó |
-| **Luôn git pull trước khi tạo changeset** | Tránh trùng số | Trùng → merge conflict |
-| **KHÔNG dùng `<dropColumn>` tùy tiện** | Mất data | Nên rename/archive thay vì xóa |
-
----
-
-## 8. Reset DB (chạy lại từ đầu)
-
-```bash
-# Docker — xóa volume
-docker-compose down -v
-docker-compose up sqlserver redis -d
-# Chờ 30 giây
-docker exec cinex-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P 'CineX@2026' -C -Q "CREATE DATABASE cinex"
-./gradlew bootRun
-# → Liquibase tạo lại TẤT CẢ bảng từ changeset 001-015
-
-# SQL Server cài trực tiếp
-# Chạy: DROP DATABASE cinex; CREATE DATABASE cinex;
-# → ./gradlew bootRun
-```
-
----
-
-## 9. Câu hỏi thường gặp
-
-**1. Sửa changeset đã chạy → lỗi checksum → fix thế nào?**
-```sql
--- Cách 1: Clear checksum (Liquibase tính lại)
-UPDATE DATABASECHANGELOG SET MD5SUM = NULL WHERE ID = '016'
-
--- Cách 2: Xóa record → Liquibase chạy lại changeset đó
-DELETE FROM DATABASECHANGELOG WHERE ID = '016'
--- ⚠️ Cẩn thận: changeset sẽ chạy lại → nếu là CREATE TABLE → lỗi "table exists"
-```
-
-**2. Muốn đổi tên cột đã tạo → làm thế nào?**
-```xml
-<!-- Tạo changeset MỚI, KHÔNG sửa file cũ -->
-<changeSet id="017" author="cinex">
-    <renameColumn tableName="users" oldColumnName="full_name" newColumnName="display_name"
-                  columnDataType="NVARCHAR(100)"/>
-</changeSet>
-```
-
-**3. Lock bị kẹt → backend chờ mãi?**
-```sql
-UPDATE DATABASECHANGELOGLOCK SET LOCKED = 0 WHERE ID = 1
-```
-
-**4. 2 dev cùng tạo changeset 016 → ai sửa?**
-→ Dev push sau sửa thành 017. Luôn `git pull` trước khi tạo changeset mới.
-
-**5. Có thể rollback changeset không?**
-→ Có, nếu changeset có `<rollback>`. VD:
-```xml
-<changeSet id="016" author="cinex">
-    <createTable tableName="reviews">...</createTable>
-    <rollback>
-        <dropTable tableName="reviews"/>
-    </rollback>
-</changeSet>
-```
-Chạy rollback: `./gradlew liquibase rollbackCount -PliquibaseCommandValue=1`
+- [Liquibase official docs](https://docs.liquibase.com/) — Reference XML tags + best practices
+- [SQL Server T-SQL syntax](https://learn.microsoft.com/sql/t-sql/language-reference) — Cho seed scripts phức tạp
+- [docs/setup-fresh-db.md](../setup-fresh-db.md) — Hướng dẫn wipe + init DB

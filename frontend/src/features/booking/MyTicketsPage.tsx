@@ -4,12 +4,8 @@ import { useMyBookings } from '@/hooks/useBooking'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { BookingListItem } from '@/types/booking'
-import { label, BOOKING_STATUS_LABELS, fmtDateTime } from '@/utils/labels'
+import { label, BOOKING_STATUS_LABELS, fmtDateTime, fmtVnd } from '@/utils/labels'
 import Loading from '@/components/common/Loading'
-
-function formatPrice(amount: number) {
-  return amount.toLocaleString('vi-VN') + 'đ'
-}
 
 type BadgeVariant = 'warning' | 'success' | 'default' | 'destructive' | 'secondary' | 'outline'
 
@@ -30,10 +26,10 @@ function BookingCard({ item, onClick }: { item: BookingListItem; onClick: () => 
   return (
     <div
       onClick={onClick}
-      className="bg-[#0a1929] border border-white/5 rounded-xl p-4 flex gap-4 cursor-pointer hover:border-[#eab308]/50 hover:bg-[#0a1929]/80 transition-all"
+      className="bg-[#201b11] border border-white/5 rounded-2xl p-4 flex gap-4 cursor-pointer hover:border-[#ffc107]/50 hover:bg-[#201b11]/80 transition-all"
     >
       {/* Poster nhỏ */}
-      <div className="flex-shrink-0 w-16 h-24 rounded-lg overflow-hidden bg-[#0d2137]">
+      <div className="flex-shrink-0 w-16 h-24 rounded-lg overflow-hidden bg-[#2a2317]">
         {item.moviePosterUrl ? (
           <img
             src={item.moviePosterUrl}
@@ -69,9 +65,9 @@ function BookingCard({ item, onClick }: { item: BookingListItem; onClick: () => 
 
         <div className="flex items-center justify-between mt-2">
           <p className="text-xs text-gray-500">
-            Mã: <span className="font-mono text-[#eab308]/80">{item.bookingCode}</span>
+            Mã: <span className="font-mono text-[#ffc107]/80">{item.bookingCode}</span>
           </p>
-          <p className="font-semibold text-[#eab308] text-sm">{formatPrice(item.totalAmount)}</p>
+          <p className="font-semibold text-[#ffc107] text-sm">{fmtVnd(item.totalAmount)}</p>
         </div>
       </div>
     </div>
@@ -87,7 +83,7 @@ export default function MyTicketsPage() {
 
   if (isError) {
     return (
-      <div className="min-h-screen bg-[#051424] flex items-center justify-center">
+      <div className="min-h-screen bg-[#181309] flex items-center justify-center">
         <p className="text-red-400">Không thể tải danh sách vé.</p>
       </div>
     )
@@ -97,10 +93,10 @@ export default function MyTicketsPage() {
   const totalPages = data?.totalPages ?? 1
 
   return (
-    <div className="min-h-screen bg-[#051424] text-white py-10 px-4">
+    <div className="min-h-screen bg-[#181309] text-white py-10 px-4">
       <div className="max-w-2xl mx-auto">
 
-        <h1 className="text-2xl font-bold text-[#eab308] mb-6">Vé của tôi</h1>
+        <h1 className="text-2xl font-bold text-[#ffc107] mb-6">Vé của tôi</h1>
 
         {items.length === 0 ? (
           <div className="text-center py-16">
@@ -108,7 +104,7 @@ export default function MyTicketsPage() {
             <p className="text-gray-400 mb-4">Bạn chưa có vé nào</p>
             <Button
               onClick={() => navigate('/movies')}
-              className="bg-[#eab308] hover:bg-[#ca8a04] text-black font-semibold"
+              className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold"
             >
               Đặt vé ngay
             </Button>

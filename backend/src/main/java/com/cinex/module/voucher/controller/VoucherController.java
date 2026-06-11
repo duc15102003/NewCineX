@@ -101,11 +101,14 @@ public class VoucherController {
     }
 
     @GetMapping("/available")
-    @Operation(summary = "Get available vouchers for an order amount")
-    public ApiResponse<java.util.List<ValidateVoucherResponse>> getAvailableVouchers(
-            @RequestParam java.math.BigDecimal orderAmount) {
+    @Operation(summary = "Get available vouchers for an order amount (paged)")
+    public ApiResponse<PageResponse<ValidateVoucherResponse>> getAvailableVouchers(
+            @RequestParam java.math.BigDecimal orderAmount,
+            @RequestParam(required = false) Long theaterId,
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         Long userId = securityService.getCurrentUserIdOrNull();
-        return ApiResponse.ok(voucherService.getAvailableVouchers(orderAmount, userId));
+        return ApiResponse.ok(PageResponse.from(
+                voucherService.getAvailableVouchers(orderAmount, userId, theaterId, pageable)));
     }
 
     @PostMapping("/validate")
@@ -114,7 +117,7 @@ public class VoucherController {
             @Valid @RequestBody ValidateVoucherRequest request) {
         Long userId = securityService.getCurrentUserIdOrNull();
         return ApiResponse.ok(voucherService.validateVoucher(
-                request.getCode(), request.getOrderAmount(), userId));
+                request.getCode(), request.getOrderAmount(), userId, request.getTheaterId()));
     }
 
 }

@@ -54,7 +54,8 @@ public class TicketService {
                         .build())
                 .toList();
 
-        String qrBase64 = qrCodeService.generateQrCodeBase64(booking.getBookingCode(), 300);
+        // QR encode qrToken (random 32 ký tự), KHÔNG encode bookingCode dễ đoán.
+        String qrBase64 = qrCodeService.generateQrCodeBase64(booking.getQrToken(), 300);
 
         return TicketResponse.builder()
                 .bookingCode(booking.getBookingCode())

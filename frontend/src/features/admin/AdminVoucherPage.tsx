@@ -1,107 +1,99 @@
-import { useState } from 'react'
-import { useForm, Controller } from 'react-hook-form'
-import { PriceInput } from '@/components/ui/price-input'
+import React, { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
+
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
-import { label, DISCOUNT_TYPE_LABELS, STORAGE_STATE_LABELS, fmtDate } from '@/utils/labels'
-import { STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
-import { useAdminVouchers, useCreateVoucher, useUpdateVoucher, useBulkDeleteVouchers, useBulkRestoreVouchers } from '@/hooks/useAdmin'
+import { FilterTrigger } from '@/components/common/FilterDrawer'
+import TheaterGroupHeaderRow from '@/components/admin/TheaterGroupHeaderRow'
+import VoucherFormDialog from './components/VoucherFormDialog'
+import VoucherFilterDrawer from './components/VoucherFilterDrawer'
+import VoucherRow from './components/VoucherRow'
 
-interface VoucherFormData {
-  code: string
-  description: string
-  discountType: string
-  discountValue: number
-  minOrderAmount: number
-  maxDiscount: number
-  usageLimit: number
-  startDate: string
-  endDate: string
-}
+import { useAdminVouchers, useBulkDeleteVouchers, useBulkRestoreVouchers } from '@/hooks/useAdmin'
+import type { AdminVoucher, AdminVoucherFilter } from '@/hooks/useAdminVouchers'
+import { useAdminTheaterStore } from '@/store/adminTheaterStore'
+import { useAuthStore } from '@/store/authStore'
+import { groupByTheater } from '@/utils/groupByTheater'
+import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
+
+const EMPTY_FILTER: AdminVoucherFilter = {}
 
 export default function AdminVoucherPage() {
   const [keyword, setKeyword] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<any>(null)
+  const [editingItem, setEditingItem] = useState<AdminVoucher | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const { data: pageData } = useAdminVouchers({ keyword: keyword || undefined, size: 50 })
+  const [adv, setAdv] = useState<AdminVoucherFilter>(EMPTY_FILTER)
+  const [includeExpired, setIncludeExpired] = useState(true)
+
+  // Theater scope: branch admin auto-lock; SUPER_ADMIN dùng adminTheaterStore
+  const { currentTheater: adminTheater } = useAdminTheaterStore()
+  const { user, isBranchAdmin } = useAuthStore()
+  const userTheaterId = user?.theaterId ?? null
+  const scopedTheaterId = adminTheater?.id ?? (isBranchAdmin() ? userTheaterId : null)
+  const branchLocked = isBranchAdmin()
+
+  const queryFilter: AdminVoucherFilter = useMemo(() => ({
+    ...adv,
+    keyword: keyword || undefined,
+    expired: includeExpired ? adv.expired : false,
+    theaterId: adminTheater?.id,
+    size: ADMIN_LIST_PAGE_SIZE,
+  }), [adv, keyword, includeExpired, adminTheater])
+
+  const { data: pageData } = useAdminVouchers(queryFilter)
   const vouchers = pageData?.content ?? []
 
-  const createMut = useCreateVoucher()
-  const updateMut = useUpdateVoucher()
+  // Grouped view khi SUPER_ADMIN xem "Tất cả chi nhánh"
+  const showGrouped = !adminTheater && !branchLocked
+  const globalVouchers = useMemo(
+    () => (showGrouped ? vouchers.filter(v => v.theaterId == null) : []),
+    [vouchers, showGrouped],
+  )
+  const groupedVouchers = useMemo(
+    () => (showGrouped ? groupByTheater(vouchers.filter(v => v.theaterId != null)) : null),
+    [vouchers, showGrouped],
+  )
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
+  const [globalCollapsed, setGlobalCollapsed] = useState(false)
+  const toggleGroup = (theaterId: number) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      next.has(theaterId) ? next.delete(theaterId) : next.add(theaterId)
+      return next
+    })
+  }
+
+  const activeCount = useMemo(() => {
+    return Object.entries(adv).filter(([, v]) => v !== undefined && v !== '' && v !== null).length
+      + (includeExpired ? 0 : 1)
+  }, [adv, includeExpired])
+
+  function patchAdv(patch: Partial<AdminVoucherFilter>) {
+    setAdv((prev) => ({ ...prev, ...patch }))
+  }
+  function resetAdv() {
+    setAdv(EMPTY_FILTER)
+    setIncludeExpired(true)
+  }
+
   const bulkDeleteMut = useBulkDeleteVouchers()
   const bulkRestoreMut = useBulkRestoreVouchers()
 
-  const { register, handleSubmit, reset, control, watch, formState: { errors } } = useForm<VoucherFormData>()
-  const discountType = watch('discountType')
-
   function openCreate() {
     setEditingItem(null)
-    reset({
-      code: '', description: '', discountType: 'PERCENTAGE',
-      discountValue: 0, minOrderAmount: 0, maxDiscount: 0,
-      usageLimit: 0, startDate: '', endDate: '',
-    })
     setDialogOpen(true)
   }
-
-  function openEdit(voucher: any) {
-    // Use list data directly — single GET endpoint may not exist
+  function openEdit(voucher: AdminVoucher) {
     setEditingItem(voucher)
-    reset({
-      code: voucher.code,
-      description: voucher.description ?? '',
-      discountType: voucher.discountType ?? 'PERCENTAGE',
-      discountValue: voucher.discountValue ?? 0,
-      minOrderAmount: voucher.minOrderAmount ?? 0,
-      maxDiscount: voucher.maxDiscount ?? 0,
-      usageLimit: voucher.usageLimit ?? 0,
-      startDate: voucher.startDate ? voucher.startDate.slice(0, 16) : '',
-      endDate: voucher.endDate ? voucher.endDate.slice(0, 16) : '',
-    })
     setDialogOpen(true)
-  }
-
-  function onSubmit(data: VoucherFormData) {
-    // Client-side business validation
-    if (data.discountType === 'PERCENTAGE' && Number(data.discountValue) > 100) {
-      toast.error('Phần trăm giảm giá không được vượt quá 100%')
-      return
-    }
-    if (data.discountType === 'FIXED_AMOUNT' && data.minOrderAmount && Number(data.discountValue) > Number(data.minOrderAmount)) {
-      toast.error('Giá trị giảm không được lớn hơn đơn tối thiểu')
-      return
-    }
-    if (data.maxDiscount && data.minOrderAmount && Number(data.maxDiscount) > Number(data.minOrderAmount)) {
-      toast.error('Giảm tối đa không được lớn hơn đơn tối thiểu')
-      return
-    }
-    if (data.startDate && data.endDate && data.endDate <= data.startDate) {
-      toast.error('Ngày kết thúc phải sau ngày bắt đầu')
-      return
-    }
-
-    const payload = {
-      ...data,
-      discountValue: Number(data.discountValue),
-      minOrderAmount: Number(data.minOrderAmount),
-      maxDiscount: Number(data.maxDiscount),
-      usageLimit: Number(data.usageLimit),
-    }
-    if (editingItem) {
-      updateMut.mutate({ id: editingItem.id, data: payload }, { onSuccess: () => setDialogOpen(false) })
-    } else {
-      createMut.mutate(payload, { onSuccess: () => setDialogOpen(false) })
-    }
   }
 
   function handleBulkArchive() {
@@ -134,35 +126,48 @@ export default function AdminVoucherPage() {
     if (selectedIds.size === vouchers.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(vouchers.map((v: any) => v.id)))
+      setSelectedIds(new Set(vouchers.map((v) => v.id)))
     }
   }
 
-  function formatDiscount(v: any) {
-    if (v.discountType === 'PERCENTAGE') return `${v.discountValue}%`
-    if (v.discountType === 'FIXED_AMOUNT') return `${(v.discountValue ?? 0).toLocaleString('vi-VN')}đ`
-    return v.discountValue ?? '—'
-  }
-
-  function formatUsage(v: any) {
-    const used = v.usedCount ?? 0
-    const limit = v.usageLimit
-    return limit ? `${used}/${limit}` : `${used}/∞`
-  }
+  const renderVoucherRow = (v: AdminVoucher, index: number) => (
+    <VoucherRow
+      key={v.id}
+      voucher={v}
+      index={index}
+      selected={selectedIds.has(v.id)}
+      onToggleSelect={toggleSelect}
+      onEdit={openEdit}
+    />
+  )
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div className="flex-1 max-w-sm">
-          <Input
-            placeholder="Tìm kiếm voucher..."
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-          />
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="flex-1 max-w-sm">
+            <Input
+              placeholder="Tìm kiếm voucher..."
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+            />
+          </div>
+          <FilterTrigger onClick={() => setDrawerOpen(true)} activeCount={activeCount} />
+          {activeCount > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={resetAdv}
+              className="text-gray-400 hover:text-white hover:bg-white/5 h-9 px-2"
+              title="Xóa filter"
+            >
+              <X size={14} />
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={openCreate} className="bg-[#eab308] hover:bg-[#ca8a04] text-black font-semibold">
+          <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
             <Plus size={16} className="mr-1" /> Thêm mới
           </Button>
           <StatusDropdown
@@ -174,17 +179,30 @@ export default function AdminVoucherPage() {
         </div>
       </div>
 
+      <VoucherFilterDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        adv={adv}
+        onPatch={patchAdv}
+        includeExpired={includeExpired}
+        onSetIncludeExpired={setIncludeExpired}
+        branchLocked={branchLocked}
+        onApply={() => setDrawerOpen(false)}
+        onReset={resetAdv}
+      />
+
       {/* Table */}
-      <div className="rounded-xl border border-white/5 overflow-hidden">
+      <div className="rounded-2xl border border-white/5 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-white/5 hover:bg-transparent">
               <TableHead className="w-10">
                 <input type="checkbox" checked={vouchers.length > 0 && selectedIds.size === vouchers.length}
-                  onChange={toggleAll} className="accent-[#eab308]" />
+                  onChange={toggleAll} className="accent-[#ffc107]" />
               </TableHead>
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Mã</TableHead>
+              <TableHead className="text-gray-400">Phạm vi</TableHead>
               <TableHead className="text-gray-400">Mô tả</TableHead>
               <TableHead className="text-gray-400">Loại giảm</TableHead>
               <TableHead className="text-gray-400">Giá trị</TableHead>
@@ -196,36 +214,46 @@ export default function AdminVoucherPage() {
           <TableBody>
             {vouchers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
+                <TableCell colSpan={10} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
               </TableRow>
             )}
-            {vouchers.map((v: any, index: number) => (
-              <TableRow key={v.id} className="border-white/5 hover:bg-white/5 group">
-                <TableCell className="whitespace-nowrap">
-                  <input type="checkbox" checked={selectedIds.has(v.id)}
-                    onChange={() => toggleSelect(v.id)} className="accent-[#eab308]" />
-                </TableCell>
-                <TableCell className="text-gray-500 text-sm whitespace-nowrap">{index + 1}</TableCell>
-                <TableCell className="whitespace-nowrap">
-                  <span onClick={() => openEdit(v)}
-                    className="text-[#eab308] hover:underline cursor-pointer font-medium">
-                    {v.code}
-                  </span>
-                </TableCell>
-                <TableCell className="text-gray-400 text-sm whitespace-nowrap">{v.description || '—'}</TableCell>
-                <TableCell className="text-gray-300 text-sm whitespace-nowrap">
-                  {label(DISCOUNT_TYPE_LABELS, v.discountType)}
-                </TableCell>
-                <TableCell className="text-gray-300 text-sm whitespace-nowrap">{formatDiscount(v)}</TableCell>
-                <TableCell className="text-gray-300 text-sm whitespace-nowrap">{formatUsage(v)}</TableCell>
-                <TableCell className="text-gray-400 text-sm whitespace-nowrap">{fmtDate(v.endDate)}</TableCell>
-                <TableCell className="whitespace-nowrap">
-                  <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[v.storageState] ?? ''}`}>
-                    {label(STORAGE_STATE_LABELS, v.storageState)}
-                  </span>
-                </TableCell>
-              </TableRow>
-            ))}
+            {showGrouped ? (
+              <>
+                {globalVouchers.length > 0 && (
+                  <React.Fragment key="group-global">
+                    <TheaterGroupHeaderRow
+                      collapsed={globalCollapsed}
+                      onToggle={() => setGlobalCollapsed(c => !c)}
+                      theaterName="Voucher toàn hệ thống"
+                      theaterCity="Áp dụng mọi chi nhánh"
+                      itemCount={globalVouchers.length}
+                      itemLabel="voucher"
+                      colSpan={10}
+                    />
+                    {!globalCollapsed && globalVouchers.map((v, idx) => renderVoucherRow(v, idx))}
+                  </React.Fragment>
+                )}
+                {groupedVouchers && groupedVouchers.map((group) => {
+                  const isCollapsed = collapsedGroups.has(group.theaterId)
+                  return (
+                    <React.Fragment key={`group-${group.theaterId}`}>
+                      <TheaterGroupHeaderRow
+                        collapsed={isCollapsed}
+                        onToggle={() => toggleGroup(group.theaterId)}
+                        theaterName={group.theaterName}
+                        theaterCity={group.theaterCity}
+                        itemCount={group.items.length}
+                        itemLabel="voucher"
+                        colSpan={10}
+                      />
+                      {!isCollapsed && group.items.map((v, idx) => renderVoucherRow(v, idx))}
+                    </React.Fragment>
+                  )
+                })}
+              </>
+            ) : (
+              vouchers.map((v, index) => renderVoucherRow(v, index))
+            )}
           </TableBody>
         </Table>
       </div>
@@ -239,109 +267,14 @@ export default function AdminVoucherPage() {
         loading={bulkDeleteMut.isPending}
       />
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent size="lg" className="bg-[#0a1929] border-white/5 text-white">
-          <DialogHeader>
-            <DialogTitle>{editingItem ? 'Chỉnh sửa voucher' : 'Thêm voucher mới'}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <DialogBody>
-              <div className="grid grid-cols-12 gap-4">
-                <div className="col-span-12">
-                  <label className="text-sm text-gray-400 mb-1.5 block">Mã voucher <span className="text-red-400">*</span></label>
-                  <Input {...register('code', { required: 'Mã voucher là bắt buộc', maxLength: { value: 30, message: 'Tối đa 30 ký tự' } })} />
-                  {errors.code && <p className="text-red-400 text-xs mt-1">{String(errors.code.message)}</p>}
-                </div>
-                <div className="col-span-12">
-                  <label className="text-sm text-gray-400 mb-1.5 block">Mô tả</label>
-                  <Textarea {...register('description')} rows={3} />
-                </div>
-                <div className="col-span-6">
-                  <label className="text-sm text-gray-400 mb-1.5 block">Loại giảm giá <span className="text-red-400">*</span></label>
-                  <select {...register('discountType')}
-                    className="w-full h-10 rounded-lg border border-white/10 bg-[#0d2137] text-white text-sm px-3 focus:outline-none focus:ring-1 focus:ring-[#eab308]">
-                    <option value="PERCENTAGE">Phần trăm (%)</option>
-                    <option value="FIXED_AMOUNT">Số tiền cố định</option>
-                  </select>
-                </div>
-                <div className="col-span-6">
-                  <label className="text-sm text-gray-400 mb-1.5 block">Giá trị giảm <span className="text-red-400">*</span></label>
-                  {discountType === 'PERCENTAGE' ? (
-                    <div className="relative">
-                      <Input
-                        type="number"
-                        {...register('discountValue', {
-                          required: 'Giá trị giảm là bắt buộc',
-                          min: { value: 1, message: 'Giá trị phải >= 1' },
-                          max: { value: 100, message: 'Tối đa 100%' },
-                        })}
-                        placeholder="VD: 20"
-                        className="pr-8"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">%</span>
-                    </div>
-                  ) : (
-                    <Controller
-                      name="discountValue"
-                      control={control}
-                      rules={{ required: 'Giá trị giảm là bắt buộc', min: { value: 1, message: 'Giá trị phải > 0' } }}
-                      render={({ field }) => (
-                        <PriceInput value={field.value} onChange={field.onChange} placeholder="VD: 50.000" />
-                      )}
-                    />
-                  )}
-                  {errors.discountValue && <p className="text-red-400 text-xs mt-1">{String(errors.discountValue.message)}</p>}
-                </div>
-                <div className="col-span-6">
-                  <label className="text-sm text-gray-400 mb-1.5 block">Đơn tối thiểu</label>
-                  <Controller
-                    name="minOrderAmount"
-                    control={control}
-                    rules={{ min: 0 }}
-                    render={({ field }) => (
-                      <PriceInput value={field.value} onChange={field.onChange} placeholder="VD: 100.000" />
-                    )}
-                  />
-                  {errors.minOrderAmount && <p className="text-red-400 text-xs mt-1">{String(errors.minOrderAmount.message)}</p>}
-                </div>
-                <div className="col-span-6">
-                  <label className="text-sm text-gray-400 mb-1.5 block">Giảm tối đa</label>
-                  <Controller
-                    name="maxDiscount"
-                    control={control}
-                    rules={{ min: 0 }}
-                    render={({ field }) => (
-                      <PriceInput value={field.value} onChange={field.onChange} placeholder="VD: 200.000" />
-                    )}
-                  />
-                  {errors.maxDiscount && <p className="text-red-400 text-xs mt-1">{String(errors.maxDiscount.message)}</p>}
-                </div>
-                <div className="col-span-12">
-                  <label className="text-sm text-gray-400 mb-1.5 block">Giới hạn lượt dùng (0 = không giới hạn)</label>
-                  <Input type="number" {...register('usageLimit', { min: 0 })} />
-                </div>
-                <div className="col-span-6">
-                  <label className="text-sm text-gray-400 mb-1.5 block">Ngày bắt đầu <span className="text-red-400">*</span></label>
-                  <Input type="datetime-local" {...register('startDate', { required: 'Ngày bắt đầu là bắt buộc' })} />
-                  {errors.startDate && <p className="text-red-400 text-xs mt-1">{String(errors.startDate.message)}</p>}
-                </div>
-                <div className="col-span-6">
-                  <label className="text-sm text-gray-400 mb-1.5 block">Ngày kết thúc <span className="text-red-400">*</span></label>
-                  <Input type="datetime-local" {...register('endDate', { required: 'Ngày kết thúc là bắt buộc' })} />
-                  {errors.endDate && <p className="text-red-400 text-xs mt-1">{String(errors.endDate.message)}</p>}
-                </div>
-              </div>
-            </DialogBody>
-            <DialogFooter className="gap-2">
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}
-                className="border-white/10 text-gray-300 hover:bg-white/5">Hủy</Button>
-              <Button type="submit" className="bg-[#eab308] hover:bg-[#ca8a04] text-black font-semibold"
-                disabled={createMut.isPending || updateMut.isPending}>Lưu</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Create/Edit Dialog — tách thành component riêng để page < 300 dòng */}
+      <VoucherFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editingItem={editingItem}
+        scopedTheaterId={scopedTheaterId}
+        branchLocked={branchLocked}
+      />
     </div>
   )
 }

@@ -9,8 +9,8 @@ import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
 
-    // Dùng cho login + SecurityContext → PHẢI filter DELETED (user đã xóa không được login)
-    @Query("SELECT u FROM User u WHERE u.username = :username AND (u.storageState IS NULL OR u.storageState <> 'DELETED')")
+    // Dùng cho login + SecurityContext → PHẢI filter user đã soft-delete (ARCHIVED không được login)
+    @Query("SELECT u FROM User u WHERE u.username = :username AND (u.storageState IS NULL OR u.storageState <> 'ARCHIVED')")
     Optional<User> findActiveByUsername(String username);
 
     // Dùng cho admin getById → không filter (xem chi tiết user đã xóa)

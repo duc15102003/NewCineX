@@ -9,6 +9,7 @@ import com.cinex.module.favorite.entity.UserFavorite;
 import com.cinex.module.favorite.repository.UserFavoriteRepository;
 import com.cinex.module.movie.entity.Movie;
 import com.cinex.module.movie.repository.MovieRepository;
+import com.cinex.module.movie.service.MovieStatusComputer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -24,9 +25,11 @@ public class UserFavoriteService {
     private final UserFavoriteRepository favoriteRepository;
     private final UserRepository userRepository;
     private final MovieRepository movieRepository;
+    private final MovieStatusComputer movieStatusComputer;
 
     @Transactional(readOnly = true)
     public Page<FavoriteMovieResponse> getMyFavorites(Long userId, Pageable pageable) {
+        // Favorite list = aggregate qua TẤT CẢ chi nhánh (user không có context theater) → theaterId=null.
         return favoriteRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
                 .map(fav -> FavoriteMovieResponse.builder()
                         .movieId(fav.getMovie().getId())
@@ -34,7 +37,7 @@ public class UserFavoriteService {
                         .posterUrl(fav.getMovie().getPosterUrl())
                         .duration(fav.getMovie().getDuration())
                         .rating(fav.getMovie().getRating())
-                        .status(fav.getMovie().getStatus())
+                        .status(movieStatusComputer.compute(fav.getMovie(), null))
                         .favoritedAt(fav.getCreatedAt())
                         .build());
     }

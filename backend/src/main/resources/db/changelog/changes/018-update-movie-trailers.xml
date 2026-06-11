@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Cập nhật trailer URL YouTube cho 18 phim seed.
+        Trước đây seed 013 không có trailer_url → user phải update tay.
+        Migration này backfill cho team kéo về có sẵn data.
+
+        Dùng WHERE title = N'...' (không phải id) để chạy idempotent
+        ngay cả khi id offset khác môi trường.
+
+        Fix-forward pattern: KHÔNG sửa 013-seed-movies-and-runs.xml
+        (checksum đã apply trên DB của user khác).
+    -->
+
+    <changeSet id="018-update-movie-trailers" author="cinex">
+        <sql>
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=wIiASgAkk7g' WHERE title = N'Avatar 3: Lửa và Tro';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=Yz96EBNwMGw' WHERE title = N'Mai 2';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=dmK6mhQ7q0Q' WHERE title = N'Dune: Phần 3';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=53bmmVls3Fg' WHERE title = N'Conan Movie 27';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=t4LVt_L9jWM' WHERE title = N'Quỷ Cẩu 2: Trở Lại';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=2vdLzk15Z0w' WHERE title = N'Doraemon: Hành Tinh Khủng Long';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=nAxQ01JJr5c' WHERE title = N'John Wick 5';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=hUlBTt3NyGI' WHERE title = N'Lật Mặt 8';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=BaXeYaFFG-g' WHERE title = N'Marvel: Doctor Strange 3';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=ByXuk9QqQkk' WHERE title = N'Spirited Away (Bản remaster 4K)';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=IosqnBOkk2I' WHERE title = N'Em và Trịnh';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=fsQgc9pCyDU' WHERE title = N'Mission Impossible 9';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=W4bVSaeIzwI' WHERE title = N'Tom &amp; Jerry: Phim Mới';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=Q8WE8CAPtXw' WHERE title = N'Nhà Bà Nữ 2';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=y2TCjYiTGIo' WHERE title = N'Inception (Remaster)';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=_OKAwz2MsJs' WHERE title = N'Joker 2: Folie à Deux (Re-issue)';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=axcr5kn3AHM' WHERE title = N'Liên Hoan Phim Pháp 2026';
+            UPDATE movies SET trailer_url = N'https://www.youtube.com/watch?v=Aftg630D6X8' WHERE title = N'Kungfu Panda 5';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

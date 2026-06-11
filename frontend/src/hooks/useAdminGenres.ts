@@ -13,12 +13,43 @@ export interface AdminGenre {
   updatedAt: string
 }
 
-export function useAdminGenres(params: Record<string, any> = {}) {
+export interface AdminGenreFilter {
+  keyword?: string
+  hasMovies?: boolean
+  includeDeleted?: boolean
+  page?: number
+  size?: number
+}
+
+function cleanParams(input: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(input)) {
+    if (v === undefined || v === null || v === '') continue
+    out[k] = v
+  }
+  return out
+}
+
+export function useAdminGenres(params: AdminGenreFilter = {}) {
   return useQuery({
     queryKey: ['admin', 'genres', params],
     queryFn: async () => {
-      const res = await api.get<ApiResponse<PageResponse<AdminGenre>>>('/api/genres', { params: { ...params, includeDeleted: true } })
+      // Default includeDeleted=true để admin thấy cả genre đã lưu trữ
+      const cleaned = cleanParams({ ...params, includeDeleted: params.includeDeleted ?? true })
+      const res = await api.get<ApiResponse<PageResponse<AdminGenre>>>('/api/genres', { params: cleaned })
       return res.data.data
+    },
+  })
+}
+
+/** Fetch detail 1 genre — dùng khi mở dialog Edit. */
+export function useGenreDetail(id: number | null) {
+  return useQuery({
+    queryKey: ['admin', 'genres', 'detail', id],
+    enabled: !!id,
+    queryFn: async () => {
+      const res = await api.get<ApiResponse<AdminGenre>>(`/api/genres/${id}`)
+      return res.data.data!
     },
   })
 }

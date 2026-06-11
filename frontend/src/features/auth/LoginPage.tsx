@@ -6,6 +6,7 @@ import { useLogin } from '@/hooks/useAuth'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 
 const loginSchema = z.object({
@@ -17,8 +18,11 @@ type LoginForm = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const isLoggedIn = useAuthStore(s => s.isLoggedIn)
+  // mode='onTouched' = validate khi blur input lần đầu rồi switch onChange
+  // → user nhập đến đâu thấy lỗi đến đó nhưng không spam error khi vừa focus.
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
+    mode: 'onTouched',
   })
   const login = useLogin()
 
@@ -32,7 +36,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        <div className="bg-[#0a1929] border border-white/5 rounded-2xl p-8">
+        <div className="bg-[#201b11] border border-white/5 rounded-2xl p-8">
           <h1 className="text-2xl font-bold text-center mb-2">Đăng nhập</h1>
           <p className="text-gray-400 text-center text-sm mb-8">
             Đăng nhập để đặt vé xem phim
@@ -44,7 +48,8 @@ export default function LoginPage() {
               <Input
                 id="username"
                 placeholder="Tên đăng nhập"
-                className="mt-1.5 bg-[#0d2137] border-white/10"
+                aria-invalid={!!errors.username}
+                className={`mt-1.5 bg-[#2a2317] ${errors.username ? 'border-red-500/60 focus:border-red-500' : 'border-white/10'}`}
                 {...register('username')}
               />
               {errors.username && (
@@ -54,27 +59,23 @@ export default function LoginPage() {
 
             <div>
               <Label htmlFor="password">Mật khẩu <span className="text-red-400">*</span></Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••"
-                className="mt-1.5 bg-[#0d2137] border-white/10"
-                {...register('password')}
-              />
+              <div className="mt-1.5">
+                <PasswordInput id="password" placeholder="••••••" {...register('password')} />
+              </div>
               {errors.password && (
                 <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>
               )}
             </div>
 
             <div className="text-right">
-              <Link to="/forgot-password" className="text-xs text-[#eab308] hover:underline">
+              <Link to="/forgot-password" className="text-xs text-[#ffc107] hover:underline">
                 Quên mật khẩu?
               </Link>
             </div>
 
             <Button
               type="submit"
-              className="w-full bg-[#eab308] hover:bg-[#ca8a04] text-black font-semibold"
+              className="w-full bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg"
               disabled={login.isPending}
             >
               {login.isPending ? 'Đang đăng nhập...' : 'Đăng nhập'}
@@ -83,7 +84,7 @@ export default function LoginPage() {
 
           <p className="text-center text-sm text-gray-400 mt-6">
             Chưa có tài khoản?{' '}
-            <Link to="/register" className="text-[#eab308] hover:underline">
+            <Link to="/register" className="text-[#ffc107] hover:underline">
               Đăng ký
             </Link>
           </p>

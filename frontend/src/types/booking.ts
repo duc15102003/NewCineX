@@ -3,8 +3,9 @@ export interface SeatItem {
   rowLabel: string
   colNumber: number
   seatNumber: string
-  seatType: 'STANDARD' | 'VIP' | 'COUPLE'
-  status: 'AVAILABLE' | 'BROKEN'
+  seatType: 'STANDARD' | 'VIP' | 'COUPLE' | 'SWEETBOX' | 'DELUXE' | 'HANDICAP'
+  status: 'AVAILABLE' | 'BROKEN' | 'BLOCKED'
+  aisle: boolean
   storageState: string | null
 }
 
@@ -58,6 +59,8 @@ export interface BookingDetail {
   status: string
   movieTitle: string
   moviePosterUrl: string | null
+  /** Phân loại độ tuổi — null nếu phim cũ chưa set. */
+  movieAgeRating?: string | null
   showtimeId: number
   startTime: string
   endTime: string
@@ -101,9 +104,12 @@ export interface UserProfile {
   email: string
   fullName: string | null
   phone: string | null
+  /** Ngày sinh (YYYY-MM-DD) — null nếu user chưa khai. Phase 2 age-rating: nếu set, BE auto-block phim không đủ tuổi. */
+  dateOfBirth: string | null
   avatarUrl: string | null
   role: string
   enabled: boolean
+  emailVerified: boolean
   createdAt: string
   updatedAt: string | null
 }

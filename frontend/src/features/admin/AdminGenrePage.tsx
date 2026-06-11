@@ -1,33 +1,57 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
-import api, { getErrorMessage } from '@/api/axios'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
+import FilterDrawer, { FilterTrigger, FilterField } from '@/components/common/FilterDrawer'
 import { label, STORAGE_STATE_LABELS } from '@/utils/labels'
 import { STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 import { useAdminGenres, useCreateGenre, useUpdateGenre, useBulkDeleteGenres, useBulkRestoreGenres } from '@/hooks/useAdmin'
+import { useGenreDetail } from '@/hooks/useAdminGenres'
+import type { AdminGenre, AdminGenreFilter } from '@/hooks/useAdminGenres'
+import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
 
 interface GenreFormData {
   name: string
   description: string
 }
 
+const EMPTY_FILTER: AdminGenreFilter = {
+  keyword: '',
+  hasMovies: undefined,
+  includeDeleted: true,  // admin mặc định thấy cả ARCHIVED
+}
+
 export default function AdminGenrePage() {
-  const [keyword, setKeyword] = useState('')
+  const [appliedFilter, setAppliedFilter] = useState<AdminGenreFilter>(EMPTY_FILTER)
+  const [draftFilter, setDraftFilter] = useState<AdminGenreFilter>(EMPTY_FILTER)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<any>(null)
+  const [editingItem, setEditingItem] = useState<AdminGenre | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  const { data: pageData } = useAdminGenres({ keyword: keyword || undefined, size: 50 })
+  // Auto-load detail khi mở Edit — React Query cache theo id, đỡ phải tự catch error
+  const { data: editingDetail } = useGenreDetail(editingId)
+
+  const { data: pageData } = useAdminGenres({ ...appliedFilter, size: ADMIN_LIST_PAGE_SIZE })
   const genres = pageData?.content ?? []
+
+  // Đếm filter đang bật (không tính keyword vì nó visible)
+  const activeCount = useMemo(() => {
+    let n = 0
+    if (appliedFilter.hasMovies !== undefined) n++
+    if (appliedFilter.includeDeleted === false) n++  // chỉ bật badge khi tắt mặc định
+    return n
+  }, [appliedFilter])
 
   const createMut = useCreateGenre()
   const updateMut = useUpdateGenre()
@@ -38,27 +62,30 @@ export default function AdminGenrePage() {
 
   function openCreate() {
     setEditingItem(null)
+    setEditingId(null)
     reset({ name: '', description: '' })
     setDialogOpen(true)
   }
 
-  async function openEdit(genreId: number) {
-    try {
-      const res = await api.get(`/api/genres/${genreId}`)
-      const g = res.data.data
-      setEditingItem(g)
-      reset({ name: g.name, description: g.description ?? '' })
-      setDialogOpen(true)
-    } catch (e) {
-      toast.error(getErrorMessage(e, 'Không thể tải dữ liệu'))
-    }
+  function openEdit(genreId: number) {
+    setEditingId(genreId)
+    setDialogOpen(true)
   }
 
+  // Khi useGenreDetail trả dữ liệu → bind vào form
+  useEffect(() => {
+    if (editingDetail) {
+      setEditingItem(editingDetail)
+      reset({ name: editingDetail.name, description: editingDetail.description ?? '' })
+    }
+  }, [editingDetail, reset])
+
   function onSubmit(data: GenreFormData) {
+    const payload = data as unknown as Record<string, unknown>
     if (editingItem) {
-      updateMut.mutate({ id: editingItem.id, data }, { onSuccess: () => setDialogOpen(false) })
+      updateMut.mutate({ id: editingItem.id, data: payload }, { onSuccess: () => setDialogOpen(false) })
     } else {
-      createMut.mutate(data, { onSuccess: () => setDialogOpen(false) })
+      createMut.mutate(payload, { onSuccess: () => setDialogOpen(false) })
     }
   }
 
@@ -92,23 +119,39 @@ export default function AdminGenrePage() {
     if (selectedIds.size === genres.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(genres.map((g: any) => g.id)))
+      setSelectedIds(new Set(genres.map((g) => g.id)))
     }
   }
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div className="flex-1 max-w-sm">
-          <Input
-            placeholder="Tìm kiếm thể loại..."
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-          />
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        {/* LEFT: Search + Filter + Reset */}
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="flex-1 max-w-sm">
+            <Input
+              placeholder="Tìm theo tên thể loại..."
+              value={appliedFilter.keyword ?? ''}
+              onChange={(e) => setAppliedFilter(f => ({ ...f, keyword: e.target.value }))}
+            />
+          </div>
+          <FilterTrigger onClick={() => { setDraftFilter(appliedFilter); setDrawerOpen(true) }} activeCount={activeCount} />
+          {activeCount > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => { setDraftFilter({ ...EMPTY_FILTER, keyword: appliedFilter.keyword }); setAppliedFilter({ ...EMPTY_FILTER, keyword: appliedFilter.keyword }) }}
+              className="text-gray-400 hover:text-white hover:bg-white/5 h-9 px-2"
+              title="Xóa filter"
+            >
+              <X size={14} />
+            </Button>
+          )}
         </div>
+        {/* RIGHT: Add + Bulk actions */}
         <div className="flex items-center gap-2">
-          <Button onClick={openCreate} className="bg-[#eab308] hover:bg-[#ca8a04] text-black font-semibold">
+          <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
             <Plus size={16} className="mr-1" /> Thêm mới
           </Button>
           <StatusDropdown
@@ -121,13 +164,13 @@ export default function AdminGenrePage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-white/5 overflow-hidden">
+      <div className="rounded-2xl border border-white/5 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-white/5 hover:bg-transparent">
               <TableHead className="w-10">
                 <input type="checkbox" checked={genres.length > 0 && selectedIds.size === genres.length}
-                  onChange={toggleAll} className="accent-[#eab308]" />
+                  onChange={toggleAll} className="accent-[#ffc107]" />
               </TableHead>
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Tên thể loại</TableHead>
@@ -141,20 +184,20 @@ export default function AdminGenrePage() {
                 <TableCell colSpan={6} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
               </TableRow>
             )}
-            {genres.map((g: any, index: number) => (
+            {genres.map((g, index) => (
               <TableRow key={g.id} className="border-white/5 hover:bg-white/5 group">
                 <TableCell className="whitespace-nowrap">
                   <input type="checkbox" checked={selectedIds.has(g.id)}
-                    onChange={() => toggleSelect(g.id)} className="accent-[#eab308]" />
+                    onChange={() => toggleSelect(g.id)} className="accent-[#ffc107]" />
                 </TableCell>
                 <TableCell className="text-gray-500 text-sm whitespace-nowrap">{index + 1}</TableCell>
                 <TableCell className="whitespace-nowrap">
                   <span onClick={() => openEdit(g.id)}
-                    className="text-[#eab308] hover:underline cursor-pointer font-medium">
+                    className="text-[#ffc107] hover:underline cursor-pointer font-medium">
                     {g.name}
                   </span>
                 </TableCell>
-                <TableCell className="text-gray-400 text-sm whitespace-nowrap">{g.description || '—'}</TableCell>
+                <TableCell className="text-gray-400 text-sm whitespace-nowrap">{g.description}</TableCell>
                 <TableCell className="whitespace-nowrap">
                   <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[g.storageState] ?? ''}`}>
                     {label(STORAGE_STATE_LABELS, g.storageState)}
@@ -177,7 +220,7 @@ export default function AdminGenrePage() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent size="md" className="bg-[#0a1929] border-white/5 text-white">
+        <DialogContent size="md" className="bg-[#201b11] border-white/5 text-white rounded-2xl">
           <DialogHeader>
             <DialogTitle>{editingItem ? 'Chỉnh sửa thể loại' : 'Thêm thể loại mới'}</DialogTitle>
           </DialogHeader>
@@ -199,12 +242,48 @@ export default function AdminGenrePage() {
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}
                 className="border-white/10 text-gray-300 hover:bg-white/5">Hủy</Button>
-              <Button type="submit" className="bg-[#eab308] hover:bg-[#ca8a04] text-black font-semibold"
+              <Button type="submit" className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg"
                 disabled={createMut.isPending || updateMut.isPending}>Lưu</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Filter Drawer */}
+      <FilterDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        title="Lọc thể loại"
+        onApply={() => { setAppliedFilter({ ...draftFilter }); setDrawerOpen(false) }}
+        onReset={() => { setDraftFilter({ ...EMPTY_FILTER, keyword: appliedFilter.keyword }); setAppliedFilter({ ...EMPTY_FILTER, keyword: appliedFilter.keyword }) }}
+      >
+        <FilterField label="Phạm vi sử dụng">
+          <select
+            value={draftFilter.hasMovies === undefined ? '' : String(draftFilter.hasMovies)}
+            onChange={(e) => {
+              const v = e.target.value
+              setDraftFilter(f => ({ ...f, hasMovies: v === '' ? undefined : v === 'true' }))
+            }}
+            className="w-full h-10 rounded-md border border-white/10 bg-[#2a2317] text-white text-sm px-3 focus:outline-none focus:ring-1 focus:ring-[#ffc107]"
+          >
+            <option value="">Tất cả</option>
+            <option value="true">Chỉ thể loại đang được dùng</option>
+            <option value="false">Chỉ thể loại chưa được dùng</option>
+          </select>
+        </FilterField>
+
+        <FilterField label="Trạng thái lưu trữ" hint="Mặc định hiển thị cả thể loại đã xóa để admin quản lý.">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={draftFilter.includeDeleted ?? true}
+              onChange={(e) => setDraftFilter(f => ({ ...f, includeDeleted: e.target.checked }))}
+              className="accent-[#ffc107] w-4 h-4"
+            />
+            <span className="text-sm text-gray-300">Bao gồm đã xóa (ARCHIVED)</span>
+          </label>
+        </FilterField>
+      </FilterDrawer>
     </div>
   )
 }

@@ -16,7 +16,7 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent size="sm" className="bg-[#0a1929] border-white/5 text-white">
+      <DialogContent size="sm" className="bg-[#201b11] border-white/5 text-white rounded-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

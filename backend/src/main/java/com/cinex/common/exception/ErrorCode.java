@@ -16,8 +16,12 @@ public enum ErrorCode {
     USER_EXISTED(1004, "Tài khoản đã tồn tại", HttpStatus.CONFLICT),
     USER_NOT_FOUND(1005, "Không tìm thấy người dùng", HttpStatus.NOT_FOUND),
     INVALID_CREDENTIALS(1006, "Tên đăng nhập hoặc mật khẩu không đúng", HttpStatus.UNAUTHORIZED),
+    TOO_MANY_LOGIN_ATTEMPTS(1009, "Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau", HttpStatus.TOO_MANY_REQUESTS),
     INVALID_PASSWORD(1007, "Mật khẩu không hợp lệ", HttpStatus.BAD_REQUEST),
     INVALID_FILE(1008, "File không hợp lệ", HttpStatus.BAD_REQUEST),
+    OPTIMISTIC_LOCK_CONFLICT(1010, "Dữ liệu đã bị thay đổi bởi người khác, vui lòng thử lại", HttpStatus.CONFLICT),
+    DATA_INTEGRITY_VIOLATION(1011, "Vi phạm ràng buộc dữ liệu", HttpStatus.CONFLICT),
+    FILE_TOO_LARGE(1012, "File quá lớn", HttpStatus.PAYLOAD_TOO_LARGE),
     GENRE_NOT_FOUND(2001, "Không tìm thấy thể loại", HttpStatus.NOT_FOUND),
     GENRE_EXISTED(2002, "Thể loại đã tồn tại", HttpStatus.CONFLICT),
     MOVIE_NOT_FOUND(2003, "Không tìm thấy phim", HttpStatus.NOT_FOUND),
@@ -35,6 +39,8 @@ public enum ErrorCode {
     REVIEW_NOT_FOUND(8001, "Không tìm thấy đánh giá", HttpStatus.NOT_FOUND),
     REVIEW_EXISTED(8002, "Bạn đã đánh giá phim này", HttpStatus.CONFLICT),
     SNACK_NOT_FOUND(8003, "Không tìm thấy đồ ăn", HttpStatus.NOT_FOUND),
+    THEATER_NOT_FOUND(9001, "Không tìm thấy chi nhánh", HttpStatus.NOT_FOUND),
+    VALIDATION_ERROR(9002, "Dữ liệu không hợp lệ", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;

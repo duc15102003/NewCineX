@@ -13,6 +13,13 @@ import java.math.BigDecimal;
 @Setter
 public class SnackRequest {
 
+    /**
+     * Chi nhánh sở hữu snack. Bắt buộc khi tạo bởi SUPER_ADMIN xem "Tất cả".
+     * Branch ADMIN: service auto-override từ JWT (FE có thể bỏ qua hoặc gửi cùng).
+     */
+    @NotNull(message = "Chi nhánh là bắt buộc")
+    private Long theaterId;
+
     @NotBlank(message = "Tên đồ ăn là bắt buộc")
     @Size(max = 100, message = "Tên đồ ăn tối đa 100 ký tự")
     private String name;

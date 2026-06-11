@@ -13,7 +13,7 @@ export default function GenreFilter({ genres, selected, onSelect }: GenreFilterP
         onClick={() => onSelect(null)}
         className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
           selected === null
-            ? 'bg-[#eab308] text-black'
+            ? 'bg-[#ffc107] text-black'
             : 'bg-white/5 text-gray-400 hover:bg-white/10'
         }`}
       >
@@ -25,7 +25,7 @@ export default function GenreFilter({ genres, selected, onSelect }: GenreFilterP
           onClick={() => onSelect(genre.id === selected ? null : genre.id)}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
             selected === genre.id
-              ? 'bg-[#eab308] text-black'
+              ? 'bg-[#ffc107] text-black'
               : 'bg-white/5 text-gray-400 hover:bg-white/10'
           }`}
         >

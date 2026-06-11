@@ -29,7 +29,7 @@ export default function StatusDropdown({ onArchive, onRestore, archiveLoading, r
       </Button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-44 bg-[#0d1c2d] border border-white/10 rounded-xl shadow-2xl shadow-black/40 py-1 z-50">
+        <div className="absolute right-0 mt-2 w-44 bg-[#201b11] border border-white/10 rounded-xl shadow-2xl shadow-black/40 py-1 z-50">
           <button
             onClick={() => { onArchive(); setOpen(false) }}
             disabled={archiveLoading}

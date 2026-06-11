@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Showtimes: tạo suất chiếu trong 14 ngày tới cho các MovieRun NOW_SHOWING.
+        Mỗi phim NOW_SHOWING × mỗi chi nhánh × mỗi ngày = 3-4 suất (sáng/chiều/tối).
+        Vouchers: 5 voucher global + 1 per-theater.
+    -->
+
+    <changeSet id="016-seed-showtimes" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            DECLARE @today DATETIME2 = CAST(CAST(GETDATE() AS DATE) AS DATETIME2);
+            DECLARE @day_offset INT = 0;
+
+            WHILE @day_offset &lt; 14
+            BEGIN
+                -- Cho mỗi MovieRun NOW_SHOWING của ngày này, tạo 3 suất chiếu:
+                -- 10:00 sáng, 14:30 chiều, 19:30 tối
+                -- Chỉ thêm vào phòng 1 (IMAX) hoặc 3 (TWO_D) theo movie title
+
+                -- Suất 10:00 sáng — phòng 3 (TWO_D)
+                INSERT INTO showtimes (movie_id, movie_run_id, room_id, start_time, end_time, slot_end_time, base_price, vip_price, couple_price, status, storage_state)
+                SELECT mr.movie_id, mr.id, r.id,
+                       DATEADD(MINUTE, 600, DATEADD(DAY, @day_offset, @today)),  -- 10:00
+                       DATEADD(MINUTE, 600 + m.duration, DATEADD(DAY, @day_offset, @today)),
+                       DATEADD(MINUTE, 600 + m.duration + 15, DATEADD(DAY, @day_offset, @today)),
+                       75000, 95000, 180000, N'SCHEDULED', N'ACTIVE'
+                FROM movie_runs mr
+                JOIN movies m ON m.id = mr.movie_id
+                JOIN rooms r ON r.theater_id = mr.theater_id AND r.name = N'Phòng 3'
+                WHERE mr.status = N'NOW_SHOWING'
+                  AND DATEADD(DAY, @day_offset, @today) &gt;= CAST(mr.start_date AS DATETIME2)
+                  AND (mr.end_date IS NULL OR DATEADD(DAY, @day_offset, @today) &lt;= CAST(mr.end_date AS DATETIME2));
+
+                -- Suất 14:30 chiều — phòng 2 (3D)
+                INSERT INTO showtimes (movie_id, movie_run_id, room_id, start_time, end_time, slot_end_time, base_price, vip_price, couple_price, status, storage_state)
+                SELECT mr.movie_id, mr.id, r.id,
+                       DATEADD(MINUTE, 870, DATEADD(DAY, @day_offset, @today)),  -- 14:30
+                       DATEADD(MINUTE, 870 + m.duration, DATEADD(DAY, @day_offset, @today)),
+                       DATEADD(MINUTE, 870 + m.duration + 15, DATEADD(DAY, @day_offset, @today)),
+                       85000, 105000, 200000, N'SCHEDULED', N'ACTIVE'
+                FROM movie_runs mr
+                JOIN movies m ON m.id = mr.movie_id
+                JOIN rooms r ON r.theater_id = mr.theater_id AND r.name = N'Phòng 2 - 3D'
+                WHERE mr.status = N'NOW_SHOWING'
+                  AND DATEADD(DAY, @day_offset, @today) &gt;= CAST(mr.start_date AS DATETIME2)
+                  AND (mr.end_date IS NULL OR DATEADD(DAY, @day_offset, @today) &lt;= CAST(mr.end_date AS DATETIME2));
+
+                -- Suất 19:30 tối — phòng 1 (IMAX) — giá cao hơn
+                INSERT INTO showtimes (movie_id, movie_run_id, room_id, start_time, end_time, slot_end_time, base_price, vip_price, couple_price, status, storage_state)
+                SELECT mr.movie_id, mr.id, r.id,
+                       DATEADD(MINUTE, 1170, DATEADD(DAY, @day_offset, @today)),  -- 19:30
+                       DATEADD(MINUTE, 1170 + m.duration, DATEADD(DAY, @day_offset, @today)),
+                       DATEADD(MINUTE, 1170 + m.duration + 15, DATEADD(DAY, @day_offset, @today)),
+                       110000, 140000, 250000, N'SCHEDULED', N'ACTIVE'
+                FROM movie_runs mr
+                JOIN movies m ON m.id = mr.movie_id
+                JOIN rooms r ON r.theater_id = mr.theater_id AND r.name = N'Phòng 1 - IMAX'
+                WHERE mr.status = N'NOW_SHOWING'
+                  AND DATEADD(DAY, @day_offset, @today) &gt;= CAST(mr.start_date AS DATETIME2)
+                  AND (mr.end_date IS NULL OR DATEADD(DAY, @day_offset, @today) &lt;= CAST(mr.end_date AS DATETIME2));
+
+                SET @day_offset = @day_offset + 1;
+            END
+        </sql>
+    </changeSet>
+
+    <changeSet id="016-seed-vouchers" author="cinex">
+        <sql splitStatements="false" endDelimiter="GO">
+            DECLARE @now DATETIME2 = GETDATE();
+            DECLARE @future DATETIME2 = DATEADD(MONTH, 3, @now);
+
+            -- 5 voucher global (theater_id = NULL)
+            INSERT INTO vouchers (theater_id, code, description, discount_type, discount_value, min_order_amount, max_discount, usage_limit, used_count, start_date, end_date, active, storage_state) VALUES
+            (NULL, N'WELCOME10',     N'Giảm 10% cho khách hàng mới',        N'PERCENTAGE',   10,     50000,   30000,  1000, 0, @now, @future, 1, N'ACTIVE'),
+            (NULL, N'CINEX20K',      N'Giảm thẳng 20.000đ mọi đơn',          N'FIXED_AMOUNT', 20000,  100000,  NULL,   500,  0, @now, @future, 1, N'ACTIVE'),
+            (NULL, N'CINEX50K',      N'Giảm 50.000đ đơn từ 300k',             N'FIXED_AMOUNT', 50000,  300000,  NULL,   200,  0, @now, @future, 1, N'ACTIVE'),
+            (NULL, N'BIGSPENDER15',  N'Giảm 15% đơn từ 500k (tối đa 100k)',   N'PERCENTAGE',   15,     500000,  100000, 300,  0, @now, @future, 1, N'ACTIVE'),
+            (NULL, N'STUDENT25',     N'Giảm 25% cho học sinh sinh viên',      N'PERCENTAGE',   25,     0,       50000,  NULL, 0, @now, @future, 1, N'ACTIVE');
+
+            -- 1 voucher per-theater: chỉ áp ở 1 chi nhánh
+            INSERT INTO vouchers (theater_id, code, description, discount_type, discount_value, min_order_amount, max_discount, usage_limit, used_count, start_date, end_date, active, storage_state)
+            SELECT id, N'KHAITRUONG_HN', N'Khuyến mãi khai trương CineX Hà Nội: giảm 30%', N'PERCENTAGE', 30, 0, 80000, 500, 0, @now, @future, 1, N'ACTIVE'
+            FROM theaters WHERE code = N'CNX-HN';
+
+            INSERT INTO vouchers (theater_id, code, description, discount_type, discount_value, min_order_amount, max_discount, usage_limit, used_count, start_date, end_date, active, storage_state)
+            SELECT id, N'CHIENTHANG_HCM', N'Mừng Chiến Thắng tại CineX HCM: giảm 40k', N'FIXED_AMOUNT', 40000, 100000, NULL, 300, 0, @now, @future, 1, N'ACTIVE'
+            FROM theaters WHERE code = N'CNX-HCM';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

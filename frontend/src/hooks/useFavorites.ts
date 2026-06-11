@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import api, { getErrorMessage } from '@/api/axios'
+import { useAuthStore } from '@/store/authStore'
 import type { ApiResponse } from '@/types/auth'
 import type { PageResponse } from '@/types/movie'
 
@@ -27,6 +28,9 @@ export function useFavorites(page = 0) {
 }
 
 export function useIsFavorite(movieId: number) {
+  // Guest không có quyền vào /users/me/favorites → skip query để tránh 401.
+  // Trang movie detail là public, hook này dùng ở đó nên phải guard.
+  const isLoggedIn = useAuthStore(s => s.isLoggedIn)
   return useQuery({
     queryKey: ['favorite', movieId],
     queryFn: async () => {
@@ -36,7 +40,7 @@ export function useIsFavorite(movieId: number) {
       const favorites = res.data.data.content ?? []
       return favorites.some(f => f.movieId === movieId)
     },
-    enabled: !!movieId,
+    enabled: !!movieId && isLoggedIn(),
   })
 }
 

@@ -1,19 +1,14 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { QRCode } from 'react-qr-code'
-import { useQuery } from '@tanstack/react-query'
 import { useBookingDetail, useTicket, useCancelBooking } from '@/hooks/useBooking'
-import api from '@/api/axios'
+import { usePublicConfigNumber } from '@/hooks/useConfig'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
-import { label, BOOKING_STATUS_LABELS, SEAT_TYPE_LABELS, ROOM_TYPE_LABELS, fmtDateTime } from '@/utils/labels'
+import { label, BOOKING_STATUS_LABELS, SEAT_TYPE_LABELS, ROOM_TYPE_LABELS, fmtDateTime, fmtVnd, needsAgeConfirm, AGE_RATING_LABELS } from '@/utils/labels'
+import { IdCard } from 'lucide-react'
 import Loading from '@/components/common/Loading'
-
-function formatPrice(amount: number) {
-  return amount.toLocaleString('vi-VN') + 'đ'
-}
 
 type BadgeVariant = 'warning' | 'success' | 'default' | 'destructive' | 'secondary' | 'outline'
 
@@ -41,15 +36,7 @@ export default function TicketDetailPage() {
   const isLoading = loadingBooking || loadingTicket
 
   // Lấy config hủy vé từ BE (không hardcode)
-  const { data: cancelConfig } = useQuery({
-    queryKey: ['config', 'cancel-before-minutes'],
-    queryFn: async () => {
-      const res = await api.get('/api/configs/public/booking.cancel_before_minutes')
-      return res.data.data as string
-    },
-    staleTime: 5 * 60 * 1000,
-  })
-  const cancelBeforeMinutes = Number(cancelConfig ?? 60)
+  const { data: cancelBeforeMinutes = 60 } = usePublicConfigNumber('booking.cancel_before_minutes', 60)
 
   // Cho hủy: CONFIRMED + trước X phút khi suất chiếu bắt đầu (X từ config)
   const canCancel = booking
@@ -66,7 +53,7 @@ export default function TicketDetailPage() {
 
   if (!booking) {
     return (
-      <div className="min-h-screen bg-[#051424] flex items-center justify-center">
+      <div className="min-h-screen bg-[#181309] flex items-center justify-center">
         <p className="text-red-400">Không tìm thấy vé.</p>
       </div>
     )
@@ -75,7 +62,7 @@ export default function TicketDetailPage() {
   const { label: statusText, variant } = getStatusInfo(booking.status)
 
   return (
-    <div className="min-h-screen bg-[#051424] text-white py-10 px-4">
+    <div className="min-h-screen bg-[#181309] text-white py-10 px-4">
       <div className="max-w-lg mx-auto space-y-5">
 
         {/* Header */}
@@ -91,15 +78,31 @@ export default function TicketDetailPage() {
           <Badge variant={variant} className="text-sm px-3 py-1">{statusText}</Badge>
         </div>
 
+        {/* Cảnh báo độ tuổi — chuẩn industry: T13/T16/T18/C buộc mang CCCD,
+            nhân viên check tại cổng có quyền từ chối nếu không đủ tuổi. */}
+        {needsAgeConfirm(booking.movieAgeRating) && (
+          <div className="flex gap-3 bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4">
+            <IdCard size={20} className="text-orange-400 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="text-orange-300 font-medium mb-0.5">
+                Phim {booking.movieAgeRating} · {AGE_RATING_LABELS[booking.movieAgeRating ?? '']?.split(' — ')[1] ?? ''}
+              </p>
+              <p className="text-orange-200/80 text-xs leading-relaxed">
+                Vui lòng mang theo CCCD/CMND để xuất trình tại cổng. Nhân viên có quyền từ chối check-in nếu không đủ tuổi và không hoàn tiền.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Thông tin phim + suất chiếu */}
-        <Card className="bg-[#0a1929] border-white/5 text-white">
+        <Card className="bg-[#201b11] border-white/5 text-white">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xl text-[#eab308]">{booking.movieTitle}</CardTitle>
+            <CardTitle className="text-xl text-[#ffc107]">{booking.movieTitle}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-400">Mã đặt vé</span>
-              <span className="font-mono text-[#eab308] font-bold">{booking.bookingCode}</span>
+              <span className="font-mono text-[#ffc107] font-bold">{booking.bookingCode}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Giờ chiếu</span>
@@ -117,7 +120,7 @@ export default function TicketDetailPage() {
         </Card>
 
         {/* Ghế + giá */}
-        <Card className="bg-[#0a1929] border-white/5 text-white">
+        <Card className="bg-[#201b11] border-white/5 text-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-gray-100">Chi tiết ghế</CardTitle>
           </CardHeader>
@@ -130,40 +133,65 @@ export default function TicketDetailPage() {
                   </Badge>
                   <span className="text-gray-400 text-xs">{label(SEAT_TYPE_LABELS, s.seatType)}</span>
                 </div>
-                <span className="text-gray-200">{formatPrice(s.price)}</span>
+                <span className="text-gray-200">{fmtVnd(s.price)}</span>
               </div>
             ))}
             <div className="border-t border-white/10 pt-3 flex justify-between font-semibold">
               <span>Tổng cộng</span>
-              <span className="text-[#eab308] text-lg">{formatPrice(booking.totalAmount)}</span>
+              <span className="text-[#ffc107] text-lg">{fmtVnd(booking.totalAmount)}</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* QR Code — chỉ hiển thị khi có ticket */}
-        {ticket ? (
-          <Card className="bg-[#0a1929] border-white/5 text-white">
+        {/* QR Code — hiển thị PNG base64 BE đã gen từ qrToken (random 32 ký tự, unforgeable).
+            KHÔNG gen từ bookingCode vì code đó predictable (CX-yymmdd-NNN). */}
+        {ticket?.qrCodeBase64 ? (
+          <Card className="bg-[#201b11] border-white/5 text-white">
             <CardContent className="pt-6 flex flex-col items-center gap-4">
               <p className="text-sm text-gray-400 text-center">
                 Xuất trình mã QR tại quầy để vào rạp
               </p>
               <div className="bg-white p-4 rounded-2xl shadow-lg">
-                <QRCode
-                  value={booking.bookingCode}
-                  size={250}
+                <img
+                  src={`data:image/png;base64,${ticket.qrCodeBase64}`}
+                  alt={`QR vé ${booking.bookingCode}`}
+                  width={250}
+                  height={250}
                 />
               </div>
-              <p className="font-mono text-[#eab308] text-sm tracking-widest">
+              <p className="font-mono text-[#ffc107] text-sm tracking-widest">
                 {booking.bookingCode}
               </p>
             </CardContent>
           </Card>
         ) : (
-          <Card className="bg-[#0a1929] border-white/5 text-white">
+          <Card className="bg-[#201b11] border-white/5 text-white">
             <CardContent className="pt-6 text-center">
               <p className="text-gray-500 text-sm">
                 QR code sẽ hiển thị sau khi thanh toán xác nhận.
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Chính sách hủy vé — luôn hiển thị, kể cả khi không còn cancel được. */}
+        {booking.status === 'CONFIRMED' && (
+          <Card className="bg-[#201b11] border-[#3f382d] text-white">
+            <CardContent className="pt-6">
+              <h3 className="font-medium text-amber-50 mb-2">Chính sách hủy vé</h3>
+              <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
+                <li>
+                  Được phép hủy <span className="text-[#ffc107] font-medium">trước {cancelBeforeMinutes} phút</span> khi suất chiếu bắt đầu
+                </li>
+                <li>Tiền vé sẽ được hoàn lại 100% qua phương thức thanh toán ban đầu</li>
+                <li>Voucher đã dùng (nếu có) sẽ được trả lại tài khoản</li>
+                <li>Trong vòng {cancelBeforeMinutes} phút trước giờ chiếu: KHÔNG cho hủy</li>
+              </ul>
+              {!canCancel && (
+                <p className="text-xs text-red-400 mt-3">
+                  ⚠ Đã quá hạn hủy vé. Vui lòng đến rạp đúng giờ.
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -183,7 +211,7 @@ export default function TicketDetailPage() {
           open={confirmOpen}
           onClose={() => setConfirmOpen(false)}
           onConfirm={handleCancel}
-          message="Bạn có chắc muốn hủy vé này không?"
+          message={`Bạn có chắc muốn hủy vé này không? Tiền sẽ được hoàn lại 100%.`}
           loading={cancelBooking.isPending}
         />
 

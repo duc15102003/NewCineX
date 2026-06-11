@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
-import api from '@/api/axios'
 import { Clock, Star, Calendar, Film, Heart } from 'lucide-react'
+import { usePublicConfigNumber } from '@/hooks/useConfig'
 import ReviewSection from '@/components/movie/ReviewSection'
-import { label, ROOM_TYPE_LABELS } from '@/utils/labels'
+import { fmtRating, label, ROOM_TYPE_LABELS, toLocalDateString, AGE_RATING_SHORT, AGE_RATING_DESC, AGE_RATING_LABELS, fmtTime } from '@/utils/labels'
+import PriceWithRules from '@/components/common/PriceWithRules'
+import { cdnImage } from '@/utils/image'
+import { AGE_RATING_COLORS } from '@/utils/colors'
 import { useIsFavorite, useAddFavorite, useRemoveFavorite } from '@/hooks/useFavorites'
+import { useTheaterStore } from '@/store/theaterStore'
 
 function getYouTubeEmbedUrl(url: string): string {
   try {
@@ -23,7 +26,7 @@ function getYouTubeEmbedUrl(url: string): string {
 import { useMovie, useShowtimes } from '@/hooks/useMovies'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import Loading from '@/components/common/Loading'
+import { MovieDetailSkeleton } from '@/components/common/Skeleton'
 import { useAuthStore } from '@/store/authStore'
 import LoginPromptModal from '@/components/common/LoginPromptModal'
 
@@ -32,21 +35,15 @@ export default function MovieDetailPage() {
   const movieId = Number(id)
   const { data: movie, isLoading } = useMovie(movieId)
 
-  // Chọn ngày xem suất chiếu (mặc định hôm nay)
-  const today = new Date().toISOString().split('T')[0]
+  // Chọn ngày xem suất chiếu (mặc định hôm nay). Dùng local timezone tránh shift múi giờ.
+  const today = toLocalDateString(new Date())
   const [selectedDate, setSelectedDate] = useState(today)
 
-  const { data: showtimes = [] } = useShowtimes(movieId, selectedDate)
+  // Filter showtime theo chi nhánh user đã chọn (F1).
+  const { currentTheater } = useTheaterStore()
+  const { data: showtimes = [] } = useShowtimes(movieId, selectedDate, currentTheater?.id)
 
-  const { data: cutoffConfig } = useQuery({
-    queryKey: ['config', 'cutoff-minutes'],
-    queryFn: async () => {
-      const res = await api.get('/api/configs/public/booking.cutoff_after_start_minutes')
-      return res.data.data as string
-    },
-    staleTime: 5 * 60 * 1000,
-  })
-  const cutoffMinutes = Number(cutoffConfig ?? 15)
+  const { data: cutoffMinutes = 15 } = usePublicConfigNumber('booking.cutoff_after_start_minutes', 15)
 
   const { isLoggedIn } = useAuthStore()
   const [loginModalOpen, setLoginModalOpen] = useState(false)
@@ -54,11 +51,11 @@ export default function MovieDetailPage() {
   const addFavorite = useAddFavorite()
   const removeFavorite = useRemoveFavorite()
 
-  // Tạo 7 ngày tới để chọn
+  // Tạo 7 ngày tới để chọn (local timezone)
   const dates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date()
     d.setDate(d.getDate() + i)
-    return d.toISOString().split('T')[0]
+    return toLocalDateString(d)
   })
 
   const formatDate = (dateStr: string) => {
@@ -69,15 +66,7 @@ export default function MovieDetailPage() {
     return { day, month, weekday }
   }
 
-  const formatTime = (iso: string) => {
-    return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-  }
-
-  const formatPrice = (price: number) => {
-    return price.toLocaleString('vi-VN') + 'đ'
-  }
-
-  if (isLoading) return <Loading />
+  if (isLoading) return <MovieDetailSkeleton />
   if (!movie) return <div className="text-center py-20 text-gray-400">Phim không tồn tại</div>
 
   return (
@@ -87,22 +76,30 @@ export default function MovieDetailPage() {
         {/* Backdrop: blurred poster as background */}
         {movie.posterUrl && (
           <img
-            src={movie.posterUrl}
+            src={cdnImage(movie.posterUrl, 600)}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-20 scale-110 pointer-events-none"
           />
         )}
-        <div className="absolute inset-0 bg-[#0d2137]/80 pointer-events-none" />
+        <div className="absolute inset-0 bg-[#2a2317]/80 pointer-events-none" />
 
         {/* Content over backdrop */}
         <div className="relative flex flex-col md:flex-row gap-8 p-8">
           {/* Poster */}
           <div className="w-full md:w-64 flex-shrink-0">
             {movie.posterUrl ? (
-              <img src={movie.posterUrl} alt={movie.title} className="w-full rounded-xl shadow-2xl" />
+              // Poster chính hiển thị above-the-fold → eager + high priority (LCP candidate)
+              <img
+                src={cdnImage(movie.posterUrl, 500)}
+                alt={movie.title}
+                fetchPriority="high"
+                className="w-full rounded-xl shadow-2xl"
+              />
             ) : (
-              <div className="w-full aspect-[2/3] bg-[#0d2137] rounded-xl flex items-center justify-center text-gray-600">
+              <div className="w-full aspect-[2/3] bg-[#2a2317] rounded-xl flex items-center justify-center text-gray-600">
                 Chưa có ảnh
               </div>
             )}
@@ -110,12 +107,22 @@ export default function MovieDetailPage() {
 
           {/* Detail */}
           <div className="flex-1">
-            <div className="flex items-start gap-3 mb-3">
-              <h1 className="text-3xl font-bold">{movie.title}</h1>
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+              <h1 className="text-3xl font-bold text-amber-50 leading-tight">{movie.title}</h1>
+              {/* Age rating badge — chuẩn TT 25/2024/BVHTTDL. Hiển thị nhãn đầy đủ
+                  (vd "P · Mọi đối tượng") để user không phải đoán "P là gì". */}
+              {movie.ageRating && (
+                <span
+                  className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border ${AGE_RATING_COLORS[movie.ageRating] ?? ''}`}
+                  title={label(AGE_RATING_LABELS, movie.ageRating)}
+                >
+                  {AGE_RATING_SHORT[movie.ageRating] ?? movie.ageRating} · {AGE_RATING_DESC[movie.ageRating] ?? ''}
+                </span>
+              )}
               {isLoggedIn() && (
                 <button
                   onClick={() => isFavorite ? removeFavorite.mutate(movieId) : addFavorite.mutate(movieId)}
-                  className={`shrink-0 mt-1 p-2 rounded-full transition-all ${
+                  className={`shrink-0 p-2 rounded-full transition-all ${
                     isFavorite
                       ? 'text-red-400 bg-red-500/10 hover:bg-red-500/20'
                       : 'text-gray-500 hover:text-red-400 hover:bg-red-500/10'
@@ -129,17 +136,17 @@ export default function MovieDetailPage() {
 
             <div className="flex flex-wrap items-center gap-3 mb-4">
               {movie.genres
-                .filter((g: any) => g.storageState !== 'ARCHIVED')
-                .map((g: any) => (
+                .filter(g => g.storageState !== 'ARCHIVED')
+                .map(g => (
                   <Badge key={g.id} variant="secondary">{g.name}</Badge>
               ))}
             </div>
 
             <div className="flex flex-wrap gap-4 text-sm text-gray-400 mb-6">
               <span className="flex items-center gap-1"><Clock size={14} /> {movie.duration} phút</span>
-              <span className={`flex items-center gap-1 ${movie.rating ? 'text-[#eab308]' : 'text-gray-600'}`}>
+              <span className={`flex items-center gap-1 ${movie.rating ? 'text-[#ffc107]' : 'text-gray-600'}`}>
                 <Star size={14} fill={movie.rating ? 'currentColor' : 'none'} />
-                {movie.rating ? `${movie.rating}/10` : 'Chưa có đánh giá'}
+                {`${fmtRating(movie.rating)}/10`}
               </span>
               {movie.language && <span className="flex items-center gap-1"><Film size={14} /> {movie.language}</span>}
               {movie.releaseDate && (
@@ -187,8 +194,8 @@ export default function MovieDetailPage() {
                 onClick={() => setSelectedDate(dateStr)}
                 className={`flex flex-col items-center min-w-[60px] px-3 py-2 rounded-xl border transition-colors ${
                   isSelected
-                    ? 'bg-[#eab308] text-black border-[#eab308]'
-                    : 'bg-[#0a1929] text-gray-400 border-white/10 hover:border-white/20'
+                    ? 'bg-[#ffc107] text-black border-[#ffc107]'
+                    : 'bg-[#201b11] text-gray-400 border-white/10 hover:border-white/20'
                 }`}
               >
                 <span className="text-xs">{weekday}</span>
@@ -208,24 +215,56 @@ export default function MovieDetailPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {futureShowtimes.map((st) => (
-              <div key={st.id} className="bg-[#0a1929] border border-white/5 rounded-xl p-4 flex items-center justify-between">
+              <div key={st.id} className="bg-[#201b11] border border-white/5 rounded-2xl p-4 flex items-center justify-between">
                 <div>
-                  <p className="font-semibold text-lg">{formatTime(st.startTime)} - {formatTime(st.endTime)}</p>
+                  <p className="font-semibold text-lg">{fmtTime(st.startTime)} - {fmtTime(st.endTime)}</p>
                   <p className="text-sm text-gray-400">{st.roomName} ({label(ROOM_TYPE_LABELS, st.roomType)})</p>
-                  <div className="text-xs mt-1 space-y-0.5">
-                    <span className="text-gray-300">Thường: <span className="text-white font-medium">{formatPrice(st.basePrice)}</span></span>
-                    {st.vipPrice && <span className="text-gray-300 ml-2">VIP: <span className="text-[#eab308] font-medium">{formatPrice(st.vipPrice)}</span></span>}
-                    {st.couplePrice && <span className="text-gray-300 ml-2">Đôi: <span className="text-purple-400 font-medium">{formatPrice(st.couplePrice)}</span></span>}
+                  <div className="text-xs mt-1 space-x-3">
+                    <PriceWithRules
+                      label="Thường:"
+                      basePrice={st.basePrice}
+                      effectivePrice={st.effectiveBasePrice ?? st.basePrice}
+                      priceColorClass="text-white"
+                    />
+                    {st.vipPrice && (
+                      <PriceWithRules
+                        label="VIP:"
+                        basePrice={st.vipPrice}
+                        effectivePrice={st.effectiveVipPrice ?? st.vipPrice}
+                      />
+                    )}
+                    {st.couplePrice && (
+                      <PriceWithRules
+                        label="Đôi:"
+                        basePrice={st.couplePrice}
+                        effectivePrice={st.effectiveCouplePrice ?? st.couplePrice}
+                        priceColorClass="text-purple-400"
+                      />
+                    )}
                   </div>
+                  {/* Chỉ hiện chip giảm giá (chuẩn rạp VN: ẩn surge để giữ tâm lý mua hàng) */}
+                  {st.appliedRules && st.appliedRules.some(r => r.discountPercent < 0) && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {st.appliedRules.filter(r => r.discountPercent < 0).map(r => (
+                        <span
+                          key={r.code}
+                          className="text-[10px] px-1.5 py-0.5 rounded-md border bg-green-500/10 text-green-400 border-green-500/30"
+                          title={r.name}
+                        >
+                          {r.name} {r.discountPercent}%
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {isLoggedIn() ? (
                   <Link to={`/booking/seats/${st.id}`}>
-                    <Button size="sm" className="bg-[#eab308] hover:bg-[#ca8a04] text-black">
+                    <Button size="sm" className="bg-[#ffc107] hover:bg-[#e6ac06] text-black">
                       Đặt vé
                     </Button>
                   </Link>
                 ) : (
-                  <Button size="sm" className="bg-[#eab308] hover:bg-[#ca8a04] text-black"
+                  <Button size="sm" className="bg-[#ffc107] hover:bg-[#e6ac06] text-black"
                     onClick={() => setLoginModalOpen(true)}>
                     Đặt vé
                   </Button>

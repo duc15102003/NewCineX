@@ -119,5 +119,68 @@ public class FileUploadService {
             throw new BusinessException(ErrorCode.INVALID_FILE,
                     "Kích thước file không được vượt quá 5MB");
         }
+        // Validate magic bytes: content-type do client gửi có thể bị giả mạo
+        // → đọc bytes đầu file để xác nhận đúng là ảnh thật
+        validateMagicBytes(file);
+    }
+
+    /**
+     * Kiểm tra magic bytes (file signature) của file ảnh.
+     *
+     * Tại sao cần?
+     * - Header Content-Type do client tự gửi, có thể giả mạo (VD: đổi tên virus.exe thành virus.jpg)
+     * - Magic bytes là vài byte đầu file, do định dạng file quy định, KHÔNG đổi được
+     *   nếu không phá hỏng file
+     *
+     * Magic bytes các định dạng:
+     * - JPEG: FF D8 FF
+     * - PNG:  89 50 4E 47 0D 0A 1A 0A
+     * - WebP: 52 49 46 46 ?? ?? ?? ?? 57 45 42 50  (RIFF....WEBP)
+     */
+    private void validateMagicBytes(MultipartFile file) {
+        try {
+            byte[] header = new byte[12];
+            int read;
+            try (var is = file.getInputStream()) {
+                read = is.read(header, 0, 12);
+            }
+            if (read < 3) {
+                throw new BusinessException(ErrorCode.INVALID_FILE, "File không phải ảnh hợp lệ");
+            }
+
+            // JPEG: FF D8 FF
+            boolean isJpeg = (header[0] & 0xFF) == 0xFF
+                    && (header[1] & 0xFF) == 0xD8
+                    && (header[2] & 0xFF) == 0xFF;
+
+            // PNG: 89 50 4E 47 0D 0A 1A 0A
+            boolean isPng = read >= 8
+                    && (header[0] & 0xFF) == 0x89
+                    && (header[1] & 0xFF) == 0x50
+                    && (header[2] & 0xFF) == 0x4E
+                    && (header[3] & 0xFF) == 0x47
+                    && (header[4] & 0xFF) == 0x0D
+                    && (header[5] & 0xFF) == 0x0A
+                    && (header[6] & 0xFF) == 0x1A
+                    && (header[7] & 0xFF) == 0x0A;
+
+            // WebP: "RIFF" (52 49 46 46) ở byte 0-3, "WEBP" (57 45 42 50) ở byte 8-11
+            boolean isWebp = read >= 12
+                    && (header[0] & 0xFF) == 0x52
+                    && (header[1] & 0xFF) == 0x49
+                    && (header[2] & 0xFF) == 0x46
+                    && (header[3] & 0xFF) == 0x46
+                    && (header[8] & 0xFF) == 0x57
+                    && (header[9] & 0xFF) == 0x45
+                    && (header[10] & 0xFF) == 0x42
+                    && (header[11] & 0xFF) == 0x50;
+
+            if (!isJpeg && !isPng && !isWebp) {
+                throw new BusinessException(ErrorCode.INVALID_FILE, "File không phải ảnh hợp lệ");
+            }
+        } catch (IOException e) {
+            log.warn("Không đọc được magic bytes của file upload", e);
+            throw new BusinessException(ErrorCode.INVALID_FILE, "File không phải ảnh hợp lệ");
+        }
     }
 }

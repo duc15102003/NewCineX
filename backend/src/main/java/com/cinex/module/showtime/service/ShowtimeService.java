@@ -5,13 +5,19 @@ import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
 import com.cinex.module.config.service.SystemConfigService;
 import com.cinex.module.movie.entity.Movie;
+import com.cinex.module.movie.entity.MovieRun;
+import com.cinex.module.movie.entity.MovieRunStatus;
 import com.cinex.module.movie.repository.MovieRepository;
+import com.cinex.module.movie.repository.MovieRunRepository;
+import com.cinex.module.pricing.service.PricingEngine;
 import com.cinex.module.room.entity.Room;
+import com.cinex.module.room.entity.RoomType;
 import com.cinex.module.room.repository.RoomRepository;
 import com.cinex.module.booking.entity.BookingStatus;
 import com.cinex.module.booking.repository.BookingRepository;
 import com.cinex.module.booking.repository.BookingSeatRepository;
 import com.cinex.module.seat.repository.SeatRepository;
+import com.cinex.module.showtime.dto.AppliedPricingRule;
 import com.cinex.module.showtime.dto.ShowtimeFilter;
 import com.cinex.module.showtime.dto.ShowtimeListResponse;
 import com.cinex.module.showtime.dto.ShowtimeRequest;
@@ -28,6 +34,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -38,18 +46,87 @@ public class ShowtimeService {
 
     private final ShowtimeRepository showtimeRepository;
     private final MovieRepository movieRepository;
+    private final MovieRunRepository movieRunRepository;
     private final RoomRepository roomRepository;
     private final SeatRepository seatRepository;
     private final BookingRepository bookingRepository;
     private final BookingSeatRepository bookingSeatRepository;
     private final ShowtimeMapper showtimeMapper;
     private final SystemConfigService systemConfigService;
+    private final com.cinex.common.service.SecurityService securityService;
+    private final PricingEngine pricingEngine;
 
+    /**
+     * <b>RBAC scope:</b> Branch ADMIN bị override filter.theaterId thành chi nhánh của mình.
+     * USER + SUPER_ADMIN giữ filter nguyên (USER vẫn xem showtime public toàn hệ thống).
+     */
     @Transactional(readOnly = true)
     public Page<ShowtimeListResponse> listShowtimes(ShowtimeFilter filter, Pageable pageable) {
+        Long scopedTheaterId = securityService.getCurrentUserTheaterId();
+        if (scopedTheaterId != null) {
+            filter.setTheaterId(scopedTheaterId);
+        }
         var spec = ShowtimeSpecification.fromFilter(filter);
         return showtimeRepository.findAll(spec, pageable)
-                .map(showtimeMapper::toListResponse);
+                .map(this::toListResponseWithPricing);
+    }
+
+    /**
+     * Map Showtime entity → ListResponse và POPULATE effective prices + applied rules.
+     *
+     * <p><b>Chuẩn industry "What You See Is What You Pay":</b> Pricing rules được apply ngay
+     * ở response — FE hiển thị giá thực sự thu (sau discount/surge), không phải giá gốc DB.
+     * Tránh bug "thấy 100k trên list, trả 80k ở payment".
+     */
+    private ShowtimeListResponse toListResponseWithPricing(Showtime showtime) {
+        ShowtimeListResponse base = showtimeMapper.toListResponse(showtime);
+        return enrichWithPricing(base, showtime);
+    }
+
+    /**
+     * Populate effectiveBasePrice/VipPrice/CouplePrice + appliedRules vào response.
+     * Tách method riêng để tái dùng cho cả listResponse và detail.
+     */
+    private ShowtimeListResponse enrichWithPricing(ShowtimeListResponse base, Showtime showtime) {
+        Long theaterId = showtime.getRoom().getTheater().getId();
+        LocalDateTime start = showtime.getStartTime();
+        List<AppliedPricingRule> applied = pricingEngine.findMatchingRules(start, theaterId).stream()
+                .map(r -> AppliedPricingRule.builder()
+                        .code(r.code())
+                        .name(r.name())
+                        // multiplierPercent 80 → discountPercent -20 (giảm 20%); 130 → +30 (tăng 30%)
+                        .discountPercent(r.multiplierPercent().subtract(BigDecimal.valueOf(100)))
+                        .build())
+                .toList();
+        return ShowtimeListResponse.builder()
+                .id(base.getId())
+                .storageState(base.getStorageState())
+                .movieId(base.getMovieId())
+                .movieTitle(base.getMovieTitle())
+                .moviePosterUrl(base.getMoviePosterUrl())
+                .movieRunId(base.getMovieRunId())
+                .runType(base.getRunType())
+                .runStartDate(base.getRunStartDate())
+                .runEndDate(base.getRunEndDate())
+                .roomId(base.getRoomId())
+                .roomName(base.getRoomName())
+                .roomType(base.getRoomType())
+                .theaterId(base.getTheaterId())
+                .theaterName(base.getTheaterName())
+                .theaterCity(base.getTheaterCity())
+                .startTime(base.getStartTime())
+                .endTime(base.getEndTime())
+                .basePrice(base.getBasePrice())
+                .vipPrice(base.getVipPrice())
+                .couplePrice(base.getCouplePrice())
+                .effectiveBasePrice(pricingEngine.applyModifiers(base.getBasePrice(), start, theaterId))
+                .effectiveVipPrice(pricingEngine.applyModifiers(base.getVipPrice(), start, theaterId))
+                .effectiveCouplePrice(pricingEngine.applyModifiers(base.getCouplePrice(), start, theaterId))
+                .appliedRules(applied)
+                .status(base.getStatus())
+                .createdAt(base.getCreatedAt())
+                .updatedAt(base.getUpdatedAt())
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -64,6 +141,17 @@ public class ShowtimeService {
         int occupiedSeats = bookingSeatRepository.findAllOccupiedByShowtimeId(id).size();
         int availableSeats = totalSeats - occupiedSeats;
 
+        // Pricing engine — chuẩn "What You See Is What You Pay": cùng nguồn giá với BookingService
+        Long theaterId = showtime.getRoom().getTheater().getId();
+        LocalDateTime start = showtime.getStartTime();
+        List<AppliedPricingRule> applied = pricingEngine.findMatchingRules(start, theaterId).stream()
+                .map(r -> AppliedPricingRule.builder()
+                        .code(r.code())
+                        .name(r.name())
+                        .discountPercent(r.multiplierPercent().subtract(BigDecimal.valueOf(100)))
+                        .build())
+                .toList();
+
         return ShowtimeResponse.builder()
                 .id(response.getId())
                 .storageState(response.getStorageState())
@@ -71,14 +159,22 @@ public class ShowtimeService {
                 .movieTitle(response.getMovieTitle())
                 .moviePosterUrl(response.getMoviePosterUrl())
                 .movieDuration(response.getMovieDuration())
+                .movieAgeRating(response.getMovieAgeRating())
                 .roomId(response.getRoomId())
                 .roomName(response.getRoomName())
                 .roomType(response.getRoomType())
+                .theaterId(response.getTheaterId())
+                .theaterName(response.getTheaterName())
+                .theaterCity(response.getTheaterCity())
                 .startTime(response.getStartTime())
                 .endTime(response.getEndTime())
                 .basePrice(response.getBasePrice())
                 .vipPrice(response.getVipPrice())
                 .couplePrice(response.getCouplePrice())
+                .effectiveBasePrice(pricingEngine.applyModifiers(response.getBasePrice(), start, theaterId))
+                .effectiveVipPrice(pricingEngine.applyModifiers(response.getVipPrice(), start, theaterId))
+                .effectiveCouplePrice(pricingEngine.applyModifiers(response.getCouplePrice(), start, theaterId))
+                .appliedRules(applied)
                 .status(response.getStatus())
                 .availableSeats(availableSeats)
                 .createdAt(response.getCreatedAt())
@@ -89,10 +185,14 @@ public class ShowtimeService {
     /**
      * Tạo suất chiếu:
      * 1. Validate: phim + phòng tồn tại
-     * 2. Không cho tạo suất trong quá khứ
-     * 3. Tính endTime = startTime + movie.duration + buffer (từ SystemConfig)
-     * 4. Kiểm tra phòng trống (không trùng giờ với suất khác)
-     * 5. Save
+     * 2. Resolve MovieRun: nếu request có movieRunId → dùng cái đó (admin chỉ định);
+     *    nếu null → tự pick active run của movie (NOW_SHOWING > nearest SCHEDULED).
+     * 3. Không cho tạo suất trong quá khứ
+     * 4. Validate startTime nằm trong [movieRun.startDate, movieRun.endDate]
+     * 5. Tính endTime = startTime + movie.duration (hiển thị cho user)
+     *    slotEndTime = endTime + buffer (cho conflict check nội bộ)
+     * 6. Kiểm tra phòng trống dùng slotEndTime
+     * 7. Set CẢ showtime.movieRun và showtime.movie (denormalized) — giữ invariant
      */
     @Transactional
     public ShowtimeResponse createShowtime(ShowtimeRequest request) {
@@ -101,42 +201,62 @@ public class ShowtimeService {
         Room room = roomRepository.findById(request.getRoomId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
+        // RBAC: branch ADMIN chỉ tạo showtime cho phòng của chi nhánh mình
+        securityService.requireAccessToTheater(room.getTheater().getId());
+
+        // Resolve MovieRun (advanced UX vs default UX) — pass theaterId để filter run theo rạp
+        MovieRun movieRun = resolveMovieRun(movie, request.getMovieRunId(), room.getTheater().getId());
+
         // Không cho tạo suất trong quá khứ
         if (request.getStartTime().isBefore(LocalDateTime.now())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "Không thể tạo suất chiếu trong quá khứ");
         }
 
-        // Tính endTime = startTime + duration + buffer
+        // Suất chiếu phải nằm trong vòng đời ĐỢT CHIẾU [movieRun.startDate, movieRun.endDate]
+        validateShowtimeWithinMovieRun(movieRun, request.getStartTime());
+
+        // endTime = chỉ phim (cho user thấy đúng "phim dài bao lâu")
+        LocalDateTime endTime = request.getStartTime().plusMinutes(movie.getDuration());
+
+        // slotEndTime = endTime + buffer dọn dẹp (cho conflict check nội bộ)
         int bufferMinutes = systemConfigService.getInt("showtime.buffer_minutes", 15);
-        LocalDateTime endTime = request.getStartTime()
-                .plusMinutes(movie.getDuration())
-                .plusMinutes(bufferMinutes);
+        LocalDateTime slotEndTime = endTime.plusMinutes(bufferMinutes);
 
-        // Validate giá: thường <= VIP <= đôi
-        validatePriceHierarchy(request);
+        // Fill giá vé mặc định theo RoomType nếu admin để trống
+        BigDecimal basePrice = resolvePrice(request.getBasePrice(), room.getType(), "base");
+        BigDecimal vipPrice = resolvePrice(request.getVipPrice(), room.getType(), "vip");
+        BigDecimal couplePrice = resolvePrice(request.getCouplePrice(), room.getType(), "couple");
 
-        // Kiểm tra phòng trống
+        // Validate giá: thường <= VIP <= đôi (dùng giá đã resolve)
+        validatePriceHierarchy(basePrice, vipPrice, couplePrice);
+
+        // Kiểm tra phòng trống — dùng slotEndTime (room phải free đến hết slot dọn dẹp)
         List<Showtime> conflicts = showtimeRepository.findConflictingShowtimes(
-                room.getId(), request.getStartTime(), endTime);
+                room.getId(), request.getStartTime(), slotEndTime);
         if (!conflicts.isEmpty()) {
             throw new BusinessException(ErrorCode.SHOWTIME_CONFLICT,
                     "Phòng '" + room.getName() + "' đã có suất chiếu trong khung giờ này");
         }
 
+        // [Invariant] Set CẢ movieRun và movie — movie phải === movieRun.movie để
+        // tránh dữ liệu lệch giữa 2 field denormalized.
         Showtime showtime = Showtime.builder()
                 .movie(movie)
+                .movieRun(movieRun)
                 .room(room)
                 .startTime(request.getStartTime())
                 .endTime(endTime)
-                .basePrice(request.getBasePrice())
-                .vipPrice(request.getVipPrice())
-                .couplePrice(request.getCouplePrice())
+                .slotEndTime(slotEndTime)
+                .basePrice(basePrice)
+                .vipPrice(vipPrice)
+                .couplePrice(couplePrice)
                 .status(ShowtimeStatus.SCHEDULED)
                 .build();
 
         showtimeRepository.save(showtime);
-        log.info("Created showtime: {} at {} in {}", movie.getTitle(), request.getStartTime(), room.getName());
+        log.info("Created showtime: {} (run #{}) at {} in {}",
+                movie.getTitle(), movieRun.getId(), request.getStartTime(), room.getName());
         return getShowtime(showtime.getId());
     }
 
@@ -144,6 +264,9 @@ public class ShowtimeService {
     public ShowtimeResponse updateShowtime(Long id, ShowtimeRequest request) {
         Showtime showtime = showtimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+
+        // RBAC: branch ADMIN chỉ sửa showtime của chi nhánh mình
+        securityService.requireAccessToTheater(showtime.getRoom().getTheater().getId());
 
         // FIX 2: Không cho sửa suất chiếu đã có booking HOLDING hoặc CONFIRMED
         long activeBookings = bookingRepository.countByShowtimeIdAndStatusIn(id,
@@ -158,33 +281,47 @@ public class ShowtimeService {
         Room room = roomRepository.findById(request.getRoomId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
 
+        // Resolve MovieRun (xem comment createShowtime) — pass room.theater để filter run theo rạp
+        MovieRun movieRun = resolveMovieRun(movie, request.getMovieRunId(), room.getTheater().getId());
+
+        // Suất chiếu phải nằm trong vòng đời đợt chiếu [movieRun.startDate, movieRun.endDate]
+        validateShowtimeWithinMovieRun(movieRun, request.getStartTime());
+
+        // endTime = chỉ phim, slotEndTime = endTime + buffer (xem comment createShowtime)
+        LocalDateTime endTime = request.getStartTime().plusMinutes(movie.getDuration());
         int bufferMinutes = systemConfigService.getInt("showtime.buffer_minutes", 15);
-        LocalDateTime endTime = request.getStartTime()
-                .plusMinutes(movie.getDuration())
-                .plusMinutes(bufferMinutes);
+        LocalDateTime slotEndTime = endTime.plusMinutes(bufferMinutes);
 
-        // Validate giá: thường <= VIP <= đôi
-        validatePriceHierarchy(request);
+        // Fill giá vé mặc định theo RoomType nếu admin để trống
+        BigDecimal basePrice = resolvePrice(request.getBasePrice(), room.getType(), "base");
+        BigDecimal vipPrice = resolvePrice(request.getVipPrice(), room.getType(), "vip");
+        BigDecimal couplePrice = resolvePrice(request.getCouplePrice(), room.getType(), "couple");
 
-        // Kiểm tra trùng giờ (loại trừ chính nó)
+        // Validate giá: thường <= VIP <= đôi (dùng giá đã resolve)
+        validatePriceHierarchy(basePrice, vipPrice, couplePrice);
+
+        // Kiểm tra trùng giờ (loại trừ chính nó) — dùng slotEndTime
         List<Showtime> conflicts = showtimeRepository.findConflictingShowtimes(
-                room.getId(), request.getStartTime(), endTime);
+                room.getId(), request.getStartTime(), slotEndTime);
         conflicts.removeIf(s -> s.getId().equals(id));
         if (!conflicts.isEmpty()) {
             throw new BusinessException(ErrorCode.SHOWTIME_CONFLICT,
                     "Phòng '" + room.getName() + "' đã có suất chiếu trong khung giờ này");
         }
 
+        // Giữ invariant: movie === movieRun.movie
         showtime.setMovie(movie);
+        showtime.setMovieRun(movieRun);
         showtime.setRoom(room);
         showtime.setStartTime(request.getStartTime());
         showtime.setEndTime(endTime);
-        showtime.setBasePrice(request.getBasePrice());
-        showtime.setVipPrice(request.getVipPrice());
-        showtime.setCouplePrice(request.getCouplePrice());
+        showtime.setSlotEndTime(slotEndTime);
+        showtime.setBasePrice(basePrice);
+        showtime.setVipPrice(vipPrice);
+        showtime.setCouplePrice(couplePrice);
 
         showtimeRepository.save(showtime);
-        log.info("Updated showtime {}", id);
+        log.info("Updated showtime {} (run #{})", id, movieRun.getId());
         return getShowtime(id);
     }
 
@@ -192,6 +329,8 @@ public class ShowtimeService {
     public void deleteShowtime(Long id) {
         Showtime showtime = showtimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+        // RBAC: branch ADMIN chỉ xoá showtime của chi nhánh mình
+        securityService.requireAccessToTheater(showtime.getRoom().getTheater().getId());
         showtime.setStorageState(StorageState.ARCHIVED);
         showtimeRepository.save(showtime);
         log.info("Soft deleted showtime {}", id);
@@ -201,6 +340,8 @@ public class ShowtimeService {
     public ShowtimeResponse restoreShowtime(Long id) {
         Showtime showtime = showtimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+        // RBAC: branch ADMIN chỉ restore showtime của chi nhánh mình
+        securityService.requireAccessToTheater(showtime.getRoom().getTheater().getId());
         showtime.setStorageState(StorageState.ACTIVE);
         showtimeRepository.save(showtime);
         log.info("Restored showtime {}", id);
@@ -210,6 +351,8 @@ public class ShowtimeService {
     @Transactional
     public void bulkDelete(List<Long> ids) {
         List<Showtime> showtimes = showtimeRepository.findAllById(ids);
+        // RBAC: branch ADMIN chỉ archive showtime của chi nhánh mình
+        showtimes.forEach(s -> securityService.requireAccessToTheater(s.getRoom().getTheater().getId()));
         showtimes.forEach(s -> s.setStorageState(StorageState.ARCHIVED));
         showtimeRepository.saveAll(showtimes);
         log.info("Bulk soft deleted {} showtimes", showtimes.size());
@@ -218,20 +361,123 @@ public class ShowtimeService {
     @Transactional
     public void bulkRestore(List<Long> ids) {
         List<Showtime> items = showtimeRepository.findAllById(ids);
+        items.forEach(i -> securityService.requireAccessToTheater(i.getRoom().getTheater().getId()));
         items.forEach(i -> i.setStorageState(StorageState.ACTIVE));
         showtimeRepository.saveAll(items);
         log.info("Bulk restored {} items", items.size());
     }
 
     /**
+     * Resolve {@link MovieRun} cho 1 showtime sắp được tạo/sửa.
+     *
+     * <p><b>Strategy:</b>
+     * <ol>
+     *   <li>Nếu admin chỉ định {@code movieRunId} (advanced UX) → load run đó, validate:
+     *       <ul>
+     *         <li>Thuộc đúng movie</li>
+     *         <li>Chưa ARCHIVED</li>
+     *         <li>Status khác {@code ENDED} (không tạo suất mới cho đợt đã kết thúc)</li>
+     *       </ul>
+     *   </li>
+     *   <li>Nếu {@code movieRunId} null (default UX) → tự pick từ các run ACTIVE của movie:
+     *       <ul>
+     *         <li>Ưu tiên run đang {@code NOW_SHOWING}</li>
+     *         <li>Fallback: run {@code SCHEDULED} có startDate gần nhất (sớm nhất)</li>
+     *         <li>Không có run nào → throw {@code INVALID_REQUEST}
+     *             ("Phim này chưa có đợt chiếu nào active")</li>
+     *       </ul>
+     *   </li>
+     * </ol>
+     *
+     * <p><b>Lý do prefer NOW_SHOWING:</b> đại đa số case admin tạo showtime cho phim đang chiếu.
+     * Tạo cho phim sắp chiếu (SCHEDULED) là use case thiểu số → fallback.
+     */
+    private MovieRun resolveMovieRun(Movie movie, Long requestedRunId, Long roomTheaterId) {
+        // Case 1: admin chỉ định run cụ thể
+        if (requestedRunId != null) {
+            MovieRun run = movieRunRepository.findById(requestedRunId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REQUEST,
+                            "Đợt chiếu #" + requestedRunId + " không tồn tại"));
+            if (!run.getMovie().getId().equals(movie.getId())) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Đợt chiếu #" + requestedRunId + " không thuộc phim đã chọn");
+            }
+            // Cross-theater guard: run.theater phải === room.theater
+            if (run.getTheater() == null
+                    || !run.getTheater().getId().equals(roomTheaterId)) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Đợt chiếu #" + requestedRunId + " không thuộc chi nhánh của phòng đã chọn");
+            }
+            if (run.getStorageState() == StorageState.ARCHIVED) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Đợt chiếu #" + requestedRunId + " đã bị xóa");
+            }
+            if (run.getStatus() == MovieRunStatus.ENDED) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Đợt chiếu này đã kết thúc, không thể tạo suất mới");
+            }
+            return run;
+        }
+
+        // Case 2: auto-pick — filter theo theater của phòng, sort startDate DESC
+        List<MovieRun> runs = movieRunRepository
+                .findByMovieIdAndTheaterIdAndStorageStateNotOrderByStartDateDesc(
+                        movie.getId(), roomTheaterId, StorageState.ARCHIVED);
+
+        // Ưu tiên NOW_SHOWING
+        MovieRun nowShowing = runs.stream()
+                .filter(r -> r.getStatus() == MovieRunStatus.NOW_SHOWING)
+                .findFirst()
+                .orElse(null);
+        if (nowShowing != null) {
+            return nowShowing;
+        }
+
+        // Fallback: SCHEDULED có startDate sớm nhất (gần hiện tại nhất theo nghĩa "sắp diễn ra")
+        MovieRun nextScheduled = runs.stream()
+                .filter(r -> r.getStatus() == MovieRunStatus.SCHEDULED)
+                .min((a, b) -> a.getStartDate().compareTo(b.getStartDate()))
+                .orElse(null);
+        if (nextScheduled != null) {
+            return nextScheduled;
+        }
+
+        throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                "Phim '" + movie.getTitle() + "' chưa có đợt chiếu nào active tại chi nhánh này. " +
+                        "Vui lòng tạo đợt chiếu (MovieRun) tại chi nhánh này trước khi xếp suất.");
+    }
+
+    /**
+     * Validate suất chiếu nằm trong khoảng [movieRun.startDate, movieRun.endDate-if-set].
+     *
+     * <p><b>Null-safe endDate (open-ended pattern):</b> nếu {@code movieRun.endDate == null}
+     * (admin chưa quyết ngày ngưng) → KHÔNG check upper bound, phim chiếu vô thời hạn cho
+     * đến khi admin set endDate.
+     *
+     * <p>Theo chuẩn rạp hiện nay: marketing công bố startDate trước, nhưng endDate chỉ set
+     * sau khi rạp quyết ngưng dựa trên doanh thu thực tế.
+     */
+    private void validateShowtimeWithinMovieRun(MovieRun movieRun, LocalDateTime startTime) {
+        LocalDate showtimeDate = startTime.toLocalDate();
+
+        if (showtimeDate.isBefore(movieRun.getStartDate())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    String.format("Không tạo suất chiếu trước ngày bắt đầu đợt chiếu (%s) của phim '%s'",
+                            movieRun.getStartDate(), movieRun.getMovie().getTitle()));
+        }
+        // endDate null = open-ended → bỏ qua upper bound check
+        if (movieRun.getEndDate() != null && showtimeDate.isAfter(movieRun.getEndDate())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    String.format("Không tạo suất chiếu sau ngày kết thúc đợt chiếu (%s) của phim '%s'",
+                            movieRun.getEndDate(), movieRun.getMovie().getTitle()));
+        }
+    }
+
+    /**
      * Validate thứ tự giá ghế: thường <= VIP <= đôi.
      * Business rule: ghế đôi luôn đắt nhất (2 người ngồi), VIP đắt hơn thường.
      */
-    private void validatePriceHierarchy(ShowtimeRequest request) {
-        var base = request.getBasePrice();
-        var vip = request.getVipPrice();
-        var couple = request.getCouplePrice();
-
+    private void validatePriceHierarchy(BigDecimal base, BigDecimal vip, BigDecimal couple) {
         if (vip != null && base != null && vip.compareTo(base) < 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "Giá VIP phải lớn hơn hoặc bằng giá thường");
@@ -244,5 +490,53 @@ public class ShowtimeService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "Giá ghế đôi phải lớn hơn hoặc bằng giá thường");
         }
+    }
+
+    /**
+     * Nếu admin nhập giá → giữ nguyên.
+     * Nếu để null → tự fill từ system_config theo RoomType.
+     * Nếu config cũng không có → fallback hard-code (an toàn).
+     *
+     * @param tier "base" / "vip" / "couple"
+     */
+    private BigDecimal resolvePrice(BigDecimal input, RoomType roomType, String tier) {
+        if (input != null) {
+            return input;
+        }
+        return getDefaultPrice(roomType, tier);
+    }
+
+    /**
+     * Đọc giá mặc định từ system_config theo nhóm RoomType.
+     * - IMAX → key prefix "pricing.imax.*"
+     * - Còn lại (TWO_D / THREE_D / FOUR_DX) → "pricing.standard.*"
+     */
+    private BigDecimal getDefaultPrice(RoomType type, String tier) {
+        String prefix = (type == RoomType.IMAX) ? "pricing.imax." : "pricing.standard.";
+        String key = prefix + tier;
+        int fallback = defaultFallback(type, tier);
+        int value = systemConfigService.getInt(key, fallback);
+        return BigDecimal.valueOf(value);
+    }
+
+    /**
+     * Fallback an toàn nếu system_config chưa seed.
+     * STANDARD: 80k / 120k / 200k — IMAX: 150k / 200k / 350k.
+     */
+    private int defaultFallback(RoomType type, String tier) {
+        if (type == RoomType.IMAX) {
+            return switch (tier) {
+                case "base" -> 150000;
+                case "vip" -> 200000;
+                case "couple" -> 350000;
+                default -> 0;
+            };
+        }
+        return switch (tier) {
+            case "base" -> 80000;
+            case "vip" -> 120000;
+            case "couple" -> 200000;
+            default -> 0;
+        };
     }
 }

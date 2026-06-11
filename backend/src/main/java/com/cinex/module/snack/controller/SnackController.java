@@ -44,11 +44,14 @@ public class SnackController {
     public ApiResponse<PageResponse<SnackResponse>> listSnacks(
             SnackFilter filter,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        if (Boolean.TRUE.equals(filter.getIncludeDeleted()) || (filter.getKeyword() != null && !filter.getKeyword().isBlank())) {
-            // Admin search/filter
+        boolean isAdminContext = Boolean.TRUE.equals(filter.getIncludeDeleted())
+                || (filter.getKeyword() != null && !filter.getKeyword().isBlank());
+        if (isAdminContext) {
             return ApiResponse.ok(PageResponse.from(snackService.listSnacksAdmin(filter, pageable)));
         }
-        return ApiResponse.ok(PageResponse.from(snackService.listSnacks(pageable)));
+        // Public path — vẫn cần honor theaterId vì ComboFormDialog / public POS lọc snack
+        // theo chi nhánh; trước đây bị bypass → combo của CN A vô tình chọn được snack CN B.
+        return ApiResponse.ok(PageResponse.from(snackService.listSnacksPublic(filter, pageable)));
     }
 
     @GetMapping("/{id}")

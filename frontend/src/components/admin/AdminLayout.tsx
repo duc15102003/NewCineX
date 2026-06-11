@@ -3,36 +3,60 @@ import { Outlet, NavLink, Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Film, Tags, DoorOpen, Clock, Ticket, Users, ScanLine,
   Menu, X, ChevronLeft, LogOut, Home, Coffee, TicketPercent, Clapperboard,
-  Shield, User, Heart, Settings, Receipt,
+  Shield, User, Heart, Settings, Receipt, CreditCard, MessageSquare, Building2,
+  Percent, Package,
+  type LucideIcon,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useLogout } from '@/hooks/useAuth'
+import AdminTheaterSelector from '@/components/admin/AdminTheaterSelector'
 
-// ============================================================
-// SIDEBAR MENU — Bật/tắt từng tab bằng cách comment/uncomment
-// Khi thầy yêu cầu thêm chức năng → bỏ comment dòng tương ứng
-// ============================================================
-const NAV_ITEMS = [
-  // { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard },                    // Dashboard thống kê — Đức
-  { to: '/admin/genres', label: 'Thể loại', icon: Tags },                            // CRUD thể loại — Đạt
-  { to: '/admin/movies', label: 'Phim', icon: Film },                                // CRUD phim — Đạt
-  { to: '/admin/rooms', label: 'Phòng chiếu', icon: DoorOpen },                      // CRUD phòng + sơ đồ ghế — Hải, Đức
-  { to: '/admin/showtimes', label: 'Suất chiếu', icon: Clock },                      // CRUD suất chiếu — Đạt
-  // { to: '/admin/bookings', label: 'Đặt vé', icon: Ticket },                       // Quản lý booking — Long
-  // { to: '/admin/snacks', label: 'Đồ ăn', icon: Coffee },                          // CRUD đồ ăn — Long
-  // { to: '/admin/vouchers', label: 'Khuyến mãi', icon: TicketPercent },             // CRUD voucher — Hải
-  { to: '/admin/users', label: 'Người dùng', icon: Users },                          // Quản lý user — Long
-  // { to: '/admin/pos', label: 'POS Đồ ăn', icon: Receipt },                        // POS bán đồ ăn — Đạt
-  // { to: '/admin/ticket-pos', label: 'POS Bán vé', icon: Clapperboard },           // POS bán vé tại quầy — Hải
-  // { to: '/admin/check-in', label: 'Quét vé', icon: ScanLine },                    // Check-in QR — Long
-  // { to: '/admin/configs', label: 'Cấu hình', icon: Settings },                    // Cấu hình hệ thống — Hải
+/**
+ * AdminLayout — khung chính cho admin panel.
+ *
+ * Theme: Dark Brown (#181309) + Warm Gold (#ffc107) — TÁCH BIỆT khỏi public site
+ * (public dùng Dark Blue #051424). Mục đích: ấm hơn, đỡ chói khi admin nhìn dashboard
+ * suốt cả ngày.
+ *
+ * Tokens dùng ở file này:
+ *  - Sidebar:  bg-[#120e05]  (đậm nhất, viền trái màn hình)
+ *  - Topbar:   bg-[#201b11]  (Card surface)
+ *  - Main:     bg-[#181309]  (Page background)
+ *  - Input:    bg-[#2a2317]  (input/dropdown nested surface)
+ *  - Accent:   #ffc107 (gold), hover #e6ac06
+ */
+
+/**
+ * Sidebar menu cấu hình.
+ * - `superAdminOnly = true`: chỉ SUPER_ADMIN thấy (vd Chi nhánh, Người dùng, Quy tắc giá, Cấu hình hệ thống).
+ *   Branch ADMIN bị ẩn → không click vào page (server-side cũng chặn qua @PreAuthorize).
+ */
+const NAV_ITEMS: { to: string; label: string; icon: LucideIcon; exact?: boolean; superAdminOnly?: boolean }[] = [
+  { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard, exact: true },
+  { to: '/admin/genres', label: 'Thể loại', icon: Tags },
+  { to: '/admin/movies', label: 'Phim', icon: Film },
+  { to: '/admin/theaters', label: 'Chi nhánh', icon: Building2, superAdminOnly: true },
+  { to: '/admin/rooms', label: 'Phòng chiếu', icon: DoorOpen },
+  { to: '/admin/showtimes', label: 'Suất chiếu', icon: Clock },
+  { to: '/admin/bookings', label: 'Đặt vé', icon: Ticket },
+  { to: '/admin/payments', label: 'Giao dịch', icon: CreditCard },
+  { to: '/admin/snacks', label: 'Đồ ăn', icon: Coffee },
+  { to: '/admin/combos', label: 'Combo', icon: Package },
+  { to: '/admin/vouchers', label: 'Khuyến mãi', icon: TicketPercent },
+  { to: '/admin/users', label: 'Người dùng', icon: Users, superAdminOnly: true },
+  { to: '/admin/reviews', label: 'Đánh giá', icon: MessageSquare },
+  { to: '/admin/pos', label: 'POS Đồ ăn', icon: Receipt },
+  { to: '/admin/ticket-pos', label: 'POS Bán vé', icon: Clapperboard },
+  { to: '/admin/check-in', label: 'Quét vé', icon: ScanLine },
+  { to: '/admin/pricing', label: 'Quy tắc giá', icon: Percent, superAdminOnly: true },
+  { to: '/admin/configs', label: 'Cấu hình', icon: Settings, superAdminOnly: true },
 ]
 
 function getBreadcrumbs(pathname: string): { label: string; to?: string }[] {
   const crumbs: { label: string; to?: string }[] = [{ label: 'Bảng điều khiển', to: '/admin' }]
 
   const parent = NAV_ITEMS.find((n) =>
-    pathname.startsWith(n.to)
+    n.exact ? pathname === n.to : pathname.startsWith(n.to)
   )
   if (!parent) return crumbs
 
@@ -70,23 +94,25 @@ export default function AdminLayout() {
     return () => document.removeEventListener('mousedown', handleMouseDown)
   }, [])
   const location = useLocation()
-  const { user } = useAuthStore()
+  const { user, isSuperAdmin } = useAuthStore()
   const logout = useLogout()
   const breadcrumbs = getBreadcrumbs(location.pathname)
 
-  const sidebarWidth = collapsed ? 'w-16' : 'w-64'
+  // Sidebar mở rộng cố định 280px (theo design spec mới);
+  // collapsed mode vẫn giữ để toggle gọn icon-only.
+  const sidebarWidth = collapsed ? 'w-16' : 'w-[280px]'
 
   const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }) => (
     <div className="flex flex-col h-full">
       {/* Logo area */}
       <div className="flex items-center justify-between px-4 py-5 border-b border-white/5">
         <NavLink to="/admin" className={`flex items-center gap-2.5 hover:opacity-80 transition-opacity ${collapsed && !isMobile ? 'justify-center w-full' : ''}`}>
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#eab308]/20 shrink-0">
-            <Clapperboard size={16} className="text-[#eab308]" />
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#ffc107]/20 shrink-0">
+            <Clapperboard size={16} className="text-[#ffc107]" />
           </div>
           {(!collapsed || isMobile) && (
             <div className="leading-tight">
-              <span className="text-[#eab308] font-bold text-base tracking-wide block">CineX</span>
+              <span className="text-[#ffc107] font-bold text-base tracking-wide block">CineX</span>
               <span className="text-white/30 text-[10px] font-medium tracking-widest uppercase">Admin Panel</span>
             </div>
           )}
@@ -121,19 +147,19 @@ export default function AdminLayout() {
         </div>
       )}
 
-      {/* Nav items */}
+      {/* Nav items — filter theo role: branch ADMIN không thấy menu superAdminOnly */}
       <nav className="flex-1 py-2 space-y-0.5 px-3 overflow-y-auto">
-        {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+        {NAV_ITEMS.filter((n) => !n.superAdminOnly || isSuperAdmin()).map(({ to, label, icon: Icon, exact }) => (
           <NavLink
             key={to}
             to={to}
-            end={false}
+            end={exact}
             onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative group ${collapsed && !isMobile ? 'justify-center' : ''
               } ${isActive
-                ? 'bg-white/5 text-[#eab308] border-l-2 border-[#eab308]'
-                : 'text-white/50 hover:text-white/90 hover:bg-white/5 border-l-2 border-transparent'
+                ? 'bg-[#ffc107]/10 text-[#ffc107] border-l-2 border-[#ffc107]'
+                : 'text-gray-300 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
               }`
             }
           >
@@ -141,7 +167,7 @@ export default function AdminLayout() {
             {(!collapsed || isMobile) && <span>{label}</span>}
             {/* Tooltip khi collapsed */}
             {collapsed && !isMobile && (
-              <div className="absolute left-full ml-3 px-2 py-1 bg-[#0a1929] border border-white/10 rounded-lg text-xs text-white/80 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+              <div className="absolute left-full ml-3 px-2 py-1 bg-[#201b11] border border-white/10 rounded-lg text-xs text-white/80 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
                 {label}
               </div>
             )}
@@ -160,8 +186,8 @@ export default function AdminLayout() {
               {user?.avatarUrl ? (
                 <img src={user.avatarUrl} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
               ) : (
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#eab308]/60 to-[#eab308]/30 flex items-center justify-center shrink-0">
-                  <span className="text-[#eab308] text-sm font-bold">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ffc107]/60 to-[#ffc107]/30 flex items-center justify-center shrink-0">
+                  <span className="text-[#ffc107] text-sm font-bold">
                     {getAvatarLetter(user?.username)}
                   </span>
                 </div>
@@ -169,8 +195,8 @@ export default function AdminLayout() {
               <div className="flex-1 min-w-0">
                 <p className="text-white/80 text-xs font-semibold truncate">{user?.username ?? 'Admin'}</p>
                 <div className="flex items-center gap-1 mt-0.5">
-                  <Shield size={9} className="text-[#eab308]/70" />
-                  <span className="text-[#eab308]/70 text-[10px] font-medium">Quản trị viên</span>
+                  <Shield size={9} className="text-[#ffc107]/70" />
+                  <span className="text-[#ffc107]/70 text-[10px] font-medium">Quản trị viên</span>
                 </div>
               </div>
             </div>
@@ -183,8 +209,8 @@ export default function AdminLayout() {
             {user?.avatarUrl ? (
               <img src={user.avatarUrl} alt="" className="w-8 h-8 rounded-lg object-cover" />
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#eab308]/60 to-[#eab308]/30 flex items-center justify-center">
-                <span className="text-[#eab308] text-sm font-bold">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ffc107]/60 to-[#ffc107]/30 flex items-center justify-center">
+                <span className="text-[#ffc107] text-sm font-bold">
                   {getAvatarLetter(user?.username)}
                 </span>
               </div>
@@ -196,10 +222,10 @@ export default function AdminLayout() {
   )
 
   return (
-    <div className="flex h-screen bg-[#051424] text-white overflow-hidden">
-      {/* Desktop sidebar */}
+    <div className="flex h-screen bg-[#181309] text-white overflow-hidden">
+      {/* Desktop sidebar — width fixed 280px theo design spec Admin */}
       <aside
-        className={`hidden md:flex flex-col ${sidebarWidth} bg-[#0a1929] border-r border-white/5 transition-all duration-200 shrink-0`}
+        className={`hidden md:flex flex-col ${sidebarWidth} bg-[#120e05] border-r border-white/5 transition-all duration-200 shrink-0`}
       >
         <SidebarContent />
       </aside>
@@ -214,7 +240,7 @@ export default function AdminLayout() {
 
       {/* Mobile sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full z-50 w-64 bg-[#0a1929] border-r border-white/5 transition-transform duration-200 md:hidden ${mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed top-0 left-0 h-full z-50 w-[280px] bg-[#120e05] border-r border-white/5 transition-transform duration-200 md:hidden ${mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
       >
         <SidebarContent isMobile />
@@ -222,11 +248,11 @@ export default function AdminLayout() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="flex items-center gap-4 px-6 py-4 bg-[#0a1929] border-b border-white/5 shrink-0">
+        {/* Top bar — Card surface (#201b11) để tách layer với main #181309 */}
+        <header className="flex items-center gap-4 px-6 py-4 bg-[#201b11] border-b border-white/5 shrink-0">
           {/* Mobile menu button */}
           <button
-            className="md:hidden text-white/40 hover:text-white/80 transition-colors"
+            className="md:hidden text-gray-400 hover:text-white transition-colors"
             onClick={() => setMobileOpen(true)}
           >
             <Menu size={20} />
@@ -238,11 +264,11 @@ export default function AdminLayout() {
               <span key={i} className="flex items-center gap-2">
                 {i > 0 && <span className="text-white/15">/</span>}
                 {crumb.to ? (
-                  <NavLink to={crumb.to} className="text-white/30 hover:text-white/60 transition-colors">
+                  <NavLink to={crumb.to} className="text-gray-400 hover:text-white transition-colors">
                     {crumb.label}
                   </NavLink>
                 ) : (
-                  <span className="text-white/80 font-semibold">{crumb.label}</span>
+                  <span className="text-white font-semibold">{crumb.label}</span>
                 )}
               </span>
             ))}
@@ -251,7 +277,10 @@ export default function AdminLayout() {
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* User avatar + dropdown — đồng bộ style với Header user */}
+          {/* Theater context selector — admin filter view theo chi nhánh */}
+          <AdminTheaterSelector />
+
+          {/* User avatar + dropdown */}
           <div className="relative" ref={headerDropdownRef}>
             <button
               onClick={() => setHeaderDropdown(!headerDropdown)}
@@ -260,7 +289,7 @@ export default function AdminLayout() {
               {user?.avatarUrl ? (
                 <img src={user.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#eab308] to-[#ca8a04] flex items-center justify-center text-black text-xs font-bold">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ffc107] to-[#e6ac06] flex items-center justify-center text-black text-xs font-bold">
                   {getAvatarLetter(user?.username)}
                 </div>
               )}
@@ -268,32 +297,32 @@ export default function AdminLayout() {
             </button>
 
             {headerDropdown && (
-              <div className="absolute right-0 mt-3 w-52 bg-[#0d1c2d] border border-white/10 rounded-xl shadow-2xl shadow-black/40 py-2 z-50">
+              <div className="absolute right-0 mt-3 w-52 bg-[#201b11] border border-white/10 rounded-2xl shadow-2xl shadow-black/40 py-2 z-50">
                 <div className="px-4 py-2.5 border-b border-white/5">
                   <p className="text-sm font-medium text-white">{user?.username}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Quản trị viên</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Quản trị viên</p>
                 </div>
                 <div className="py-1">
-                  {/* <Link to="/"
+                  <Link to="/"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                     onClick={() => setHeaderDropdown(false)}>
                     <Home size={16} className="text-gray-400" /> Trang chủ
-                  </Link> */}{/* Trang chủ user */}
+                  </Link>
                   <Link to="/profile"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                     onClick={() => setHeaderDropdown(false)}>
                     <User size={16} className="text-gray-400" /> Hồ sơ
                   </Link>
-                  {/* <Link to="/my-tickets"
+                  <Link to="/my-tickets"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                     onClick={() => setHeaderDropdown(false)}>
                     <Ticket size={16} className="text-gray-400" /> Vé của tôi
-                  </Link> */}{/* Vé của tôi — Long */}
-                  {/* <Link to="/favorites"
+                  </Link>
+                  <Link to="/favorites"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                     onClick={() => setHeaderDropdown(false)}>
                     <Heart size={16} className="text-gray-400" /> Phim yêu thích
-                  </Link> */}{/* Yêu thích — Đạt */}
+                  </Link>
                 </div>
                 <hr className="border-white/5 my-1" />
                 <button
@@ -307,8 +336,8 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        {/* Page content — padding 32px (p-8) theo design spec */}
+        <main className="flex-1 overflow-y-auto p-8 bg-[#181309]">
           <Outlet />
         </main>
       </div>

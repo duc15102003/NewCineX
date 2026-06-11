@@ -13,6 +13,65 @@ export interface Review {
   rating: number
   comment: string
   createdAt: string
+  storageState?: string
+}
+
+/**
+ * Filter cho admin list reviews — map 1-1 với BE ReviewFilter.java.
+ */
+export interface AdminReviewFilter {
+  // Search: LIKE trên user.username/fullName/email + movie.title + comment
+  keyword?: string
+  movieId?: number
+  userId?: number
+  minRating?: number
+  maxRating?: number
+  hasComment?: boolean
+  createdFrom?: string  // ISO datetime
+  createdTo?: string
+  includeDeleted?: boolean
+  page?: number
+  size?: number
+}
+
+function cleanParams(input: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(input)) {
+    if (v === undefined || v === null || v === '') continue
+    out[k] = v
+  }
+  return out
+}
+
+/**
+ * Admin xem tất cả reviews xuyên phim — gọi /api/reviews/admin (ROLE_ADMIN).
+ */
+export function useAdminReviews(params: AdminReviewFilter = {}) {
+  return useQuery({
+    queryKey: ['admin', 'reviews', params],
+    queryFn: async () => {
+      const cleaned = cleanParams(params as Record<string, unknown>)
+      const res = await api.get<ApiResponse<PageResponse<Review>>>('/api/reviews/admin', { params: cleaned })
+      return res.data.data
+    },
+  })
+}
+
+/**
+ * Admin xóa review bất kỳ — service check role ADMIN bypass ownership.
+ */
+export function useAdminDeleteReview() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (reviewId: number) => {
+      await api.delete(`/api/reviews/${reviewId}`)
+    },
+    onSuccess: () => {
+      toast.success('Đã xóa đánh giá')
+      qc.invalidateQueries({ queryKey: ['admin', 'reviews'] })
+    },
+    onError: (e) => toast.error(getErrorMessage(e, 'Lỗi')),
+  })
 }
 
 export function useReviews(movieId: number) {

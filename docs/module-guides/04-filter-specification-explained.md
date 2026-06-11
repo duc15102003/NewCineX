@@ -364,19 +364,21 @@ Spring tu đồng:
 
 **Không cần `@RequestParam`!** Spring Boot tu bind query params vào DTO object khi tên field KHOP với tên param.
 
-### Bảng tổng hợp Filter DTO trong dự án
+### Bảng tổng hợp Filter DTO trong dự án (cập nhật Phase 4a)
 
-| Module | Filter DTO | Fields | File |
+| Module | Filter DTO | Fields chính | Đặc điểm |
 |---|---|---|---|
-| Movie | `MovieFilter` | keyword, status, genreId, includeDeleted, showing | `module/movie/dto/MovieFilter.java` |
-| Genre | `GenreFilter` | keyword, includeDeleted | `module/movie/dto/GenreFilter.java` |
-| Room | `RoomFilter` | keyword, type, status, includeDeleted | `module/room/dto/RoomFilter.java` |
-| User | `UserFilter` | keyword, role, enabled, includeDeleted | `module/user/dto/UserFilter.java` |
-| Booking | `BookingFilter` | keyword, status, includeDeleted | `module/booking/dto/BookingFilter.java` |
-| Showtime | `ShowtimeFilter` | movieId, roomId, date, status, includeDeleted | `module/showtime/dto/ShowtimeFilter.java` |
-| Snack | `SnackFilter` | keyword, includeDeleted | `module/snack/dto/SnackFilter.java` |
-| Voucher | `VoucherFilter` | keyword, active, expired, includeDeleted | `module/voucher/dto/VoucherFilter.java` |
-| Review | `ReviewFilter` | movieId, minRating, includeDeleted | `module/review/dto/ReviewFilter.java` |
+| Movie | `MovieFilter` | keyword, status, genreId, director, cast, language, minDuration, maxDuration, **minRating/maxRating (COALESCE)**, releaseDateFrom/To, showing, hasActiveShowtimes, includeDeleted | 11 field — filter sâu cho FE list phim |
+| Genre | `GenreFilter` | keyword, **hasMovies** (EXISTS subquery), includeDeleted | Filter genre còn liên kết phim hay không |
+| Room | `RoomFilter` | keyword, type, status, includeDeleted | Enum filter |
+| User | `UserFilter` | keyword (username/email/fullName/**phone**), role, enabled, createdFrom/To, includeDeleted | Keyword OR trên 4 field |
+| Booking (admin) | `BookingFilter` | keyword, status, **userId, movieId, showtimeId, roomId, paymentMethod (EXISTS), minAmount/maxAmount, createdFrom/To, confirmedFrom/To**, includeDeleted | 11 field cho admin; user filter chỉ subset (KHÔNG có userId) |
+| Showtime | `ShowtimeFilter` | movieId, roomId, date, status, includeDeleted | Date range với onDate() |
+| Snack | `SnackFilter` | keyword, includeDeleted (publicFilter cho user) | 2 entry point |
+| Voucher | `VoucherFilter` | keyword, active, **discountType**, **currentlyValid**, expired, minDiscount/maxDiscount, startDate/endDate range, **hasUsageLeft**, includeDeleted | Filter theo tính hợp lệ hiện tại |
+| Review | `ReviewFilter` | movieId, userId, **minRating/maxRating**, **hasComment**, createdFrom/To, includeDeleted | Filter content quality |
+| Payment | `PaymentFilter` **(MỚI)** | keyword, status, method, bookingId, userId, paidFrom/To, createdFrom/To, minAmount/maxAmount, includeDeleted | Filter doanh thu / báo cáo |
+| Notification | `NotificationFilter` | type, isRead, createdFrom/To. **KHÔNG có userId** — chống IDOR | userId truyền riêng ở `fromFilter(filter, userId)` |
 
 ---
 

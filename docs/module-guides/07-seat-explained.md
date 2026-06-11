@@ -1040,3 +1040,148 @@ TreeMap cũng được nhưng tốn performance hơn (O(log n) cho mỗi put, vs
 2. **Kịch bản xấu (race condition):** Cả 2 soft delete cùng lúc → cả 2 đều tạo ghế mới → phòng có 240 ghế (gấp đôi!).
 
 **Cách phòng tránh:** Dùng `@Version` (Optimistic Lock) trên Room entity. Khi cả 2 cùng `room.setTotalSeats()` → 1 trong 2 sẽ gặp `OptimisticLockException` → retry hoặc báo lỗi.
+
+---
+
+## 11. Revamp 2026-06 — Industry-standard seat system (Option C)
+
+> Cập nhật lớn: nâng seat system lên chuẩn chuỗi rạp lớn (CGV/Lotte/BHD/Beta).
+> Trước đây: chỉ 3 SeatType (STANDARD/VIP/COUPLE), vipRows toàn row, không có aisle/blocked/handicap.
+
+### 11.1. SeatType từ 3 → 6 loại
+
+| Loại | Mô tả | Pricing | CineX use case |
+|---|---|---|---|
+| `STANDARD` | Ghế thường | basePrice | Mặc định toàn rạp |
+| `VIP` | Ghế giữa rạp "sweet spot" | vipPrice | Pattern phổ biến |
+| `COUPLE` | Ghế đôi thường (2 ô) | couplePrice | Hàng cuối |
+| `SWEETBOX` ⭐ MỚI | Ghế đôi cao cấp, nệm dày, bàn nhỏ | sweetboxPrice (fallback couple × 2) | Premium pattern CGV |
+| `DELUXE` ⭐ MỚI | Ghế ngả lưng recliner | deluxePrice (fallback vip × 1.5) | Phòng L'amour / IMAX deluxe |
+| `HANDICAP` ⭐ MỚI | Ghế cho người khuyết tật | basePrice (inclusive, không phụ thu) | **NĐ 28/2012 BẮT BUỘC** đầu hàng gần lối vào |
+
+### 11.2. SeatStatus thêm BLOCKED
+
+| Status | Khác BROKEN ở đâu |
+|---|---|
+| `AVAILABLE` | Có thể đặt |
+| `BROKEN` | **Tạm thời** — có thể sửa, hết bảo trì → AVAILABLE |
+| `BLOCKED` ⭐ MỚI | **Vĩnh viễn** — cột bê tông, lối thoát hiểm, thiết bị máy chiếu. KHÔNG repair. |
+
+### 11.3. `isAisle` field — lối đi
+
+Trước: layout liên tục col 1→N (không thực tế).
+Sau: `Seat.isAisle=true` đánh dấu position là LỐI ĐI giữa các block ghế.
+
+```
+Trước:                       Sau:
+A1 A2 A3 A4 A5 A6 A7 A8     A1 A2 A3 [aisle] A4 A5 A6 [aisle] A7 A8
+                            ^col=4, isAisle=true (render khoảng trống)
+```
+
+`isAisle` không tính vào `room.totalSeats`. FE render `AisleGap` thay vì button.
+
+### 11.4. SeatGenerateRequest mới — zone-based
+
+**Cũ:**
+```json
+{ "totalRows": 10, "totalCols": 12, "vipRows": ["E","F","G"], "coupleRow": "J" }
+```
+→ Toàn row E là VIP (15 ghế đều VIP — không thực tế).
+
+**Mới:**
+```json
+{
+  "totalRows": 10, "totalCols": 12,
+  "vipZone": { "rowStart": "C", "rowEnd": "G", "colStart": 4, "colEnd": 9 },
+  "coupleRows": ["J"],
+  "deluxeRows": ["F"],
+  "handicapPositions": [{"row":"B","col":1}, {"row":"B","col":12}],
+  "aisleCols": [4, 9],
+  "blockedPositions": []
+}
+```
+→ VIP chỉ trong "sweet spot" hình chữ nhật giữa rạp (5 hàng × 6 cột). Handicap ở B1/B12 (đầu hàng B gần lối vào).
+
+### 11.5. RoomType-aware preset (`SeatLayoutPreset.java`)
+
+| RoomType | Preset |
+|---|---|
+| `TWO_D` | 10×12, VIP zone 5×6 giữa, couple hàng J, 2 handicap B1/B12, 2 aisle cols 4/9 |
+| `THREE_D` | 10×12 như TWO_D nhưng VIP zone rộng hơn (kính 3D đắt) |
+| `IMAX` | 14×18, VIP zone lớn + 2 hàng Deluxe F/G, 0 couple |
+| `FOUR_DX` | 8×10, KHÔNG có couple/sweetbox (ghế đặc biệt rung/gió) |
+
+API:
+```json
+POST /api/rooms/{id}/seats/generate
+{
+  "applyPresetForRoomType": true,
+  "roomTypeOverride": "IMAX"
+}
+```
+
+BE override request với preset → admin chỉ click 1 nút.
+
+### 11.6. Ưu tiên SeatType khi generate
+
+Logic resolve khi 1 position thuộc nhiều zone:
+
+```
+BLOCKED  >  AISLE  >  HANDICAP  >  SWEETBOX  >  COUPLE  >  DELUXE  >  VIP  >  STANDARD
+```
+
+VD: position B1 vừa trong handicapPositions vừa trong vipZone → HANDICAP win.
+
+### 11.7. Booking validation
+
+`BookingService.validateSeatSelection` chặn 3 loại với error message phân biệt:
+- AISLE → "Vị trí là lối đi, không phải ghế"
+- BLOCKED → "Ghế bị chặn vĩnh viễn, không thể đặt"
+- BROKEN → "Ghế đang bảo trì, không thể đặt"
+
+### 11.8. Pricing fallback rule
+
+`BookingService.getPriceForSeat`:
+```java
+SWEETBOX -> sweetboxPrice (fallback couplePrice × 2)
+DELUXE   -> deluxePrice   (fallback vipPrice × 1.5)
+HANDICAP -> basePrice     (chính sách inclusive — không phụ thu)
+```
+
+`Showtime.sweetboxPrice` và `deluxePrice` nullable — phòng không có loại đó thì để NULL, BE tự fallback.
+
+### 11.9. Schema migration (Liquibase 019)
+
+```sql
+ALTER TABLE seats ADD is_aisle BIT NOT NULL DEFAULT 0;
+ALTER TABLE seats DROP CONSTRAINT CK_seats_seat_type;
+ALTER TABLE seats ADD CONSTRAINT CK_seats_seat_type
+  CHECK (seat_type IN ('STANDARD','VIP','COUPLE','SWEETBOX','DELUXE','HANDICAP'));
+ALTER TABLE seats DROP CONSTRAINT CK_seats_status;
+ALTER TABLE seats ADD CONSTRAINT CK_seats_status
+  CHECK (status IN ('AVAILABLE','BROKEN','BLOCKED'));
+ALTER TABLE showtimes ADD sweetbox_price DECIMAL(12,0), deluxe_price DECIMAL(12,0);
+```
+
+### 11.10. FE SeatMap render mới
+
+- AISLE → `<AisleGap>` (khoảng trống, không button)
+- SWEETBOX gộp 2 cột (giống COUPLE) — màu purple thay vì pink
+- DELUXE single seat màu blue
+- HANDICAP single seat màu green với icon `♿` thay số cột
+- BLOCKED màu red-900 đậm + disabled
+- BROKEN màu orange + disabled
+- Row label render cả 2 bên (user dễ định hướng)
+
+### 11.11. GenerateSeatsDialog 2-mode
+
+- **PRESET tab** (80% case): chọn RoomType card → 1 click generate
+- **CUSTOM tab** (advanced): config zones bằng input CSV + dropdown
+- Hint footer: "Sau khi tạo, dùng Seat Map Editor để tinh chỉnh từng ghế"
+
+### 11.12. Compliance pháp lý
+
+**Nghị định 28/2012/NĐ-CP về người khuyết tật:**
+> Cơ sở vật chất rạp chiếu phim phải có chỗ ngồi và đường tiếp cận cho người khuyết tật.
+
+CineX enforce qua preset: mọi RoomType đều có ≥ 2 handicap positions ở đầu hàng B (gần lối vào). Pricing inclusive (HANDICAP = basePrice, không phụ thu).

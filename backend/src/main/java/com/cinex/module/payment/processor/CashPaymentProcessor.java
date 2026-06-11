@@ -26,4 +26,16 @@ public class CashPaymentProcessor implements PaymentProcessor {
         // Cash: luôn true khi admin xác nhận
         return true;
     }
+
+    /**
+     * Cash refund: không gọi API ngoài, chỉ log để admin nắm thông tin.
+     * Tiền mặt được hoàn trực tiếp tại quầy.
+     */
+    @Override
+    public boolean refund(String transactionCode, String gatewayTransactionId,
+                          BigDecimal amount, String reason) {
+        log.info("[Cash Refund] Hoàn tiền mặt tại quầy. txn={}, amount={}, reason={}",
+                transactionCode, amount, reason);
+        return true;
+    }
 }

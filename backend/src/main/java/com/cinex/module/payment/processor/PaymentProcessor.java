@@ -24,4 +24,16 @@ public interface PaymentProcessor {
      * Xác nhận callback từ cổng thanh toán → trả true nếu thanh toán thành công.
      */
     boolean verifyCallback(Map<String, String> params);
+
+    /**
+     * Gọi API hoàn tiền cho payment. Trả về true nếu refund thành công.
+     * Implementation cụ thể tùy processor: MoMo gọi /refund API, Cash chỉ log.
+     *
+     * @param transactionCode mã giao dịch của hệ thống (orderId trên cổng — VD: PAYMENT-20260608-001)
+     * @param gatewayTransactionId transId nội bộ của cổng (MoMo cần cái này để refund). Có thể null nếu Cash.
+     * @param amount số tiền cần hoàn
+     * @param reason lý do hoàn tiền (lưu log + ghi nhật ký bên cổng)
+     * @return true nếu refund thành công, false nếu lỗi
+     */
+    boolean refund(String transactionCode, String gatewayTransactionId, BigDecimal amount, String reason);
 }
