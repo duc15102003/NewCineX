@@ -222,7 +222,7 @@ export default function AdminComboPage() {
               <TableHead className="text-gray-400">Mã / Tên</TableHead>
               <TableHead className="text-gray-400">Items</TableHead>
               <TableHead className="text-gray-400">Giá</TableHead>
-              <TableHead className="text-gray-400">Trạng thái</TableHead>
+              <TableHead className="text-gray-400">Lưu trữ</TableHead>
               <TableHead className="text-gray-400 text-right">Upload</TableHead>
             </TableRow>
           </TableHeader>

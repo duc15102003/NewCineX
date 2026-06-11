@@ -185,7 +185,7 @@ export default function AdminReviewPage() {
                 <TableHead className="text-gray-400">Phim</TableHead>
                 <TableHead className="text-gray-400">Rating</TableHead>
                 <TableHead className="text-gray-400">Bình luận</TableHead>
-                <TableHead className="text-gray-400">Trạng thái</TableHead>
+                <TableHead className="text-gray-400">Lưu trữ</TableHead>
                 <TableHead className="text-gray-400">Tạo lúc</TableHead>
                 <TableHead className="text-gray-400 text-right pr-4">Thao tác</TableHead>
               </TableRow>

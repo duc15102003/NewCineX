@@ -208,7 +208,7 @@ export default function AdminVoucherPage() {
               <TableHead className="text-gray-400">Giá trị</TableHead>
               <TableHead className="text-gray-400">Đã dùng/Giới hạn</TableHead>
               <TableHead className="text-gray-400">Hạn sử dụng</TableHead>
-              <TableHead className="text-gray-400">Trạng thái</TableHead>
+              <TableHead className="text-gray-400">Lưu trữ</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

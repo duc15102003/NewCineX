@@ -175,7 +175,7 @@ export default function AdminGenrePage() {
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Tên thể loại</TableHead>
               <TableHead className="text-gray-400">Mô tả</TableHead>
-              <TableHead className="text-gray-400">Trạng thái</TableHead>
+              <TableHead className="text-gray-400">Lưu trữ</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

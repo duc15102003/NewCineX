@@ -228,7 +228,7 @@ export default function AdminSnackPage() {
               <TableHead className="text-gray-400">Danh mục</TableHead>
               <TableHead className="text-gray-400">Giá</TableHead>
               <TableHead className="text-gray-400">Còn hàng</TableHead>
-              <TableHead className="text-gray-400">Trạng thái</TableHead>
+              <TableHead className="text-gray-400">Lưu trữ</TableHead>
               <TableHead className="text-gray-400 text-right">Upload</TableHead>
             </TableRow>
           </TableHeader>
