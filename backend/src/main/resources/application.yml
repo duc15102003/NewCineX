@@ -49,7 +49,8 @@ momo:
   ipn-url: ${MOMO_IPN_URL:${app.backend-url}/api/payments/ipn}
 
 cloudinary:
-  cloud-name: ${CLOUDINARY_CLOUD_NAME:dale1y60n}
-  # Credentials nhạy cảm — bắt buộc set env, không default
+  # Mỗi dev/môi trường dùng Cloudinary account RIÊNG — không có default trỏ
+  # vào account của ai. Set qua application-local.yml (dev) hoặc env var (prod).
+  cloud-name: ${CLOUDINARY_CLOUD_NAME}
   api-key: ${CLOUDINARY_API_KEY}
   api-secret: ${CLOUDINARY_API_SECRET}

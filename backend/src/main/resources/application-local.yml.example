@@ -10,9 +10,15 @@
 # Vault, K8s secrets, ...).
 
 cloudinary:
-  # Lấy từ https://cloudinary.com/console
-  api-key: YOUR_CLOUDINARY_API_KEY_HERE
-  api-secret: YOUR_CLOUDINARY_API_SECRET_HERE
+  # ============================================================
+  # BẮT BUỘC — Mỗi dev đăng ký tài khoản Cloudinary RIÊNG
+  # ============================================================
+  # 1. Đăng ký free tại https://cloudinary.com (25 credits/tháng/account)
+  # 2. Vào Dashboard → block "Product Environment Credentials"
+  # 3. Copy 3 giá trị bên dưới:
+  cloud-name: YOUR_CLOUDINARY_CLOUD_NAME
+  api-key: YOUR_CLOUDINARY_API_KEY
+  api-secret: YOUR_CLOUDINARY_API_SECRET
 
 spring:
   mail:

@@ -93,9 +93,11 @@ momo:
   secret-key: ${MOMO_SECRET_KEY:K951B6PE1waDMi640xX08PD3vg6EkVlz}
 
 cloudinary:
-  # Placeholder — set env nếu cần dùng upload ảnh thật
-  api-key: ${CLOUDINARY_API_KEY:dev-placeholder-set-CLOUDINARY_API_KEY-env}
-  api-secret: ${CLOUDINARY_API_SECRET:dev-placeholder-set-CLOUDINARY_API_SECRET-env}
+  # Placeholder — mỗi dev đăng ký Cloudinary riêng tại https://cloudinary.com
+  # và set 3 giá trị này qua application-local.yml.
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:dev-placeholder-set-CLOUDINARY_CLOUD_NAME}
+  api-key: ${CLOUDINARY_API_KEY:dev-placeholder-set-CLOUDINARY_API_KEY}
+  api-secret: ${CLOUDINARY_API_SECRET:dev-placeholder-set-CLOUDINARY_API_SECRET}
 
 logging:
   level:
