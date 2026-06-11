@@ -9,6 +9,7 @@ import com.cinex.module.room.entity.Room;
 import com.cinex.module.room.repository.RoomRepository;
 import com.cinex.module.seat.dto.BulkUpdateSeatRequest;
 import com.cinex.module.seat.dto.SeatFilter;
+import com.cinex.module.seat.dto.RoomSeatTypeSummaryResponse;
 import com.cinex.module.seat.dto.SeatGenerateRequest;
 import com.cinex.module.seat.dto.SeatMapResponse;
 import com.cinex.module.seat.dto.SeatResponse;
@@ -55,6 +56,35 @@ public class SeatService {
         }
         return seatRepository.findAll(SeatSpecification.fromFilter(filter), pageable)
                 .map(seatMapper::toResponse);
+    }
+
+    /**
+     * Trả về danh sách loại ghế có trong phòng + số lượng mỗi loại.
+     *
+     * <p>Dùng cho form Showtime: chọn phòng → query API này → FE render input
+     * giá ĐỘNG (chỉ hiện input cho loại ghế phòng có).
+     *
+     * <p>Bỏ qua ghế aisle (lối đi) — không phải ghế thật.
+     */
+    @Transactional(readOnly = true)
+    public RoomSeatTypeSummaryResponse getSeatTypeSummary(Long roomId) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
+
+        List<Object[]> rows = seatRepository.countSeatsByTypeInRoom(roomId, StorageState.ACTIVE);
+        List<RoomSeatTypeSummaryResponse.SeatTypeCount> seatTypes = new ArrayList<>(rows.size());
+        for (Object[] row : rows) {
+            seatTypes.add(RoomSeatTypeSummaryResponse.SeatTypeCount.builder()
+                    .seatType((SeatType) row[0])
+                    .count(((Number) row[1]).longValue())
+                    .build());
+        }
+
+        return RoomSeatTypeSummaryResponse.builder()
+                .roomId(room.getId())
+                .roomName(room.getName())
+                .seatTypes(seatTypes)
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -124,7 +154,7 @@ public class SeatService {
         validateLayoutRequest(request);
 
         // Soft delete ghế cũ
-        seatRepository.softDeleteByRoomId(roomId);
+        seatRepository.softDeleteByRoomId(roomId, StorageState.ARCHIVED);
 
         int totalRows = request.getTotalRows();
         int totalCols = request.getTotalCols();
@@ -184,7 +214,7 @@ public class SeatService {
      * COUPLE/SWEETBOX đơn lẻ (ghế lẻ cuối hàng).
      */
     private SeatMapResponse generateFromCustomLayout(Room room, List<SeatGenerateRequest.CustomLayoutCell> cells) {
-        seatRepository.softDeleteByRoomId(room.getId());
+        seatRepository.softDeleteByRoomId(room.getId(), StorageState.ARCHIVED);
 
         // Build index (row, col) → cell để check partner
         java.util.Map<String, SeatGenerateRequest.CustomLayoutCell> index = new java.util.HashMap<>();

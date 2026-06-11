@@ -57,6 +57,10 @@ export interface AdminShowtimeDetail {
   basePrice: number
   vipPrice: number | null
   couplePrice: number | null
+  /** Giá Sweetbox — null = phòng không có hoặc chưa set, BE sẽ fallback couplePrice × 2 khi book. */
+  sweetboxPrice: number | null
+  /** Giá Deluxe — null = phòng không có hoặc chưa set, BE sẽ fallback vipPrice × 1.5 khi book. */
+  deluxePrice: number | null
   status: string
 }
 

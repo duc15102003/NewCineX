@@ -12,7 +12,7 @@ import {
 } from '@/hooks/useAdmin'
 import { useMovieRuns } from '@/hooks/useMovieRuns'
 import { useTheaterOptions, type Theater } from '@/hooks/useAdminTheaters'
-import type { AdminRoom } from '@/hooks/useAdminRooms'
+import { useRoomSeatTypes, type AdminRoom, type SeatType } from '@/hooks/useAdminRooms'
 import type { AdminMovie } from '@/hooks/useAdminMovies'
 import { useAuthStore } from '@/store/authStore'
 import { OPTIONS_DROPDOWN_PAGE_SIZE } from '@/utils/constants'
@@ -24,9 +24,12 @@ interface ShowtimeFormData {
   theaterId: number | ''
   roomId: number
   startTime: string
+  /** Giá ghế thường — dùng chung cho STANDARD + HANDICAP (NĐ 28/2012). */
   basePrice: number
   vipPrice: number
   couplePrice: number
+  sweetboxPrice: number
+  deluxePrice: number
 }
 
 export interface ShowtimeFormDialogProps {
@@ -70,16 +73,19 @@ export default function ShowtimeFormDialog({
 
   const { register, handleSubmit, reset, control, setValue, formState: { errors } } = useForm<ShowtimeFormData>()
 
-  // Watch: movieId → lazy load runs; theaterId → filter rooms + đợt chiếu.
+  // Watch: movieId → lazy load runs; theaterId → filter rooms + đợt chiếu;
+  // roomId → fetch seat types để render input giá ĐỘNG.
   // Cascading filter chuẩn industry: chọn chi nhánh trước → dropdown đợt chiếu
   // CHỈ hiện run của chi nhánh đó (MovieRun PER-THEATER). Tránh case admin chọn
   // run rạp B trong khi phòng thuộc rạp A → BE chặn "Đợt chiếu không thuộc chi nhánh".
   const selectedMovieId = useWatch({ control, name: 'movieId' })
   const selectedTheaterId = useWatch({ control, name: 'theaterId' })
+  const selectedRoomId = useWatch({ control, name: 'roomId' })
   const { data: movieRuns = [] } = useMovieRuns(
     selectedMovieId ? Number(selectedMovieId) : undefined,
     selectedTheaterId ? Number(selectedTheaterId) : undefined,
   )
+  const { data: roomSeatTypes } = useRoomSeatTypes(selectedRoomId ? Number(selectedRoomId) : undefined)
   const filteredRooms = useMemo<AdminRoom[]>(() => {
     if (!selectedTheaterId) return []
     return rooms.filter((r) => r.theaterId === Number(selectedTheaterId))
@@ -99,6 +105,8 @@ export default function ShowtimeFormDialog({
         basePrice: showtimeDetail.basePrice,
         vipPrice: showtimeDetail.vipPrice ?? 0,
         couplePrice: showtimeDetail.couplePrice ?? 0,
+        sweetboxPrice: showtimeDetail.sweetboxPrice ?? 0,
+        deluxePrice: showtimeDetail.deluxePrice ?? 0,
       })
     } else {
       // Create mode: pre-fill theaterId từ scoped context
@@ -111,23 +119,34 @@ export default function ShowtimeFormDialog({
         basePrice: 0,
         vipPrice: 0,
         couplePrice: 0,
+        sweetboxPrice: 0,
+        deluxePrice: 0,
       })
     }
   }, [open, isEditMode, showtimeDetail, scopedTheaterId, reset])
 
   function onSubmit(data: ShowtimeFormData) {
-    if (!validatePriceTier(data)) return
+    const presentTypes = new Set(roomSeatTypes?.seatTypes.map((s) => s.seatType) ?? [])
+    if (!validatePriceTier(data, presentTypes)) return
 
-    const payload = {
+    // Chỉ gửi giá cho loại ghế phòng CÓ thật. Field không có → undefined để BE
+    // giữ giá trị mặc định (auto-fill theo RoomType từ SystemConfig, hoặc null cho
+    // sweetbox/deluxe → fallback couple×2 / vip×1.5 khi book).
+    const has = (t: SeatType) => presentTypes.size === 0 || presentTypes.has(t)
+    const payload: Record<string, unknown> = {
       movieId: Number(data.movieId),
       // Để trống → BE auto-pick MovieRun phù hợp (NOW_SHOWING > SCHEDULED gần nhất)
       movieRunId: data.movieRunId ? Number(data.movieRunId) : undefined,
       roomId: Number(data.roomId),
       startTime: data.startTime,
+      // basePrice luôn gửi (mọi phòng đều có ghế STANDARD)
       basePrice: Number(data.basePrice) || 0,
-      vipPrice: Number(data.vipPrice) || 0,
-      couplePrice: Number(data.couplePrice) || 0,
     }
+    if (has('VIP')) payload.vipPrice = Number(data.vipPrice) || 0
+    if (has('COUPLE')) payload.couplePrice = Number(data.couplePrice) || 0
+    if (has('SWEETBOX') && Number(data.sweetboxPrice) > 0) payload.sweetboxPrice = Number(data.sweetboxPrice)
+    if (has('DELUXE') && Number(data.deluxePrice) > 0) payload.deluxePrice = Number(data.deluxePrice)
+
     if (isEditMode && editingId != null) {
       updateMut.mutate({ id: editingId, data: payload }, { onSuccess: () => onOpenChange(false) })
     } else {
@@ -183,7 +202,12 @@ export default function ShowtimeFormDialog({
                 {errors.startTime && <p className="text-red-400 text-xs mt-1">{String(errors.startTime.message)}</p>}
               </div>
 
-              <PriceTierInputs control={control} errors={errors} />
+              <PriceTierInputs
+                control={control}
+                errors={errors}
+                seatTypes={roomSeatTypes?.seatTypes}
+                hasRoomSelected={!!selectedRoomId}
+              />
             </div>
           </DialogBody>
           <DialogFooter className="gap-2">
@@ -338,48 +362,110 @@ function MovieRunSelect({ show, runs, register }: MovieRunSelectProps) {
 interface PriceTierInputsProps {
   control: ReturnType<typeof useForm<ShowtimeFormData>>['control']
   errors: ReturnType<typeof useForm<ShowtimeFormData>>['formState']['errors']
+  /** Danh sách loại ghế phòng có — undefined khi chưa fetch xong hoặc chưa chọn phòng. */
+  seatTypes: { seatType: SeatType; count: number }[] | undefined
+  hasRoomSelected: boolean
 }
 
-/** 3 input giá: thường / VIP / đôi. Tách ra để JSX cha gọn. */
-function PriceTierInputs({ control, errors }: PriceTierInputsProps) {
+interface TierConfig {
+  field: 'basePrice' | 'vipPrice' | 'couplePrice' | 'sweetboxPrice' | 'deluxePrice'
+  /** Loại ghế phải có trong phòng để hiển thị tier này. STANDARD/HANDICAP dùng chung basePrice. */
+  matchTypes: SeatType[]
+  labelText: string
+  placeholder: string
+  /** Tier "thường" bắt buộc (mọi phòng đều có ghế STANDARD). Còn lại optional. */
+  required: boolean
+  /** Suffix hiển thị bên label, VD: "(bao gồm ghế khuyết tật)". */
+  suffix?: (counts: Record<SeatType, number>) => string | null
+}
+
+const PRICE_TIERS: TierConfig[] = [
+  {
+    field: 'basePrice',
+    matchTypes: ['STANDARD', 'HANDICAP'],
+    labelText: 'Giá ghế thường (đ)',
+    placeholder: 'VD: 75.000',
+    required: true,
+    suffix: (counts) => counts.HANDICAP > 0 ? '· bao gồm ghế khuyết tật' : null,
+  },
+  { field: 'vipPrice', matchTypes: ['VIP'], labelText: 'Giá VIP (đ)', placeholder: 'VD: 100.000', required: false },
+  { field: 'couplePrice', matchTypes: ['COUPLE'], labelText: 'Giá ghế đôi (đ)', placeholder: 'VD: 180.000', required: false },
+  { field: 'sweetboxPrice', matchTypes: ['SWEETBOX'], labelText: 'Giá Sweetbox (đ)', placeholder: 'VD: 350.000', required: false },
+  { field: 'deluxePrice', matchTypes: ['DELUXE'], labelText: 'Giá Deluxe (đ)', placeholder: 'VD: 250.000', required: false },
+]
+
+/**
+ * Input giá ĐỘNG theo loại ghế phòng có. Chuẩn industry (CGV/Lotte).
+ * - Chưa chọn phòng → ẩn cả block giá, hiện hint.
+ * - Đã chọn phòng → query BE lấy seat types → render input tương ứng.
+ * - STANDARD + HANDICAP → 1 input "Giá ghế thường" (NĐ 28/2012 không thu phụ phí ghế khuyết tật).
+ */
+function PriceTierInputs({ control, errors, seatTypes, hasRoomSelected }: PriceTierInputsProps) {
+  if (!hasRoomSelected) {
+    return (
+      <div className="col-span-12 rounded-xl border border-white/5 bg-[#2a2317]/40 px-4 py-3 text-xs text-gray-400">
+        Chọn phòng chiếu để hiển thị các ô nhập giá theo loại ghế của phòng đó.
+      </div>
+    )
+  }
+  if (!seatTypes) {
+    return (
+      <div className="col-span-12 text-xs text-gray-400">Đang tải danh sách loại ghế của phòng…</div>
+    )
+  }
+
+  // Build map: seatType → count để check + render badge số lượng
+  const counts: Record<SeatType, number> = {
+    STANDARD: 0, VIP: 0, COUPLE: 0, SWEETBOX: 0, DELUXE: 0, HANDICAP: 0,
+  }
+  seatTypes.forEach((s) => { counts[s.seatType] = s.count })
+
+  // Lọc tier có ít nhất 1 loại ghế match trong phòng
+  const activeTiers = PRICE_TIERS.filter((t) => t.matchTypes.some((mt) => counts[mt] > 0))
+
+  if (activeTiers.length === 0) {
+    return (
+      <div className="col-span-12 rounded-xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-xs text-orange-300">
+        Phòng này chưa có ghế nào ACTIVE. Vào trang Phòng → tạo seat layout trước.
+      </div>
+    )
+  }
+
+  // Layout: tối đa 3 cột/row để cân với grid 12
+  const colSpan = activeTiers.length === 1 ? 'col-span-12'
+    : activeTiers.length === 2 ? 'col-span-6'
+    : 'col-span-4'
+
   return (
     <>
-      <div className="col-span-4">
-        <label className="text-sm text-gray-400 mb-1.5 block">Giá thường (đ) <span className="text-red-400">*</span></label>
-        <Controller
-          name="basePrice"
-          control={control}
-          rules={{ required: 'Giá vé là bắt buộc', min: { value: 1, message: 'Giá phải > 0' } }}
-          render={({ field }) => (
-            <PriceInput value={field.value} onChange={field.onChange} placeholder="VD: 75.000" />
-          )}
-        />
-        {errors.basePrice && <p className="text-red-400 text-xs mt-1">{String(errors.basePrice.message)}</p>}
-      </div>
-      <div className="col-span-4">
-        <label className="text-sm text-gray-400 mb-1.5 block">Giá VIP (đ)</label>
-        <Controller
-          name="vipPrice"
-          control={control}
-          rules={{ min: { value: 0, message: 'Giá không được âm' } }}
-          render={({ field }) => (
-            <PriceInput value={field.value} onChange={field.onChange} placeholder="VD: 100.000" />
-          )}
-        />
-        {errors.vipPrice && <p className="text-red-400 text-xs mt-1">{String(errors.vipPrice.message)}</p>}
-      </div>
-      <div className="col-span-4">
-        <label className="text-sm text-gray-400 mb-1.5 block">Giá đôi (đ)</label>
-        <Controller
-          name="couplePrice"
-          control={control}
-          rules={{ min: { value: 0, message: 'Giá không được âm' } }}
-          render={({ field }) => (
-            <PriceInput value={field.value} onChange={field.onChange} placeholder="VD: 150.000" />
-          )}
-        />
-        {errors.couplePrice && <p className="text-red-400 text-xs mt-1">{String(errors.couplePrice.message)}</p>}
-      </div>
+      {activeTiers.map((tier) => {
+        const totalCount = tier.matchTypes.reduce((sum, mt) => sum + counts[mt], 0)
+        const suffix = tier.suffix?.(counts)
+        return (
+          <div key={tier.field} className={colSpan}>
+            <label className="text-sm text-gray-400 mb-1.5 block">
+              {tier.labelText}
+              {tier.required && <span className="text-red-400"> *</span>}
+              <span className="text-gray-500 text-xs ml-2">
+                · {totalCount} ghế{suffix ? ` ${suffix}` : ''}
+              </span>
+            </label>
+            <Controller
+              name={tier.field}
+              control={control}
+              rules={tier.required
+                ? { required: 'Giá vé là bắt buộc', min: { value: 1, message: 'Giá phải > 0' } }
+                : { min: { value: 0, message: 'Giá không được âm' } }}
+              render={({ field }) => (
+                <PriceInput value={field.value} onChange={field.onChange} placeholder={tier.placeholder} />
+              )}
+            />
+            {errors[tier.field] && (
+              <p className="text-red-400 text-xs mt-1">{String(errors[tier.field]?.message)}</p>
+            )}
+          </div>
+        )
+      })}
     </>
   )
 }
@@ -388,22 +474,45 @@ function PriceTierInputs({ control, errors }: PriceTierInputsProps) {
 //  Business validation — testable, không phụ thuộc state
 // ============================================================
 
-/** Validate thứ tự giá: base ≤ vip ≤ couple. Return false + toast nếu vi phạm. */
-function validatePriceTier(data: ShowtimeFormData): boolean {
+/**
+ * Validate thứ tự giá tier — chỉ check tier phòng có thật.
+ * Quy tắc: base ≤ vip ≤ couple ≤ sweetbox; base ≤ vip ≤ deluxe.
+ * Sweetbox và Deluxe độc lập nhau (Sweetbox là couple cao cấp, Deluxe là single recliner).
+ */
+function validatePriceTier(data: ShowtimeFormData, presentTypes: Set<SeatType>): boolean {
   const base = Number(data.basePrice) || 0
   const vip = Number(data.vipPrice) || 0
   const couple = Number(data.couplePrice) || 0
+  const sweetbox = Number(data.sweetboxPrice) || 0
+  const deluxe = Number(data.deluxePrice) || 0
 
-  if (vip > 0 && vip < base) {
-    toast.error('Giá VIP phải lớn hơn hoặc bằng giá thường')
+  const hasVip = presentTypes.has('VIP')
+  const hasCouple = presentTypes.has('COUPLE')
+  const hasSweetbox = presentTypes.has('SWEETBOX')
+  const hasDeluxe = presentTypes.has('DELUXE')
+
+  if (hasVip && vip > 0 && vip < base) {
+    toast.error('Giá VIP phải lớn hơn hoặc bằng giá ghế thường')
     return false
   }
-  if (couple > 0 && couple < vip) {
+  if (hasCouple && couple > 0 && couple < base) {
+    toast.error('Giá ghế đôi phải lớn hơn hoặc bằng giá ghế thường')
+    return false
+  }
+  if (hasCouple && hasVip && couple > 0 && vip > 0 && couple < vip) {
     toast.error('Giá ghế đôi phải lớn hơn hoặc bằng giá VIP')
     return false
   }
-  if (couple > 0 && couple < base) {
-    toast.error('Giá ghế đôi phải lớn hơn hoặc bằng giá thường')
+  if (hasSweetbox && sweetbox > 0 && hasCouple && couple > 0 && sweetbox < couple) {
+    toast.error('Giá Sweetbox phải lớn hơn hoặc bằng giá ghế đôi')
+    return false
+  }
+  if (hasDeluxe && deluxe > 0 && hasVip && vip > 0 && deluxe < vip) {
+    toast.error('Giá Deluxe phải lớn hơn hoặc bằng giá VIP')
+    return false
+  }
+  if (hasDeluxe && deluxe > 0 && deluxe < base) {
+    toast.error('Giá Deluxe phải lớn hơn hoặc bằng giá ghế thường')
     return false
   }
   return true

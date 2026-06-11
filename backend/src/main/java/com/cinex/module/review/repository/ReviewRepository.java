@@ -25,8 +25,8 @@ public interface ReviewRepository extends JpaRepository<Review, Long>, JpaSpecif
      * CAST(r.rating AS double): ép kiểu để AVG tính số thực (không làm tròn thành int).
      * WHERE storageState <> ARCHIVED: chỉ tính review chưa bị xóa (soft-delete).
      */
-    @Query("SELECT COALESCE(AVG(CAST(r.rating AS double)), 0) FROM Review r WHERE r.movie.id = :movieId AND r.storageState <> com.cinex.common.entity.StorageState.ARCHIVED")
-    Double getAverageRatingByMovieId(Long movieId);
+    @Query("SELECT COALESCE(AVG(CAST(r.rating AS double)), 0) FROM Review r WHERE r.movie.id = :movieId AND r.storageState <> :archived")
+    Double getAverageRatingByMovieId(Long movieId, StorageState archived);
 
     /**
      * Đếm số review của 1 phim (loại trừ storageState truyền vào — thường là ARCHIVED).
@@ -46,16 +46,18 @@ public interface ReviewRepository extends JpaRepository<Review, Long>, JpaSpecif
      * so với loadAll → setStorageState → saveAll (N+1 query).
      */
     @Modifying
-    @Query("UPDATE Review r SET r.storageState = com.cinex.common.entity.StorageState.ARCHIVED " +
-            "WHERE r.movie.id = :movieId AND r.storageState <> com.cinex.common.entity.StorageState.ARCHIVED")
-    int archiveByMovieId(@Param("movieId") Long movieId);
+    @Query("UPDATE Review r SET r.storageState = :archived " +
+            "WHERE r.movie.id = :movieId AND r.storageState <> :archived")
+    int archiveByMovieId(@Param("movieId") Long movieId, @Param("archived") StorageState archived);
 
     /**
-     * Reverse của {@link #archiveByMovieId(Long)} — khi admin restore Movie.
+     * Reverse của {@link #archiveByMovieId} — khi admin restore Movie.
      * Chỉ unarchive review đang ARCHIVED (tránh ghi đè review user xóa tay).
      */
     @Modifying
-    @Query("UPDATE Review r SET r.storageState = com.cinex.common.entity.StorageState.ACTIVE " +
-            "WHERE r.movie.id = :movieId AND r.storageState = com.cinex.common.entity.StorageState.ARCHIVED")
-    int unarchiveByMovieId(@Param("movieId") Long movieId);
+    @Query("UPDATE Review r SET r.storageState = :active " +
+            "WHERE r.movie.id = :movieId AND r.storageState = :archived")
+    int unarchiveByMovieId(@Param("movieId") Long movieId,
+                           @Param("active") StorageState active,
+                           @Param("archived") StorageState archived);
 }

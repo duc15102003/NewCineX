@@ -2,6 +2,7 @@ package com.cinex.module.seat.controller;
 
 import com.cinex.common.response.ApiResponse;
 import com.cinex.module.seat.dto.BulkUpdateSeatRequest;
+import com.cinex.module.seat.dto.RoomSeatTypeSummaryResponse;
 import com.cinex.module.seat.dto.SeatGenerateRequest;
 import com.cinex.module.seat.dto.SeatMapResponse;
 import com.cinex.module.seat.dto.SeatResponse;
@@ -37,6 +38,17 @@ public class SeatController {
     @Operation(summary = "Get seat map of a room")
     public ApiResponse<SeatMapResponse> getSeatMap(@PathVariable Long roomId) {
         return ApiResponse.ok(seatService.getSeatMap(roomId));
+    }
+
+    /**
+     * Dùng cho form tạo/sửa Showtime: FE chọn phòng → gọi endpoint này → biết
+     * phòng có loại ghế nào → render input giá ĐỘNG. Không cần auth ADMIN riêng
+     * vì cùng quyền với getSeatMap (mọi user xem được seat map).
+     */
+    @GetMapping("/types")
+    @Operation(summary = "Get distinct seat types of a room with counts (for dynamic pricing form)")
+    public ApiResponse<RoomSeatTypeSummaryResponse> getSeatTypeSummary(@PathVariable Long roomId) {
+        return ApiResponse.ok(seatService.getSeatTypeSummary(roomId));
     }
 
     @PostMapping("/generate")

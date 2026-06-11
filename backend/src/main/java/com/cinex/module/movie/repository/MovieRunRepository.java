@@ -76,12 +76,12 @@ public interface MovieRunRepository extends JpaRepository<MovieRun, Long>, JpaSp
      * context — tránh entity stale trong cùng transaction (ví dụ sau khi archive, gọi
      * findById vẫn trả storageState cũ vì 1st level cache).
      *
-     * <p>FQCN {@code com.cinex.common.entity.StorageState.ARCHIVED} trong JPQL string là chuẩn
-     * — JPQL không có import statement, phải dùng FQCN cho enum reference.
+     * <p>Pass {@code StorageState.ARCHIVED} qua parameter để dependency
+     * (enum class) stay ở Java import — không hardcode FQCN trong JPQL.
      */
     @Modifying(clearAutomatically = true)
-    @Query("UPDATE MovieRun r SET r.storageState = com.cinex.common.entity.StorageState.ARCHIVED " +
+    @Query("UPDATE MovieRun r SET r.storageState = :archived " +
             "WHERE r.movie.id = :movieId " +
-            "AND (r.storageState IS NULL OR r.storageState <> com.cinex.common.entity.StorageState.ARCHIVED)")
-    int archiveByMovieId(@Param("movieId") Long movieId);
+            "AND (r.storageState IS NULL OR r.storageState <> :archived)")
+    int archiveByMovieId(@Param("movieId") Long movieId, @Param("archived") StorageState archived);
 }

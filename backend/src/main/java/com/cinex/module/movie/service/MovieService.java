@@ -175,7 +175,7 @@ public class MovieService {
 
         // Reverse cascade: unarchive review. Favorite không restore được (đã hard delete).
         // KHÔNG auto-restore MovieRun — admin chọn restore từng đợt cần qua /api/movie-runs/{id}/restore.
-        int restored = reviewRepository.unarchiveByMovieId(id);
+        int restored = reviewRepository.unarchiveByMovieId(id, StorageState.ACTIVE, StorageState.ARCHIVED);
         if (restored > 0) {
             log.info("Restored {} reviews for movie {}", restored, movie.getTitle());
         }
@@ -215,8 +215,8 @@ public class MovieService {
      * cho run, FE list runs vẫn hiện. Cascade để DB nhất quán.
      */
     private void cascadeArchiveDependencies(Long movieId) {
-        int runsArchived = movieRunRepository.archiveByMovieId(movieId);
-        int reviewsArchived = reviewRepository.archiveByMovieId(movieId);
+        int runsArchived = movieRunRepository.archiveByMovieId(movieId, StorageState.ARCHIVED);
+        int reviewsArchived = reviewRepository.archiveByMovieId(movieId, StorageState.ARCHIVED);
         int favoritesDeleted = userFavoriteRepository.deleteByMovieId(movieId);
         if (runsArchived > 0 || reviewsArchived > 0 || favoritesDeleted > 0) {
             log.info("Cascade archive for movie {}: {} runs, {} reviews archived, {} favorites deleted",

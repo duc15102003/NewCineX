@@ -32,6 +32,40 @@ export interface AdminRoomParams {
   size?: number
 }
 
+/** Loại ghế hợp lệ — match BE enum SeatType. */
+export type SeatType = 'STANDARD' | 'VIP' | 'COUPLE' | 'SWEETBOX' | 'DELUXE' | 'HANDICAP'
+
+/** 1 dòng trong summary: loại ghế + số lượng. */
+export interface SeatTypeCount {
+  seatType: SeatType
+  count: number
+}
+
+/** Response của GET /api/rooms/{roomId}/seats/types. */
+export interface RoomSeatTypeSummary {
+  roomId: number
+  roomName: string
+  seatTypes: SeatTypeCount[]
+}
+
+/**
+ * Lấy danh sách loại ghế có trong phòng + số lượng — dùng cho form Showtime
+ * để render input giá ĐỘNG (chỉ hiện input cho loại ghế phòng có thật).
+ *
+ * Enabled khi có roomId hợp lệ. staleTime 5 phút vì seat layout ít đổi.
+ */
+export function useRoomSeatTypes(roomId: number | undefined | null) {
+  return useQuery({
+    queryKey: ['admin', 'room-seat-types', roomId],
+    enabled: !!roomId && roomId > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const res = await api.get<ApiResponse<RoomSeatTypeSummary>>(`/api/rooms/${roomId}/seats/types`)
+      return res.data.data
+    },
+  })
+}
+
 export function useAdminRooms(params: AdminRoomParams = {}) {
   return useQuery({
     queryKey: ['admin', 'rooms', params],

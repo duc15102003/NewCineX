@@ -277,7 +277,7 @@ public class ReviewService {
      * <p>KHÔNG nên gọi thường xuyên vì là query nặng — chỉ là safety net.
      */
     private void recomputeFromScratch(Movie movie) {
-        Double avg = reviewRepository.getAverageRatingByMovieId(movie.getId());
+        Double avg = reviewRepository.getAverageRatingByMovieId(movie.getId(), StorageState.ARCHIVED);
         long cnt = reviewRepository.countByMovieIdAndStorageStateNot(movie.getId(), StorageState.ARCHIVED);
 
         if (cnt == 0 || avg == null) {
