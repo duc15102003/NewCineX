@@ -18,11 +18,21 @@ export function useLogin() {
     onSuccess: async (data) => {
       // Ưu tiên đọc role + theater từ AuthResponse (BE đã expose). Fallback decode JWT.
       const decoded = jwtDecode(data.accessToken)
+      const role = data.role ?? decoded.role
+
+      // Giai đoạn demo đồ án: chỉ ADMIN/SUPER_ADMIN được vào hệ thống.
+      // USER thường login OK ở BE nhưng FE chặn lại + clear refresh cookie BE vừa set.
+      if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+        api.post('/api/auth/logout').catch(() => {})
+        toast.error('Tính năng dành cho người dùng đang được phát triển, vui lòng quay lại sau')
+        return
+      }
+
       // Sau A3: refresh token đi qua HttpOnly cookie (BE set qua Set-Cookie header),
       // FE chỉ lưu access token. Browser tự gửi cookie khi gọi /api/auth/refresh.
       setAuth(data.accessToken, {
         username: data.username ?? decoded.sub,
-        role: data.role ?? decoded.role,
+        role,
         theaterId: data.theaterId ?? null,
         theaterName: data.theaterName ?? null,
         theaterCity: data.theaterCity ?? null,
@@ -34,7 +44,8 @@ export function useLogin() {
         if (avatarUrl) useAuthStore.getState().updateUser({ avatarUrl })
       } catch { /* ignore */ }
       toast.success('Đăng nhập thành công')
-      navigate('/')
+      // [DEMO ĐỒ ÁN] Tab Tổng quan đang ẩn → vào thẳng tab đầu tiên (Thể loại).
+      navigate('/admin/genres')
     },
     onError: (e) => {
       toast.error(getErrorMessage(e, 'Đăng nhập thất bại'))

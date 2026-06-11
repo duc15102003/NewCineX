@@ -37,12 +37,14 @@ export default function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-6 text-sm">
+            {/* [DEMO ĐỒ ÁN] Ẩn link public — uncomment khi đã sẵn sàng cho user:
             <Link to="/" className="text-gray-300 hover:text-[#ffc107] transition-colors">
               Trang chủ
             </Link>
             <Link to="/movies" className="text-gray-300 hover:text-[#ffc107] transition-colors">
               Phim
             </Link>
+            */}
 
             {/* Theater selector — badge "📍 CineX Hà Nội" luôn hiện, click để đổi chi nhánh */}
             <TheaterSelector />
@@ -152,12 +154,14 @@ export default function Header() {
       {/* Mobile menu */}
       {menuOpen && (
         <div className="md:hidden bg-[#201b11] border-t border-[#3f382d] px-4 py-4 space-y-1">
+          {/* [DEMO ĐỒ ÁN] Ẩn link public mobile — uncomment khi đã sẵn sàng cho user:
           <Link to="/" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#ffc107]" onClick={() => setMenuOpen(false)}>
             Trang chủ
           </Link>
           <Link to="/movies" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#ffc107]" onClick={() => setMenuOpen(false)}>
             Phim
           </Link>
+          */}
 
           {isLoggedIn() ? (
             <>

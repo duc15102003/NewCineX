@@ -18,6 +18,7 @@ type LoginForm = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const isLoggedIn = useAuthStore(s => s.isLoggedIn)
+  const isAdmin = useAuthStore(s => s.isAdmin)
   // mode='onTouched' = validate khi blur input lần đầu rồi switch onChange
   // → user nhập đến đâu thấy lỗi đến đó nhưng không spam error khi vừa focus.
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
@@ -26,8 +27,8 @@ export default function LoginPage() {
   })
   const login = useLogin()
 
-  // Đã đăng nhập → redirect về trang chủ (không cho vào lại trang login)
-  if (isLoggedIn()) return <Navigate to="/" replace />
+  // Đã đăng nhập → admin về tab Thể loại (Tổng quan đang ẩn), còn lại về trang chủ.
+  if (isLoggedIn()) return <Navigate to={isAdmin() ? '/admin/genres' : '/'} replace />
 
   const onSubmit = (data: LoginForm) => {
     login.mutate(data)

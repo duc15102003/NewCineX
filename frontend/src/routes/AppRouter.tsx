@@ -1,12 +1,13 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import MainLayout from '@/components/layout/MainLayout'
 import ProtectedRoute from './ProtectedRoute'
 import AdminRoute from './AdminRoute'
 import Loading from '@/components/common/Loading'
 
 // Lazy load — tách chunk theo route group
-const HomePage = lazy(() => import('@/features/home/HomePage'))
+// [DEMO ĐỒ ÁN] Uncomment khi mở lại HomePage:
+// const HomePage = lazy(() => import('@/features/home/HomePage'))
 const LoginPage = lazy(() => import('@/features/auth/LoginPage'))
 const RegisterPage = lazy(() => import('@/features/auth/RegisterPage'))
 const ForgotPasswordPage = lazy(() => import('@/features/auth/ForgotPasswordPage'))
@@ -55,7 +56,10 @@ export default function AppRouter() {
         <Routes>
           {/* Public routes with layout */}
           <Route element={<MainLayout />}>
-            <Route path="/" element={<HomePage />} />
+            {/* [DEMO ĐỒ ÁN] Trang chủ tạm redirect về /login để không lộ danh sách phim.
+                Uncomment dòng <Route path="/" element={<HomePage />} /> và xóa Navigate khi mở lại: */}
+            {/* <Route path="/" element={<HomePage />} /> */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
