@@ -3,6 +3,7 @@ package com.cinex.module.showtime.service;
 import com.cinex.common.entity.StorageState;
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
+import com.cinex.common.service.SecurityService;
 import com.cinex.module.config.service.SystemConfigService;
 import com.cinex.module.movie.entity.Movie;
 import com.cinex.module.movie.entity.MovieRun;
@@ -58,7 +59,7 @@ public class ShowtimeService {
     private final BookingSeatRepository bookingSeatRepository;
     private final ShowtimeMapper showtimeMapper;
     private final SystemConfigService systemConfigService;
-    private final com.cinex.common.service.SecurityService securityService;
+    private final SecurityService securityService;
     private final PricingEngine pricingEngine;
 
     /**

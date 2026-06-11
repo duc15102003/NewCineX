@@ -4,6 +4,7 @@ import com.cinex.common.audit.Auditable;
 import com.cinex.common.entity.StorageState;
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
+import com.cinex.common.service.FileUploadService;
 import com.cinex.common.service.SecurityService;
 import com.cinex.module.combo.dto.ComboItemRequest;
 import com.cinex.module.combo.dto.ComboItemResponse;
@@ -43,7 +44,7 @@ public class ComboService {
     private final SnackRepository snackRepository;
     private final TheaterRepository theaterRepository;
     private final SecurityService securityService;
-    private final com.cinex.common.service.FileUploadService fileUploadService;
+    private final FileUploadService fileUploadService;
 
     @Transactional(readOnly = true)
     public Page<ComboResponse> list(Pageable pageable) {

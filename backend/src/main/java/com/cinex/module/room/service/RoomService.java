@@ -3,6 +3,7 @@ package com.cinex.module.room.service;
 import com.cinex.common.entity.StorageState;
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
+import com.cinex.common.service.SecurityService;
 import com.cinex.module.room.dto.RoomFilter;
 import com.cinex.module.room.dto.RoomRequest;
 import com.cinex.module.room.dto.RoomResponse;
@@ -33,7 +34,7 @@ public class RoomService {
     private final ShowtimeRepository showtimeRepository;
     private final TheaterRepository theaterRepository;
     private final RoomMapper roomMapper;
-    private final com.cinex.common.service.SecurityService securityService;
+    private final SecurityService securityService;
 
     // Danh sách trạng thái suất chiếu được coi là "đang hoạt động" — chặn xóa Room/Movie liên quan
     private static final List<ShowtimeStatus> ACTIVE_SHOWTIME_STATUSES =

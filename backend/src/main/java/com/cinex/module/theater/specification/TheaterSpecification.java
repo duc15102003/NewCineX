@@ -3,6 +3,7 @@ package com.cinex.module.theater.specification;
 import com.cinex.common.entity.StorageState;
 import com.cinex.module.theater.dto.TheaterFilter;
 import com.cinex.module.theater.entity.Theater;
+import com.cinex.module.theater.entity.TheaterStatus;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
@@ -55,7 +56,7 @@ public class TheaterSpecification {
         return (root, query, cb) -> cb.equal(root.get("city"), city);
     }
 
-    private static Specification<Theater> hasStatus(com.cinex.module.theater.entity.TheaterStatus status) {
+    private static Specification<Theater> hasStatus(TheaterStatus status) {
         return (root, query, cb) -> cb.equal(root.get("status"), status);
     }
 }

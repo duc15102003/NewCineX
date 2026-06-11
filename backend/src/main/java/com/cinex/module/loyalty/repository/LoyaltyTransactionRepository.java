@@ -1,6 +1,7 @@
 package com.cinex.module.loyalty.repository;
 
 import com.cinex.module.loyalty.entity.LoyaltyTransaction;
+import com.cinex.module.loyalty.entity.LoyaltyTransactionType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -19,6 +20,5 @@ public interface LoyaltyTransactionRepository extends JpaRepository<LoyaltyTrans
     Page<LoyaltyTransaction> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
     /** Kiểm tra booking đã được earn chưa — tránh double-earn nếu event re-publish. */
-    boolean existsByBookingIdAndTransactionType(Long bookingId,
-                                                com.cinex.module.loyalty.entity.LoyaltyTransactionType type);
+    boolean existsByBookingIdAndTransactionType(Long bookingId, LoyaltyTransactionType type);
 }

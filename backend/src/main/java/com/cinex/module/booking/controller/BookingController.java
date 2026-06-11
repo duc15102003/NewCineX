@@ -10,6 +10,7 @@ import com.cinex.module.booking.dto.ConfirmBookingRequest;
 import com.cinex.module.booking.dto.CounterSaleRequest;
 import com.cinex.module.booking.dto.HoldSeatsRequest;
 import com.cinex.module.booking.dto.HoldSeatsResponse;
+import com.cinex.module.booking.service.BookingCheckInService;
 import com.cinex.module.booking.service.BookingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class BookingController {
 
     private final BookingService bookingService;
+    private final BookingCheckInService bookingCheckInService;
     private final SecurityService securityService;
 
     @PostMapping("/hold")
@@ -94,14 +96,14 @@ public class BookingController {
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "(Admin/Staff) Check-in — nhận qrToken (quét QR) hoặc bookingCode (nhập tay)")
     public ApiResponse<BookingResponse> checkIn(@RequestParam String code) {
-        return ApiResponse.ok("Checked in", bookingService.checkIn(code));
+        return ApiResponse.ok("Checked in", bookingCheckInService.checkIn(code));
     }
 
     @GetMapping("/check-in/preview")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "(Admin/Staff) Preview booking info trước khi admit/reject — read-only")
     public ApiResponse<BookingResponse> previewCheckIn(@RequestParam String code) {
-        return ApiResponse.ok(bookingService.previewCheckIn(code));
+        return ApiResponse.ok(bookingCheckInService.previewCheckIn(code));
     }
 
     @PostMapping("/check-in/reject")
@@ -110,7 +112,7 @@ public class BookingController {
     public ApiResponse<BookingResponse> rejectCheckIn(
             @RequestParam String code,
             @RequestParam(defaultValue = "UNDER_AGE") String reason) {
-        return ApiResponse.ok("Vé đã bị từ chối", bookingService.rejectCheckIn(code, reason));
+        return ApiResponse.ok("Vé đã bị từ chối", bookingCheckInService.rejectCheckIn(code, reason));
     }
 
     @GetMapping("/showtimes/{showtimeId}/occupied-seats")

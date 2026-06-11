@@ -3,6 +3,7 @@ package com.cinex.module.statistics.controller;
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
 import com.cinex.common.response.ApiResponse;
+import com.cinex.module.config.service.SystemConfigService;
 import com.cinex.module.statistics.dto.OccupancyStatistics;
 import com.cinex.module.statistics.dto.OverviewStatistics;
 import com.cinex.module.statistics.dto.RevenueStatistics;
@@ -36,7 +37,7 @@ public class StatisticsController {
     private static final int DEFAULT_RANGE_DAYS_FALLBACK = 30;
 
     private final StatisticsService statisticsService;
-    private final com.cinex.module.config.service.SystemConfigService systemConfigService;
+    private final SystemConfigService systemConfigService;
 
     @GetMapping("/overview")
     @Operation(summary = "Overview: today bookings, revenue, total users/movies/rooms (filter theo theaterId)")

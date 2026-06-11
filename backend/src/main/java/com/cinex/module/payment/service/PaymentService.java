@@ -4,6 +4,7 @@ import com.cinex.common.audit.Auditable;
 import com.cinex.common.entity.tracker.IdTrackerService;
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
+import com.cinex.common.service.SecurityService;
 import com.cinex.module.booking.entity.Booking;
 import com.cinex.module.booking.entity.BookingSeatStatus;
 import com.cinex.module.booking.entity.BookingStatus;
@@ -44,7 +45,7 @@ public class PaymentService {
     private final IdTrackerService idTrackerService;
     private final ApplicationEventPublisher eventPublisher;
     private final SeatWebSocketService seatWebSocketService;
-    private final com.cinex.common.service.SecurityService securityService;
+    private final SecurityService securityService;
 
     /**
      * Tạo payment → gọi PaymentProcessor (Factory+Strategy) → trả URL.

@@ -11,6 +11,8 @@ import com.cinex.module.booking.dto.BookingListResponse;
 import com.cinex.module.booking.dto.BookingResponse;
 import com.cinex.module.booking.dto.BookingSeatResponse;
 import com.cinex.module.booking.dto.ConfirmBookingRequest;
+import com.cinex.module.booking.mapper.BookingResponseMapper;
+import com.cinex.module.movie.entity.AgeRating;
 import com.cinex.module.booking.dto.CounterSaleRequest;
 import com.cinex.module.booking.dto.HoldSeatsRequest;
 import com.cinex.module.booking.dto.HoldSeatsResponse;
@@ -31,6 +33,7 @@ import com.cinex.module.booking.service.SeatWebSocketService;
 import com.cinex.module.showtime.repository.ShowtimeRepository;
 import com.cinex.common.service.EmailService;
 import com.cinex.common.service.QrCodeService;
+import com.cinex.common.service.SecurityService;
 import com.cinex.module.payment.entity.Payment;
 import com.cinex.module.payment.entity.PaymentMethod;
 import com.cinex.module.payment.entity.PaymentStatus;
@@ -73,7 +76,8 @@ public class BookingService {
     private final PaymentService paymentService;
     private final EmailService emailService;
     private final PricingEngine pricingEngine;
-    private final com.cinex.common.service.SecurityService securityService;
+    private final SecurityService securityService;
+    private final BookingResponseMapper bookingResponseMapper;
     private final QrCodeService qrCodeService;
 
     /**
@@ -156,7 +160,7 @@ public class BookingService {
      * <p>Min age theo TT 25/2024: T13→13, T16→16, T18→18. P/K không cần check.
      * Mức C (cấm phổ biến) không xuất hiện trong booking system — phim cấm không lên rạp.
      */
-    private void validateAgeIfDOBSet(User user, com.cinex.module.movie.entity.AgeRating ageRating) {
+    private void validateAgeIfDOBSet(User user, AgeRating ageRating) {
         if (user.getDateOfBirth() == null || ageRating == null) return;
         int minAge = switch (ageRating) {
             case P, K -> 0;
@@ -486,89 +490,7 @@ public class BookingService {
                 nf.format(booking.getTotalAmount()) + "đ");
     }
 
-    /**
-     * Check-in — staff/admin quét QR (qrToken) hoặc nhập manual bookingCode.
-     *
-     * Param `code` chấp nhận 2 dạng:
-     * - qrToken (32 ký tự hex, random) — quét QR → an toàn, không thể brute force.
-     * - bookingCode (CX-YYYYMMDD-NNN) — nhập tay khi QR hỏng. Có rủi ro hacker đoán code
-     *   nhưng đỡ vì cần staff trực tiếp, staff có thể verify danh tính (CCCD, SĐT).
-     *
-     * Thử qrToken trước (đường an toàn), fallback bookingCode (đường manual).
-     */
-    @Transactional
-    public BookingResponse checkIn(String code) {
-        Booking booking = bookingRepository.findByQrToken(code)
-                .or(() -> {
-                    log.info("Check-in fallback to bookingCode (manual mode): {}", code);
-                    return bookingRepository.findByBookingCode(code);
-                })
-                .orElseThrow(() -> new BusinessException(ErrorCode.BOOKING_NOT_FOUND,
-                        "Booking not found: " + code));
-
-        if (booking.getStatus() == BookingStatus.CHECKED_IN) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Vé đã được sử dụng");
-        }
-
-        if (booking.getStatus() != BookingStatus.CONFIRMED) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                    "Đơn đặt vé chưa được xác nhận, trạng thái: " + booking.getStatus());
-        }
-
-        booking.setStatus(BookingStatus.CHECKED_IN);
-        bookingRepository.save(booking);
-
-        log.info("Booking {} checked in", booking.getBookingCode());
-        return toBookingResponse(booking);
-    }
-
-    /**
-     * Preview booking info trước khi check-in (chuẩn Vista/Veezi): staff scan/nhập code
-     * → BE trả booking info + ageRating → FE hiển thị cảnh báo, staff verify CCCD vật lý
-     * → click Admit (gọi checkIn) hoặc Reject (gọi rejectCheckIn).
-     *
-     * <p>Read-only, KHÔNG mutate trạng thái booking — chỉ lookup info.
-     */
-    @Transactional(readOnly = true)
-    public BookingResponse previewCheckIn(String code) {
-        Booking booking = bookingRepository.findByQrToken(code)
-                .or(() -> bookingRepository.findByBookingCode(code))
-                .orElseThrow(() -> new BusinessException(ErrorCode.BOOKING_NOT_FOUND,
-                        "Booking not found: " + code));
-        return toBookingResponse(booking);
-    }
-
-    /**
-     * Từ chối check-in tại cổng — staff verify CCCD thấy không đủ tuổi (T13/T16/T18) hoặc
-     * lý do khác → click "Từ chối". Booking flip CONFIRMED → REJECTED.
-     *
-     * <p>Theo policy CGV/Lotte: <b>không hoàn tiền</b> vì user đã được cảnh báo ở 3 nơi
-     * (confirm dialog đặt vé, chip trên QR ticket, profile DOB). @Auditable log reason
-     * để khiếu nại sau có chứng cớ.
-     */
-    @Transactional
-    @com.cinex.common.audit.Auditable(action = "REJECT_CHECK_IN", entityType = "Booking")
-    public BookingResponse rejectCheckIn(String code, String reason) {
-        Booking booking = bookingRepository.findByQrToken(code)
-                .or(() -> bookingRepository.findByBookingCode(code))
-                .orElseThrow(() -> new BusinessException(ErrorCode.BOOKING_NOT_FOUND,
-                        "Booking not found: " + code));
-
-        if (booking.getStatus() == BookingStatus.CHECKED_IN) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                    "Vé đã check-in, không thể từ chối");
-        }
-        if (booking.getStatus() != BookingStatus.CONFIRMED) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                    "Chỉ vé CONFIRMED mới từ chối được, trạng thái hiện tại: " + booking.getStatus());
-        }
-
-        booking.setStatus(BookingStatus.REJECTED);
-        bookingRepository.save(booking);
-
-        log.info("Booking {} REJECTED at gate. Reason: {}", booking.getBookingCode(), reason);
-        return toBookingResponse(booking);
-    }
+    /* Check-in flow tách sang BookingCheckInService. */
 
     /**
      * Danh sách vé của user — Filter DTO + Specification.
@@ -675,37 +597,9 @@ public class BookingService {
         return pricingEngine.applyModifiers(rawPrice, showtime.getStartTime(), theaterId);
     }
 
+    /** Delegate sang BookingResponseMapper — giữ method để 8 call site nội bộ không phải đổi. */
     private BookingResponse toBookingResponse(Booking booking) {
-        List<BookingSeatResponse> seatResponses = booking.getBookingSeats().stream()
-                .map(bs -> BookingSeatResponse.builder()
-                        .seatId(bs.getSeat().getId())
-                        .seatNumber(bs.getSeat().getSeatNumber())
-                        .seatType(bs.getSeat().getSeatType().name())
-                        .price(bs.getPrice())
-                        .status(bs.getStatus().name())
-                        .build())
-                .toList();
-
-        return BookingResponse.builder()
-                .id(booking.getId())
-                .storageState(booking.getStorageState() != null ? booking.getStorageState().name() : null)
-                .bookingCode(booking.getBookingCode())
-                .status(booking.getStatus())
-                .movieTitle(booking.getShowtime().getMovie().getTitle())
-                .moviePosterUrl(booking.getShowtime().getMovie().getPosterUrl())
-                .movieAgeRating(booking.getShowtime().getMovie().getAgeRating())
-                .showtimeId(booking.getShowtime().getId())
-                .startTime(booking.getShowtime().getStartTime())
-                .endTime(booking.getShowtime().getEndTime())
-                .roomName(booking.getShowtime().getRoom().getName())
-                .roomType(booking.getShowtime().getRoom().getType().name())
-                .seats(seatResponses)
-                .totalAmount(booking.getTotalAmount())
-                .confirmedAt(booking.getConfirmedAt())
-                .cancelledAt(booking.getCancelledAt())
-                .createdAt(booking.getCreatedAt())
-                .updatedAt(booking.getUpdatedAt())
-                .build();
+        return bookingResponseMapper.toResponse(booking);
     }
 
     /**
