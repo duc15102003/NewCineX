@@ -65,6 +65,9 @@ export function useBulkUpdateSeats(roomId: number) {
     onSuccess: () => {
       toast.success('Lưu sơ đồ ghế thành công')
       qc.invalidateQueries({ queryKey: ['seatmap', roomId] })
+      // Form Showtime dùng useRoomSeatTypes — phải invalidate, tránh form
+      // hiển thị input giá cho danh sách loại ghế cũ.
+      qc.invalidateQueries({ queryKey: ['admin', 'room-seat-types', roomId] })
     },
     onError: (e) => toast.error(getErrorMessage(e, 'Lỗi khi lưu')),
   })

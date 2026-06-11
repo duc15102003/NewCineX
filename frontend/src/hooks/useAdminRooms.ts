@@ -119,12 +119,19 @@ export function useBulkRestoreRooms() {
 }
 
 export function useGenerateSeats() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ roomId, data }: { roomId: number; data: Record<string, unknown> }) => {
       const res = await api.post<ApiResponse<unknown>>(`/api/rooms/${roomId}/seats/generate`, data)
       return res.data.data
     },
-    onSuccess: () => toast.success('Generate ghế thành công'),
+    onSuccess: (_data, vars) => {
+      toast.success('Generate ghế thành công')
+      // Generate ghế đổi danh sách seat trong phòng → invalidate cả seat map
+      // lẫn room-seat-types để form Showtime fetch lại loại ghế mới.
+      qc.invalidateQueries({ queryKey: ['seatmap', vars.roomId] })
+      qc.invalidateQueries({ queryKey: ['admin', 'room-seat-types', vars.roomId] })
+    },
     onError: (e) => toast.error(getErrorMessage(e, 'Lỗi')),
   })
 }
