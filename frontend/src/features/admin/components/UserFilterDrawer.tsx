@@ -69,7 +69,7 @@ export default function UserFilterDrawer(props: UserFilterDrawerProps) {
         />
       </FilterField>
 
-      <FilterField label="Bao gồm tài khoản đã xóa" hint="Hiển thị cả user bị xóa mềm (ARCHIVED).">
+      <FilterField label="Bao gồm đã lưu trữ" hint="Hiển thị cả bản ghi đã bị xoá mềm (ARCHIVED).">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -77,7 +77,7 @@ export default function UserFilterDrawer(props: UserFilterDrawerProps) {
             onChange={(e) => onPatchDraft({ includeDeleted: e.target.checked })}
             className="accent-[#ffc107] w-4 h-4"
           />
-          <span className="text-sm text-gray-300">Hiển thị tài khoản đã xóa</span>
+          <span className="text-sm text-gray-300">Hiển thị tài khoản đã lưu trữ</span>
         </label>
       </FilterField>
     </FilterDrawer>

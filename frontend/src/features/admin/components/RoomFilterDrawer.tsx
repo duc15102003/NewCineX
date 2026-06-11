@@ -70,7 +70,7 @@ export default function RoomFilterDrawer(props: RoomFilterDrawerProps) {
         />
       </FilterField>
 
-      <FilterField label="Bao gồm đã xóa">
+      <FilterField label="Bao gồm đã lưu trữ" hint="Hiển thị cả bản ghi đã bị xoá mềm (ARCHIVED).">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -78,7 +78,7 @@ export default function RoomFilterDrawer(props: RoomFilterDrawerProps) {
             onChange={(e) => onSetDraft('includeDeleted', e.target.checked)}
             className="accent-[#ffc107] w-4 h-4"
           />
-          <span className="text-sm text-gray-300">Hiển thị cả phòng đã lưu trữ</span>
+          <span className="text-sm text-gray-300">Hiển thị phòng đã lưu trữ</span>
         </label>
       </FilterField>
     </FilterDrawer>

@@ -272,7 +272,7 @@ export default function AdminGenrePage() {
           </select>
         </FilterField>
 
-        <FilterField label="Trạng thái lưu trữ" hint="Mặc định hiển thị cả thể loại đã xóa để admin quản lý.">
+        <FilterField label="Bao gồm đã lưu trữ" hint="Hiển thị cả bản ghi đã bị xoá mềm (ARCHIVED).">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -280,7 +280,7 @@ export default function AdminGenrePage() {
               onChange={(e) => setDraftFilter(f => ({ ...f, includeDeleted: e.target.checked }))}
               className="accent-[#ffc107] w-4 h-4"
             />
-            <span className="text-sm text-gray-300">Bao gồm đã xóa (ARCHIVED)</span>
+            <span className="text-sm text-gray-300">Hiển thị thể loại đã lưu trữ</span>
           </label>
         </FilterField>
       </FilterDrawer>

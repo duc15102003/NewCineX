@@ -50,7 +50,7 @@ export default function TheaterFilterDrawer(props: TheaterFilterDrawerProps) {
           ))}
         </select>
       </FilterField>
-      <FilterField label="Bao gồm đã lưu trữ">
+      <FilterField label="Bao gồm đã lưu trữ" hint="Hiển thị cả bản ghi đã bị xoá mềm (ARCHIVED).">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -58,7 +58,7 @@ export default function TheaterFilterDrawer(props: TheaterFilterDrawerProps) {
             onChange={(e) => onPatchDraft({ includeDeleted: e.target.checked })}
             className="accent-[#ffc107] w-4 h-4"
           />
-          <span className="text-sm text-gray-300">Bao gồm chi nhánh ARCHIVED</span>
+          <span className="text-sm text-gray-300">Hiển thị chi nhánh đã lưu trữ</span>
         </label>
       </FilterField>
     </FilterDrawer>

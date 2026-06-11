@@ -126,7 +126,7 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
         />
       </FilterField>
 
-      <FilterField label="Bao gồm suất đã xóa" hint="Hiển thị cả suất chiếu đã bị xóa mềm (ARCHIVED).">
+      <FilterField label="Bao gồm đã lưu trữ" hint="Hiển thị cả bản ghi đã bị xoá mềm (ARCHIVED).">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -134,7 +134,7 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
             onChange={(e) => onSetDraft('includeDeleted', e.target.checked ? 'true' : '')}
             className="accent-[#ffc107] w-4 h-4"
           />
-          <span className="text-sm text-gray-300">Hiển thị suất đã xóa</span>
+          <span className="text-sm text-gray-300">Hiển thị suất chiếu đã lưu trữ</span>
         </label>
       </FilterField>
     </FilterDrawer>

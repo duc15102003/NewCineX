@@ -102,7 +102,7 @@ export default function ReviewFilterDrawer(props: ReviewFilterDrawerProps) {
               onChange={(e) => onPatchDraft({ includeDeleted: e.target.checked })}
               className="accent-[#ffc107] w-4 h-4"
             />
-            <span className="text-sm text-gray-300">Bao gồm đã xóa (ARCHIVED)</span>
+            <span className="text-sm text-gray-300">Hiển thị đánh giá đã lưu trữ</span>
           </label>
         </div>
       </FilterField>

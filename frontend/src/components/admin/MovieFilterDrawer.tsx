@@ -269,7 +269,7 @@ export default function MovieFilterDrawer({
                   onChange={(e) => setField('includeDeleted', e.target.checked)}
                   className="accent-[#ffc107]"
                 />
-                Bao gồm phim đã lưu trữ
+                Hiển thị phim đã lưu trữ
               </label>
             )}
           </div>
