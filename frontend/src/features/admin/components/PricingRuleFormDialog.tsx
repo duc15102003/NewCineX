@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { Globe2, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -10,48 +9,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 
 import { useCreatePricingRule, useUpdatePricingRule } from '@/hooks/useAdmin'
 import { useTheaterOptions, type Theater } from '@/hooks/useAdminTheaters'
-import { useAuthStore } from '@/store/authStore'
-import type { PricingRule, PricingRuleType } from '@/hooks/useAdminPricingRules'
+import type { PricingRule } from '@/hooks/useAdminPricingRules'
 import LockedTheaterBadge from './LockedTheaterBadge'
 
-const SELECT_CLS =
-  'w-full h-10 rounded-md border border-white/10 bg-[#2a2317] text-white text-sm px-3 focus:outline-none focus:ring-1 focus:ring-[#ffc107]'
-
-const RULE_TYPE_LABELS: Record<PricingRuleType, string> = {
-  DAY_OF_WEEK: 'Theo thứ trong tuần',
-  HOUR_RANGE: 'Theo khung giờ',
-  DATE_RANGE: 'Theo khoảng ngày',
-  COMPOSITE: 'Kết hợp (AND)',
-}
-
-const DAY_OPTIONS = [
-  { value: 'MONDAY', label: 'T2' },
-  { value: 'TUESDAY', label: 'T3' },
-  { value: 'WEDNESDAY', label: 'T4' },
-  { value: 'THURSDAY', label: 'T5' },
-  { value: 'FRIDAY', label: 'T6' },
-  { value: 'SATURDAY', label: 'T7' },
-  { value: 'SUNDAY', label: 'CN' },
-]
-
-type ScopeChoice = 'GLOBAL' | 'THEATER'
-
-interface FormData {
-  scope: ScopeChoice
-  theaterId: number | ''
-  code: string
-  name: string
-  description: string
-  ruleType: PricingRuleType
-  multiplierPercent: string
-  dayOfWeek: string
-  hourStart: string
-  hourEnd: string
-  dateStart: string
-  dateEnd: string
-  active: boolean
-  priority: string
-}
+import { ScopeRadio, ScopeReadOnlyBadge } from './pricing/ScopeSelector'
+import { DayOfWeekPicker, HourRangeInputs, DateRangeInputs } from './pricing/RuleConditionInputs'
+import { type FormData, type ScopeChoice, RULE_TYPE_LABELS, SELECT_CLS } from './pricing/types'
 
 export interface PricingRuleFormDialogProps {
   open: boolean
@@ -65,12 +28,13 @@ export interface PricingRuleFormDialogProps {
 /**
  * Dialog tạo/sửa PricingRule với hybrid scope (Global default vs Theater override).
  * Pattern resolution: cùng code → theater-specific WIN (override toàn bộ global).
+ *
+ * Sub-components: ./pricing/ScopeSelector + ./pricing/RuleConditionInputs.
  */
 export default function PricingRuleFormDialog({
   open, onOpenChange, editingItem, scopedTheaterId, branchLocked, userTheaterId,
 }: PricingRuleFormDialogProps) {
   const { data: theaters = [] } = useTheaterOptions()
-  const { isBranchAdmin } = useAuthStore()
   const createMut = useCreatePricingRule()
   const updateMut = useUpdatePricingRule()
 
@@ -141,8 +105,7 @@ export default function PricingRuleFormDialog({
       priority: Number(data.priority),
     }
     if (editingItem) {
-      updateMut.mutate({ id: editingItem.id, data: payload },
-        { onSuccess: () => onOpenChange(false) })
+      updateMut.mutate({ id: editingItem.id, data: payload }, { onSuccess: () => onOpenChange(false) })
     } else {
       createMut.mutate(payload, { onSuccess: () => onOpenChange(false) })
     }
@@ -157,7 +120,6 @@ export default function PricingRuleFormDialog({
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogBody>
             <div className="grid grid-cols-12 gap-4">
-              {/* Scope radio chỉ hiện khi SUPER_ADMIN tạo mới — branch admin luôn THEATER, edit không cho đổi */}
               {!branchLocked && !editingItem && (
                 <ScopeRadio
                   watchedScope={watchedScope}
@@ -233,11 +195,7 @@ export default function PricingRuleFormDialog({
               </div>
 
               {(selectedType === 'DAY_OF_WEEK' || selectedType === 'COMPOSITE') && (
-                <DayOfWeekPicker
-                  selectedDays={selectedDays}
-                  onToggle={toggleDay}
-                  register={register}
-                />
+                <DayOfWeekPicker selectedDays={selectedDays} onToggle={toggleDay} register={register} />
               )}
 
               {(selectedType === 'HOUR_RANGE' || selectedType === 'COMPOSITE') && (
@@ -265,185 +223,5 @@ export default function PricingRuleFormDialog({
         </form>
       </DialogContent>
     </Dialog>
-  )
-}
-
-// ============================================================
-//  Sub-components
-// ============================================================
-
-interface ScopeRadioProps {
-  watchedScope: ScopeChoice
-  register: ReturnType<typeof useForm<FormData>>['register']
-  editingItem: PricingRule | null
-  branchLocked: boolean
-}
-
-function ScopeRadio({ watchedScope, register, editingItem, branchLocked }: ScopeRadioProps) {
-  const editLocked = !!editingItem
-  return (
-    <div className="col-span-12">
-      <label className="text-sm text-gray-400 mb-1.5 block">
-        Phạm vi áp dụng <span className="text-red-400">*</span>
-        {(branchLocked || editLocked) && <span className="text-xs text-gray-500 ml-2">(không thể đổi)</span>}
-      </label>
-      <div className="grid grid-cols-2 gap-2">
-        <ScopeOption
-          value="GLOBAL"
-          icon={<Globe2 size={16} className="text-[#ffc107]" />}
-          title="Toàn hệ thống (default)"
-          subtitle="Áp dụng mọi rạp nếu không có override"
-          active={watchedScope === 'GLOBAL'}
-          disabled={branchLocked || editLocked}
-          register={register}
-        />
-        <ScopeOption
-          value="THEATER"
-          icon={<Building2 size={16} className="text-blue-400" />}
-          title="Override theo chi nhánh"
-          subtitle="Cùng mã sẽ thay rule toàn hệ tại rạp này"
-          active={watchedScope === 'THEATER'}
-          disabled={editLocked}
-          register={register}
-        />
-      </div>
-      {branchLocked && (
-        <p className="text-gray-500 text-xs mt-1">
-          Admin chi nhánh chỉ tạo override cho rạp mình.
-        </p>
-      )}
-    </div>
-  )
-}
-
-interface ScopeOptionProps {
-  value: ScopeChoice
-  icon: React.ReactNode
-  title: string
-  subtitle: string
-  active: boolean
-  disabled: boolean
-  register: ReturnType<typeof useForm<FormData>>['register']
-}
-
-function ScopeOption({ value, icon, title, subtitle, active, disabled, register }: ScopeOptionProps) {
-  const borderCls = active ? 'border-[#ffc107] bg-[#ffc107]/5' : 'border-white/10 bg-[#2a2317]'
-  const disabledCls = disabled ? 'opacity-50 cursor-not-allowed' : ''
-  return (
-    <label className={`flex items-center gap-2 cursor-pointer p-3 rounded-lg border transition ${borderCls} ${disabledCls}`}>
-      <input type="radio" value={value} {...register('scope')} disabled={disabled} className="accent-[#ffc107]" />
-      <div className="flex items-center gap-2">
-        {icon}
-        <div>
-          <div className="text-sm font-medium text-white">{title}</div>
-          <div className="text-xs text-gray-400">{subtitle}</div>
-        </div>
-      </div>
-    </label>
-  )
-}
-
-interface ScopeReadOnlyBadgeProps {
-  isGlobal: boolean
-  theaterName?: string
-}
-
-/** Badge read-only hiển thị scope hiện tại trong edit mode — thay cho radio disabled rườm rà. */
-function ScopeReadOnlyBadge({ isGlobal, theaterName }: ScopeReadOnlyBadgeProps) {
-  return (
-    <div className="col-span-12">
-      <label className="text-sm text-gray-400 mb-1.5 block">
-        Phạm vi áp dụng
-      </label>
-      <div className="flex items-center gap-2 p-3 rounded-lg border border-white/10 bg-[#2a2317]/40">
-        {isGlobal ? (
-          <>
-            <Globe2 size={16} className="text-[#ffc107] shrink-0" />
-            <span className="text-white text-sm font-medium">Toàn hệ thống</span>
-          </>
-        ) : (
-          <>
-            <Building2 size={16} className="text-blue-400 shrink-0" />
-            <span className="text-white text-sm font-medium">
-              {theaterName ?? 'Chi nhánh cụ thể'}
-            </span>
-          </>
-        )}
-      </div>
-      <p className="text-gray-500 text-xs mt-1">Không thể đổi phạm vi — tạo rule mới nếu cần.</p>
-    </div>
-  )
-}
-
-interface DayOfWeekPickerProps {
-  selectedDays: string[]
-  onToggle: (day: string) => void
-  register: ReturnType<typeof useForm<FormData>>['register']
-}
-
-function DayOfWeekPicker({ selectedDays, onToggle, register }: DayOfWeekPickerProps) {
-  return (
-    <div className="col-span-12">
-      <label className="text-sm text-gray-400 mb-1.5 block">Áp dụng cho các thứ</label>
-      <div className="flex flex-wrap gap-2">
-        {DAY_OPTIONS.map(d => {
-          const selected = selectedDays.includes(d.value)
-          return (
-            <button
-              key={d.value}
-              type="button"
-              onClick={() => onToggle(d.value)}
-              className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
-                selected
-                  ? 'bg-[#ffc107]/10 text-[#ffc107] border-[#ffc107]/30'
-                  : 'bg-[#2a2317] text-gray-400 border-white/10 hover:text-white'
-              }`}
-            >
-              {d.label}
-            </button>
-          )
-        })}
-      </div>
-      {/* Hidden input để form data nhận giá trị join */}
-      <input type="hidden" {...register('dayOfWeek')} />
-    </div>
-  )
-}
-
-interface HourRangeInputsProps {
-  register: ReturnType<typeof useForm<FormData>>['register']
-}
-
-function HourRangeInputs({ register }: HourRangeInputsProps) {
-  return (
-    <>
-      <div className="col-span-6">
-        <label className="text-sm text-gray-400 mb-1.5 block">Giờ bắt đầu</label>
-        <Input type="number" min={0} max={23} {...register('hourStart')} placeholder="18" />
-      </div>
-      <div className="col-span-6">
-        <label className="text-sm text-gray-400 mb-1.5 block">Giờ kết thúc</label>
-        <Input type="number" min={0} max={24} {...register('hourEnd')} placeholder="22" />
-      </div>
-    </>
-  )
-}
-
-interface DateRangeInputsProps {
-  register: ReturnType<typeof useForm<FormData>>['register']
-}
-
-function DateRangeInputs({ register }: DateRangeInputsProps) {
-  return (
-    <>
-      <div className="col-span-6">
-        <label className="text-sm text-gray-400 mb-1.5 block">Ngày bắt đầu</label>
-        <Input type="date" {...register('dateStart')} />
-      </div>
-      <div className="col-span-6">
-        <label className="text-sm text-gray-400 mb-1.5 block">Ngày kết thúc</label>
-        <Input type="date" {...register('dateEnd')} />
-      </div>
-    </>
   )
 }
