@@ -1,7 +1,7 @@
 import { TableCell, TableRow } from '@/components/ui/table'
 import { DoorOpen } from 'lucide-react'
-import { label, SHOWTIME_STATUS_LABELS, fmtDate, fmtTime, fmtVnd } from '@/utils/labels'
-import { SHOWTIME_STATUS_COLORS as STATUS_COLORS } from '@/utils/colors'
+import { label, SHOWTIME_STATUS_LABELS, STORAGE_STATE_LABELS, fmtDate, fmtTime, fmtVnd } from '@/utils/labels'
+import { SHOWTIME_STATUS_COLORS as STATUS_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 import type { AdminShowtime } from '@/hooks/useAdminShowtimes'
 
 export interface ShowtimeRowProps {
@@ -14,8 +14,9 @@ export interface ShowtimeRowProps {
 
 /** Row trong bảng AdminShowtimePage — hiển thị phim, phòng, giá, trạng thái. */
 export default function ShowtimeRow({ showtime: s, index, selected, onToggleSelect, onEdit }: ShowtimeRowProps) {
+  const isArchived = s.storageState === 'ARCHIVED'
   return (
-    <TableRow className="border-white/5 hover:bg-white/5 group">
+    <TableRow className={`border-white/5 hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
       <TableCell className="whitespace-nowrap">
         <input type="checkbox" checked={selected}
           onChange={() => onToggleSelect(s.id)} className="accent-[#ffc107]" />
@@ -66,9 +67,16 @@ export default function ShowtimeRow({ showtime: s, index, selected, onToggleSele
         </div>
       </TableCell>
       <TableCell className="whitespace-nowrap">
-        <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[s.status] ?? ''}`}>
-          {label(SHOWTIME_STATUS_LABELS, s.status)}
-        </span>
+        <div className="flex flex-col gap-1 items-start">
+          <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[s.status] ?? ''}`}>
+            {label(SHOWTIME_STATUS_LABELS, s.status)}
+          </span>
+          {isArchived && (
+            <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[s.storageState] ?? ''}`}>
+              {label(STORAGE_STATE_LABELS, s.storageState)}
+            </span>
+          )}
+        </div>
       </TableCell>
     </TableRow>
   )

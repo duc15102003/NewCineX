@@ -104,19 +104,27 @@ interface PriceBreakdownProps {
 }
 
 function PriceBreakdown({ showtime, selectedSeats, allSeats }: PriceBreakdownProps) {
-  const counts = { STANDARD: 0, VIP: 0, COUPLE: 0 }
+  // HANDICAP dùng basePrice (NĐ 28/2012 — không thu phụ phí ghế khuyết tật).
+  const counts = { STANDARD: 0, VIP: 0, COUPLE: 0, SWEETBOX: 0, DELUXE: 0, HANDICAP: 0 }
   selectedSeats.forEach(id => {
     const s = allSeats.find(seat => seat.id === id)
     if (s) counts[s.seatType]++
   })
 
+  // Fallback formula khớp BookingService.getPriceForSeat:
+  // SWEETBOX = couple × 2 nếu null, DELUXE = vip × 1.5 nếu null.
   const vipPrice = showtime.vipPrice ?? showtime.basePrice
   const couplePrice = showtime.couplePrice ?? showtime.basePrice
+  const sweetboxPrice = showtime.sweetboxPrice ?? couplePrice * 2
+  const deluxePrice = showtime.deluxePrice ?? Math.round(vipPrice * 1.5)
+  const standardCount = counts.STANDARD + counts.HANDICAP
   return (
     <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-300">
-      {counts.STANDARD > 0 && <span>Thường x{counts.STANDARD} = {fmtVnd(counts.STANDARD * showtime.basePrice)}</span>}
+      {standardCount > 0 && <span>Thường x{standardCount} = {fmtVnd(standardCount * showtime.basePrice)}</span>}
       {counts.VIP > 0 && <span>VIP x{counts.VIP} = {fmtVnd(counts.VIP * vipPrice)}</span>}
       {counts.COUPLE > 0 && <span>Đôi x{counts.COUPLE} = {fmtVnd(counts.COUPLE * couplePrice)}</span>}
+      {counts.SWEETBOX > 0 && <span>Sweetbox x{counts.SWEETBOX} = {fmtVnd(counts.SWEETBOX * sweetboxPrice)}</span>}
+      {counts.DELUXE > 0 && <span>Deluxe x{counts.DELUXE} = {fmtVnd(counts.DELUXE * deluxePrice)}</span>}
     </div>
   )
 }

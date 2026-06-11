@@ -75,10 +75,14 @@ export interface ShowtimeItem {
   basePrice: number
   vipPrice: number | null
   couplePrice: number | null
+  sweetboxPrice: number | null
+  deluxePrice: number | null
   /** Giá CUỐI (sau PricingEngine) — đây là giá thực sự thu, dùng cho tính tiền và hiển thị chính. */
   effectiveBasePrice?: number
   effectiveVipPrice?: number | null
   effectiveCouplePrice?: number | null
+  effectiveSweetboxPrice?: number | null
+  effectiveDeluxePrice?: number | null
   appliedRules?: AppliedPricingRule[]
   status: string
   /** Sau refactor MovieRun: showtime thuộc 1 đợt chiếu cụ thể. */

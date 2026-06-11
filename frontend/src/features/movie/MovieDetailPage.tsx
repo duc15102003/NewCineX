@@ -226,19 +226,35 @@ export default function MovieDetailPage() {
                       effectivePrice={st.effectiveBasePrice ?? st.basePrice}
                       priceColorClass="text-white"
                     />
-                    {st.vipPrice && (
+                    {st.vipPrice != null && (
                       <PriceWithRules
                         label="VIP:"
                         basePrice={st.vipPrice}
                         effectivePrice={st.effectiveVipPrice ?? st.vipPrice}
                       />
                     )}
-                    {st.couplePrice && (
+                    {st.couplePrice != null && (
                       <PriceWithRules
                         label="Đôi:"
                         basePrice={st.couplePrice}
                         effectivePrice={st.effectiveCouplePrice ?? st.couplePrice}
                         priceColorClass="text-purple-400"
+                      />
+                    )}
+                    {st.sweetboxPrice != null && (
+                      <PriceWithRules
+                        label="Sweetbox:"
+                        basePrice={st.sweetboxPrice}
+                        effectivePrice={st.effectiveSweetboxPrice ?? st.sweetboxPrice}
+                        priceColorClass="text-pink-400"
+                      />
+                    )}
+                    {st.deluxePrice != null && (
+                      <PriceWithRules
+                        label="Deluxe:"
+                        basePrice={st.deluxePrice}
+                        effectivePrice={st.effectiveDeluxePrice ?? st.deluxePrice}
+                        priceColorClass="text-cyan-400"
                       />
                     )}
                   </div>
