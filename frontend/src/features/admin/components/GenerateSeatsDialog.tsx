@@ -294,12 +294,11 @@ function CustomPanel({ roomId, onClose, generateMut }: {
 
     // Check validation NGOÀI setCells — tránh React StrictMode chạy updater 2 lần → toast 2 lần
     if (isDouble) {
-      const isOdd = col % 2 === 1
-      const partnerCol = isOdd ? col + 1 : col - 1
-      if (partnerCol < 1 || partnerCol > cols) {
+      const partnerCol = findPartnerInBlock(rowLabel, col, cells, cols)
+      if (partnerCol === null) {
         toast.warning(
           `${rowLabel}${col} không thể đặt ${tool === 'SWEETBOX' ? 'Sweetbox' : 'ghế đôi'} ` +
-          `— ghế lẻ cuối hàng không có cặp.`
+          `— ghế lẻ cuối dải không có cặp (ghế đôi không vắt qua lối đi).`
         )
         return  // skip state update
       }
@@ -309,17 +308,16 @@ function CustomPanel({ roomId, onClose, generateMut }: {
       const next = new Map(prev)
 
       if (isDouble) {
-        const isOdd = col % 2 === 1
-        const partnerCol = isOdd ? col + 1 : col - 1
+        const partnerCol = findPartnerInBlock(rowLabel, col, prev, cols)
+        if (partnerCol === null) return prev // race-condition guard: block đổi giữa check & apply
         next.set(key, tool)
         next.set(`${rowLabel}:${partnerCol}`, tool)
       } else {
-        // Tool khác: nếu cell đang là COUPLE/SWEETBOX → un-pair partner cùng type
+        // Tool khác: nếu cell đang là COUPLE/SWEETBOX → un-pair partner cùng type trong cùng block
         const current = prev.get(key)
         if (current === 'COUPLE' || current === 'SWEETBOX') {
-          const isOdd = col % 2 === 1
-          const partnerCol = isOdd ? col + 1 : col - 1
-          if (partnerCol >= 1 && partnerCol <= cols && prev.get(`${rowLabel}:${partnerCol}`) === current) {
+          const partnerCol = findPartnerInBlock(rowLabel, col, prev, cols)
+          if (partnerCol !== null && prev.get(`${rowLabel}:${partnerCol}`) === current) {
             next.set(`${rowLabel}:${partnerCol}`, tool)
           }
         }
@@ -459,7 +457,7 @@ function CustomPanel({ roomId, onClose, generateMut }: {
           </div>
 
           <p className="text-[10px] text-gray-500 italic mt-3 text-center">
-            Click hoặc kéo chuột để vẽ. Đôi/Sweetbox tự ghép cặp 2 ô liền kề (1-2, 3-4...)
+            Click hoặc kéo chuột để vẽ. Đôi/Sweetbox tự ghép cặp 2 ô liền kề trong cùng dải — không vắt qua lối đi.
           </p>
         </div>
       </div>
@@ -504,6 +502,36 @@ function NumField({ label, value, min, max, onChange }: {
         }} className="h-9 text-sm" />
     </div>
   )
+}
+
+/**
+ * Tìm cột partner cho ghế đôi/sweetbox theo block (giữa các lối đi).
+ *
+ * <p>Mở rộng trái-phải từ {@code col} đến khi gặp AISLE hoặc biên grid → xác định block.
+ * Trong block, vị trí lẻ → partner = col+1; vị trí chẵn → partner = col-1.
+ * Nếu partner ra ngoài block (block lẻ ghế, col đứng cuối) → null (UI báo không thể đặt).
+ *
+ * <p>Mô phỏng thực tế rạp: ghế đôi vật lý chiếm 2 chỗ liền nhau, KHÔNG vắt qua lối đi.
+ */
+function findPartnerInBlock(
+  rowLabel: string,
+  col: number,
+  cells: Map<string, SeatTypeKey>,
+  totalCols: number,
+): number | null {
+  let leftBound = col
+  while (leftBound > 1 && cells.get(`${rowLabel}:${leftBound - 1}`) !== 'AISLE') {
+    leftBound--
+  }
+  let rightBound = col
+  while (rightBound < totalCols && cells.get(`${rowLabel}:${rightBound + 1}`) !== 'AISLE') {
+    rightBound++
+  }
+  const posInBlock = col - leftBound + 1
+  const isOddInBlock = posInBlock % 2 === 1
+  const partnerCol = isOddInBlock ? col + 1 : col - 1
+  if (partnerCol < leftBound || partnerCol > rightBound) return null
+  return partnerCol
 }
 
 function initCells(rows: number, cols: number): Map<string, SeatTypeKey> {

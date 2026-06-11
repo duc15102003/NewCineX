@@ -222,27 +222,79 @@ Hang J: J1  J2  J3  J4  J5  J6  J7  J8  J9  J10 J11 J12  -> 12 COUPLE
 Tong: 10 x 12 = 120 ghe
 ```
 
-### Xử lý ghế le cuối hàng couple
+### Xử lý ghế đôi với lối đi (Block-Aware Pairing — chuẩn industry)
 
-Khi `totalCols` là so le (VD: 13 cột), hàng couple không the ghép đôi hoan hao:
+Ghế đôi là **vật lý** (2 nệm dính nhau, 1 tay vịn chung) — nó CHỈ tồn tại trong cùng 1 dải ghế liền mạch. Aisle (lối đi) là khoảng trống vật lý ngăn cách → **KHÔNG có ghế đôi nào vắt qua lối đi** ở rạp thật. Phần mềm thiết kế rạp chuyên nghiệp (Vista, Veezi, Compeso) đều pair theo block, không theo parity tuyệt đối.
+
+**Thuật toán "block-aware":**
 
 ```
-Hang J (13 cot):
-  [J1-J2] [J3-J4] [J5-J6] [J7-J8] [J9-J10] [J11-J12] [J13]
-  COUPLE  COUPLE  COUPLE  COUPLE  COUPLE   COUPLE    STANDARD
-                                                       ^
-                                              Ghe le -> doi thanh STANDARD
+Cho row có aisle tại cột 3 và 10, totalCols = 12:
+
+| 1  2 || aisle 3 || 4  5  6  7  8  9 || aisle 10 || 11 12 |
+  └─┘                └─┘└─┘└─┘                       └─┘
+  pair               pair pair pair                  pair
+
+Block 1: cột 1-2 (width 2)  → pair (1,2)           = 2 COUPLE
+Block 2: cột 4-9 (width 6)  → pair (4,5)(6,7)(8,9) = 6 COUPLE
+Block 3: cột 11-12 (width 2) → pair (11,12)         = 2 COUPLE
+Tổng: 10 COUPLE = 5 cặp ghế đôi
 ```
 
-Code xử lý:
+**Nếu block lẻ ghế** → ghế CUỐI block không có partner → tự fallback STANDARD:
+
+```
+Row có aisle tại cột 4 và 10, totalCols = 12:
+
+Block 1: cột 1-3 (width 3, ODD) → pair (1,2), col 3 LẺ → STANDARD
+Block 2: cột 5-9 (width 5, ODD) → pair (5,6)(7,8), col 9 LẺ → STANDARD  
+Block 3: cột 11-12 (width 2)    → pair (11,12)
+Tổng: 6 COUPLE + 2 STANDARD = 3 cặp + 2 ghế đơn
+```
+
+**Code BE** (`SeatService.resolveCoupleTypeInBlock`):
 ```java
-// Ghe doi ghep cap 1-2, 3-4, ... -- ghe le cuoi (khi totalCols le) -> STANDARD
-boolean isLastOddCol = (request.getTotalCols() % 2 != 0)
-                    && (col == request.getTotalCols());
-seatType = isLastOddCol ? SeatType.STANDARD : SeatType.COUPLE;
+// Mở rộng trái-phải đến khi gặp aisle hoặc biên grid
+int leftBound = col;
+while (leftBound > 1 && !aisleCols.contains(leftBound - 1)) leftBound--;
+int rightBound = col;
+while (rightBound < totalCols && !aisleCols.contains(rightBound + 1)) rightBound++;
+
+int blockWidth = rightBound - leftBound + 1;
+int posInBlock = col - leftBound + 1;
+boolean isLoneLast = (blockWidth % 2 != 0) && (posInBlock == blockWidth);
+return isLoneLast ? SeatType.STANDARD : SeatType.COUPLE;
 ```
 
-**Tại sao không bộ ghế le?** Vì layout cần cần đôi. Nếu hàng khác co 13 cột ma hàng couple chi co 12, grid sẽ bi lech. Giữ ghế le là STANDARD dam bao so cột đồng deu mới hàng.
+**Code FE** (`GenerateSeatsDialog.findPartnerInBlock`):
+```ts
+// Tìm partner trong cùng block (skip AISLE cells)
+let leftBound = col
+while (leftBound > 1 && cells.get(`${rowLabel}:${leftBound - 1}`) !== 'AISLE') leftBound--
+let rightBound = col
+while (rightBound < totalCols && cells.get(`${rowLabel}:${rightBound + 1}`) !== 'AISLE') rightBound++
+
+const posInBlock = col - leftBound + 1
+const isOddInBlock = posInBlock % 2 === 1
+const partnerCol = isOddInBlock ? col + 1 : col - 1
+if (partnerCol < leftBound || partnerCol > rightBound) return null  // block lẻ → ghế cuối không cặp
+return partnerCol
+```
+
+### So sánh BEFORE / AFTER refactor
+
+| Scenario | Logic CŨ (parity tuyệt đối) | Logic MỚI (block-aware) |
+|---|---|---|
+| 12 cột, aisle 3+10, hàng J COUPLE | (1,2)(3*,4)(5,6)(7,8)(9,10*)(11,12) — pair 3-4 và 9-10 vắt qua lối đi ❌ | (1,2) \| aisle3 \| (4,5)(6,7)(8,9) \| aisle10 \| (11,12) — 5 cặp đúng vật lý ✅ |
+| 12 cột, aisle 4+9, hàng J COUPLE | (1,2)(3,4*)(5,6)(7,8)(9*,10)(11,12) — pair 3-4 và 9-10 vắt qua lối đi ❌ | (1,2)[3 STD] \| aisle4 \| (5,6)(7,8)[9 STD] \| aisle9 \| (11,12) — 3 cặp + 2 ghế lẻ ✅ |
+| 13 cột, không aisle | (1,2)...(11,12)(13 STD) | (1,2)...(11,12)(13 STD) — kết quả giống nhau ✅ |
+
+**Mối ngại "lệch grid":** Ghế đôi chiếm 2 ô vật lý nhưng vẫn lưu **2 record riêng** trong DB (col 1 và col 2). Render FE dùng `colspan=2` nên dù 1 hàng có 5 cặp + 2 lẻ vẫn căn đúng grid 12 cột với các hàng khác.
+
+**Câu hỏi tự kiểm tra:**
+1. Phòng 10×14, aisle cột 5 và 11. Hàng cuối COUPLE → có bao nhiêu cặp ghế đôi? *(Đáp: block 1-4 = 2 cặp, block 6-10 = 2 cặp + col 10 STD, block 12-14 = 1 cặp + col 14 STD → 5 cặp + 2 STD)*
+2. Tại sao không cho ghế đôi vắt qua lối đi như logic cũ? *(Đáp: ghế đôi là 2 nệm dính nhau — không thể tồn tại "nửa ghế bên này lối đi, nửa bên kia")*
+3. Khi user xóa 1 ghế đôi (đổi sang STANDARD), partner có tự reset không? *(Đáp: Có — `applyTool` un-pair partner cùng block cùng type)*
 
 ---
 

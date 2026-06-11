@@ -199,15 +199,20 @@ public class SeatService {
             SeatType type = cell.getSeatType() != null ? cell.getSeatType() : SeatType.STANDARD;
             SeatStatus status = cell.getStatus() != null ? cell.getStatus() : SeatStatus.AVAILABLE;
 
-            // Sanitize ghế đôi không có partner đúng type → STANDARD
+            // Sanitize ghế đôi không có partner đúng type → STANDARD.
+            // Partner tính theo block giữa các aisle (chuẩn industry CGV/Lotte/BHD):
+            // ghế đôi vật lý chiếm 2 chỗ liền nhau trong cùng 1 dải ghế, KHÔNG vắt qua lối đi.
             if (!isAisle && (type == SeatType.COUPLE || type == SeatType.SWEETBOX)) {
-                int col = cell.getCol();
-                boolean isOdd = col % 2 != 0;
-                int partnerCol = isOdd ? col + 1 : col - 1;
-                var partner = index.get(cell.getRow() + ":" + partnerCol);
-                if (partner == null || partner.getSeatType() != type) {
+                Integer partnerCol = findCouplePartnerInBlock(cell.getRow(), cell.getCol(), index);
+                if (partnerCol == null) {
                     type = SeatType.STANDARD;
                     fallbackCount++;
+                } else {
+                    var partner = index.get(cell.getRow() + ":" + partnerCol);
+                    if (partner == null || partner.getSeatType() != type) {
+                        type = SeatType.STANDARD;
+                        fallbackCount++;
+                    }
                 }
             }
 
@@ -235,6 +240,57 @@ public class SeatService {
         log.info("Generated {} positions (custom) for room {} ({} bookable)",
                 seats.size(), room.getName(), realSeatCount);
         return getSeatMap(room.getId());
+    }
+
+    /**
+     * Resolve COUPLE vs STANDARD cho 1 col trong couple row, theo block giữa các aisle.
+     *
+     * <p>Trong block width N: nếu N lẻ, ghế cuối cùng (positionInBlock == N) không có
+     * partner → STANDARD. Còn lại tất cả pair OK → COUPLE.
+     */
+    private SeatType resolveCoupleTypeInBlock(int col, Set<Integer> aisleCols, int totalCols) {
+        int leftBound = col;
+        while (leftBound > 1 && !aisleCols.contains(leftBound - 1)) leftBound--;
+        int rightBound = col;
+        while (rightBound < totalCols && !aisleCols.contains(rightBound + 1)) rightBound++;
+        int blockWidth = rightBound - leftBound + 1;
+        int posInBlock = col - leftBound + 1;
+        boolean isLoneLast = (blockWidth % 2 != 0) && (posInBlock == blockWidth);
+        return isLoneLast ? SeatType.STANDARD : SeatType.COUPLE;
+    }
+
+    /**
+     * Tìm cột partner cho ghế đôi/sweetbox theo block — chuẩn industry.
+     *
+     * <p>Thuật toán: trong cùng row, mở rộng trái-phải từ {@code col} đến khi gặp
+     * AISLE hoặc hết grid → xác định block. Trong block, vị trí thứ N (1-indexed):
+     * lẻ → partner = col+1, chẵn → partner = col-1. Nếu partner ra ngoài block (block
+     * lẻ ghế, col đứng cuối) → return null (caller fallback STANDARD).
+     *
+     * <p>Khác parity tuyệt đối: với row có aisle cột 3, dải [4..9] sẽ pair
+     * (4,5)(6,7)(8,9) — không phải (3,4)(5,6)... vắt qua aisle.
+     */
+    private Integer findCouplePartnerInBlock(
+            String rowLabel,
+            int col,
+            java.util.Map<String, SeatGenerateRequest.CustomLayoutCell> index) {
+        int leftBound = col;
+        while (leftBound > 1) {
+            var prev = index.get(rowLabel + ":" + (leftBound - 1));
+            if (prev == null || Boolean.TRUE.equals(prev.getAisle())) break;
+            leftBound--;
+        }
+        int rightBound = col;
+        while (true) {
+            var next = index.get(rowLabel + ":" + (rightBound + 1));
+            if (next == null || Boolean.TRUE.equals(next.getAisle())) break;
+            rightBound++;
+        }
+        int posInBlock = col - leftBound + 1;
+        boolean isOddInBlock = posInBlock % 2 == 1;
+        int partnerCol = isOddInBlock ? col + 1 : col - 1;
+        if (partnerCol < leftBound || partnerCol > rightBound) return null;
+        return partnerCol;
     }
 
     /** Validate ranges + boundary của tất cả zone trong request. */
@@ -328,11 +384,12 @@ public class SeatService {
             }
         }
 
-        // 3. Couple
+        // 3. Couple — pair theo block (chuẩn industry: ghế đôi không vắt qua lối đi).
+        // Block lẻ ghế → ghế cuối block tự fallback STANDARD để không đứng đơn lẻ.
         if (coupleRows.contains(rowLabel)) {
-            int totalCols = req.getTotalCols();
-            boolean isLastOdd = (totalCols % 2 != 0) && (col == totalCols);
-            return isLastOdd ? SeatType.STANDARD : SeatType.COUPLE;
+            Set<Integer> aisleCols = req.getAisleCols() != null ? req.getAisleCols() : Set.of();
+            if (aisleCols.contains(col)) return SeatType.COUPLE; // aisle: type không dùng (display ưu tiên aisle flag)
+            return resolveCoupleTypeInBlock(col, aisleCols, req.getTotalCols());
         }
 
         // 4. Deluxe
