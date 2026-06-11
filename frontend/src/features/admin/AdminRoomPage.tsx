@@ -232,13 +232,14 @@ export default function AdminRoomPage() {
               <TableHead className="text-gray-400">Loại</TableHead>
               <TableHead className="text-gray-400">Tổng ghế</TableHead>
               <TableHead className="text-gray-400">Trạng thái</TableHead>
+              <TableHead className="text-gray-400">Lưu trữ</TableHead>
               <TableHead className="text-gray-400 text-right">Tạo ghế</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rooms.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-gray-500 py-10">Chưa có phòng chiếu</TableCell>
+                <TableCell colSpan={8} className="text-center text-gray-500 py-10">Chưa có phòng chiếu</TableCell>
               </TableRow>
             )}
 
@@ -254,7 +255,7 @@ export default function AdminRoomPage() {
                     theaterCity={group.theaterCity}
                     itemCount={group.rooms.length}
                     itemLabel="phòng"
-                    colSpan={7}
+                    colSpan={8}
                   />
                   {!isCollapsed && group.rooms.map((r, idx) => renderRoomRow(r, idx, true))}
                 </React.Fragment>

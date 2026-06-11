@@ -110,12 +110,13 @@ export default function AdminUserPage() {
               <TableHead className="text-gray-400">Vai trò</TableHead>
               <TableHead className="text-gray-400">Chi nhánh</TableHead>
               <TableHead className="text-gray-400">Trạng thái</TableHead>
+              <TableHead className="text-gray-400">Lưu trữ</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
+                <TableCell colSpan={9} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
               </TableRow>
             )}
             {users.map((u, index) => {
@@ -141,18 +142,18 @@ export default function AdminUserPage() {
                   {u.theaterName ? <span>{u.theaterName}</span> : <span className="text-gray-600">—</span>}
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
-                  <div className="flex flex-col gap-1 items-start">
-                    <span className={`text-xs px-2 py-1 rounded border ${u.enabled
-                      ? 'bg-green-500/10 text-green-400 border-green-500/30'
-                      : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
-                      {u.enabled ? 'Hoạt động' : 'Bị khóa'}
+                  <span className={`text-xs px-2 py-1 rounded border ${u.enabled
+                    ? 'bg-green-500/10 text-green-400 border-green-500/30'
+                    : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
+                    {u.enabled ? 'Hoạt động' : 'Bị khóa'}
+                  </span>
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
+                  {u.storageState && (
+                    <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[u.storageState] ?? ''}`}>
+                      {label(STORAGE_STATE_LABELS, u.storageState)}
                     </span>
-                    {isArchived && u.storageState && (
-                      <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[u.storageState] ?? ''}`}>
-                        {label(STORAGE_STATE_LABELS, u.storageState)}
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </TableCell>
               </TableRow>
             )})}

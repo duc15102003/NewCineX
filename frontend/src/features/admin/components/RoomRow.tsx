@@ -41,16 +41,14 @@ export default function RoomRow({
       </TableCell>
       <TableCell className="text-gray-300 whitespace-nowrap">{r.totalSeats}</TableCell>
       <TableCell className="whitespace-nowrap">
-        <div className="flex flex-col gap-1 items-start">
-          <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[r.status] ?? ''}`}>
-            {label(ROOM_STATUS_LABELS, r.status)}
-          </span>
-          {isArchived && (
-            <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[r.storageState] ?? ''}`}>
-              {label(STORAGE_STATE_LABELS, r.storageState)}
-            </span>
-          )}
-        </div>
+        <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[r.status] ?? ''}`}>
+          {label(ROOM_STATUS_LABELS, r.status)}
+        </span>
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[r.storageState] ?? ''}`}>
+          {label(STORAGE_STATE_LABELS, r.storageState)}
+        </span>
       </TableCell>
       <TableCell className="text-right whitespace-nowrap">
         <div className="flex items-center justify-end gap-1">

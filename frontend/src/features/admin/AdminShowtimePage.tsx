@@ -233,12 +233,13 @@ export default function AdminShowtimePage() {
               <TableHead className="text-gray-400">Phòng</TableHead>
               <TableHead className="text-gray-400">Giá</TableHead>
               <TableHead className="text-gray-400">Trạng thái</TableHead>
+              <TableHead className="text-gray-400">Lưu trữ</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {showtimes.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-gray-500 py-10">Chưa có suất chiếu</TableCell>
+                <TableCell colSpan={7} className="text-center text-gray-500 py-10">Chưa có suất chiếu</TableCell>
               </TableRow>
             )}
 

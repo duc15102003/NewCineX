@@ -149,12 +149,13 @@ export default function AdminTheaterPage() {
               <TableHead className="text-gray-400">Địa chỉ</TableHead>
               <TableHead className="text-gray-400">Liên hệ</TableHead>
               <TableHead className="text-gray-400">Trạng thái</TableHead>
+              <TableHead className="text-gray-400">Lưu trữ</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {theaters.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-gray-500 py-10">Không có chi nhánh nào</TableCell>
+                <TableCell colSpan={8} className="text-center text-gray-500 py-10">Không có chi nhánh nào</TableCell>
               </TableRow>
             )}
             {theaters.map((t, idx) => {
@@ -190,16 +191,14 @@ export default function AdminTheaterPage() {
                   {t.email && <div className="text-xs text-gray-500">{t.email}</div>}
                 </TableCell>
                 <TableCell>
-                  <div className="flex flex-col gap-1 items-start">
-                    <span className={`text-xs px-2 py-1 rounded-md border ${THEATER_STATUS_COLORS[t.status] ?? ''}`}>
-                      {label(THEATER_STATUS_LABELS, t.status)}
-                    </span>
-                    {isArchived && (
-                      <span className={`text-xs px-2 py-1 rounded-md border ${STATE_COLORS[t.storageState] ?? ''}`}>
-                        {label(STORAGE_STATE_LABELS, t.storageState)}
-                      </span>
-                    )}
-                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-md border ${THEATER_STATUS_COLORS[t.status] ?? ''}`}>
+                    {label(THEATER_STATUS_LABELS, t.status)}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className={`text-xs px-2 py-1 rounded-md border ${STATE_COLORS[t.storageState] ?? ''}`}>
+                    {label(STORAGE_STATE_LABELS, t.storageState)}
+                  </span>
                 </TableCell>
               </TableRow>
             )})}

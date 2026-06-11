@@ -67,16 +67,14 @@ export default function ShowtimeRow({ showtime: s, index, selected, onToggleSele
         </div>
       </TableCell>
       <TableCell className="whitespace-nowrap">
-        <div className="flex flex-col gap-1 items-start">
-          <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[s.status] ?? ''}`}>
-            {label(SHOWTIME_STATUS_LABELS, s.status)}
-          </span>
-          {isArchived && (
-            <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[s.storageState] ?? ''}`}>
-              {label(STORAGE_STATE_LABELS, s.storageState)}
-            </span>
-          )}
-        </div>
+        <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[s.status] ?? ''}`}>
+          {label(SHOWTIME_STATUS_LABELS, s.status)}
+        </span>
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[s.storageState] ?? ''}`}>
+          {label(STORAGE_STATE_LABELS, s.storageState)}
+        </span>
       </TableCell>
     </TableRow>
   )

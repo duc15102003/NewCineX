@@ -71,16 +71,14 @@ export default function MovieRow({
         )}
       </TableCell>
       <TableCell className="whitespace-nowrap">
-        <div className="flex flex-col gap-1 items-start">
-          <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[m.status] ?? ''}`}>
-            {label(MOVIE_STATUS_LABELS, m.status)}
-          </span>
-          {isArchived && (
-            <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[m.storageState] ?? ''}`}>
-              {label(STORAGE_STATE_LABELS, m.storageState)}
-            </span>
-          )}
-        </div>
+        <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[m.status] ?? ''}`}>
+          {label(MOVIE_STATUS_LABELS, m.status)}
+        </span>
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[m.storageState] ?? ''}`}>
+          {label(STORAGE_STATE_LABELS, m.storageState)}
+        </span>
       </TableCell>
       <TableCell className="whitespace-nowrap">
         <span className={`inline-flex items-center gap-1 ${m.rating ? 'text-[#ffc107]' : 'text-gray-500'}`}>
