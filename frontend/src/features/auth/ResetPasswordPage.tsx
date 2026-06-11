@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
-import { Lock, CheckCircle2, XCircle } from 'lucide-react'
+import { Lock, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 import { getErrorMessage } from '@/api/axios'
 import { useResetPassword } from '@/hooks/useAuth'
 
@@ -20,11 +20,24 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
+/**
+ * Phân loại lỗi BE trả về:
+ * - TERMINAL: token sai/hết hạn → user không tự sửa được, switch sang trang lỗi
+ *   để dẫn về flow forgot-password.
+ * - RETRYABLE: mật khẩu yếu/trùng/không khớp → show banner đỏ trên form, giữ
+ *   nguyên form để user sửa và submit lại (chuẩn CGV/Lotte/ngân hàng).
+ */
+function isTerminalError(msg: string): boolean {
+  const lower = msg.toLowerCase()
+  return lower.includes('token') || lower.includes('hết hạn') || lower.includes('expired')
+}
+
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
   const [status, setStatus] = useState<'form' | 'success' | 'error'>('form')
   const [errorMsg, setErrorMsg] = useState('')
+  const [inlineError, setInlineError] = useState('')
   const resetPassword = useResetPassword()
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
@@ -33,13 +46,19 @@ export default function ResetPasswordPage() {
 
   function onSubmit(data: FormData) {
     if (!token) return
+    setInlineError('')
     resetPassword.mutate(
       { token, newPassword: data.newPassword, confirmPassword: data.confirmPassword },
       {
         onSuccess: () => setStatus('success'),
         onError: (e) => {
-          setErrorMsg(getErrorMessage(e, 'Đặt lại mật khẩu thất bại'))
-          setStatus('error')
+          const msg = getErrorMessage(e, 'Đặt lại mật khẩu thất bại')
+          if (isTerminalError(msg)) {
+            setErrorMsg(msg)
+            setStatus('error')
+          } else {
+            setInlineError(msg)
+          }
         },
       },
     )
@@ -118,6 +137,12 @@ export default function ResetPasswordPage() {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {inlineError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+              <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-400">{inlineError}</p>
+            </div>
+          )}
           <div>
             <Label className="text-gray-400">Mật khẩu mới <span className="text-red-400">*</span></Label>
             <div className="mt-1.5">
