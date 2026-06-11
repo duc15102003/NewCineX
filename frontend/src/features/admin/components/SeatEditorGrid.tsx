@@ -2,19 +2,19 @@ import React from 'react'
 import CinemaScreen from '@/components/common/CinemaScreen'
 import type { SeatItem } from '@/hooks/useAdmin'
 import { SEAT_BG, SEAT_TYPES, type SeatTypeKey } from '@/types/seatEditor'
+import { isDouble, isSeatBlockedForTool } from '../utils/seatPairing'
 
 export interface SeatEditorGridProps {
   rows: [string, SeatItem[]][]
   maxCols: number
   previewMode: boolean
   pendingChanges: Map<number, SeatTypeKey>
+  /** Tool đang chọn — để render visual hint khi ô không pair được. */
+  activeTool: SeatTypeKey
   getDisplayType: (seat: SeatItem) => SeatTypeKey
   onMouseDown: (seat: SeatItem, seats: SeatItem[]) => void
   onMouseEnter: (seat: SeatItem, seats: SeatItem[]) => void
 }
-
-const DOUBLE_TYPES: SeatTypeKey[] = ['COUPLE', 'SWEETBOX']
-const isDouble = (t: SeatTypeKey) => DOUBLE_TYPES.includes(t)
 
 /** Khu vực chính: màn chiếu + cột header + grid ghế + legend. */
 export default function SeatEditorGrid(props: SeatEditorGridProps) {
@@ -33,6 +33,7 @@ export default function SeatEditorGrid(props: SeatEditorGridProps) {
                 seats={seats}
                 previewMode={props.previewMode}
                 pendingChanges={props.pendingChanges}
+                activeTool={props.activeTool}
                 getDisplayType={props.getDisplayType}
                 onMouseDown={props.onMouseDown}
                 onMouseEnter={props.onMouseEnter}
@@ -65,12 +66,13 @@ interface RowSeatsProps {
   seats: SeatItem[]
   previewMode: boolean
   pendingChanges: Map<number, SeatTypeKey>
+  activeTool: SeatTypeKey
   getDisplayType: (seat: SeatItem) => SeatTypeKey
   onMouseDown: (seat: SeatItem, seats: SeatItem[]) => void
   onMouseEnter: (seat: SeatItem, seats: SeatItem[]) => void
 }
 
-function RowSeats({ seats, previewMode, pendingChanges, getDisplayType, onMouseDown, onMouseEnter }: RowSeatsProps) {
+function RowSeats({ seats, previewMode, pendingChanges, activeTool, getDisplayType, onMouseDown, onMouseEnter }: RowSeatsProps) {
   const rendered: React.ReactElement[] = []
   const skipCols = new Set<number>()
 
@@ -109,15 +111,22 @@ function RowSeats({ seats, previewMode, pendingChanges, getDisplayType, onMouseD
 
     // Ghế đơn (STANDARD, VIP, DELUXE, HANDICAP, BROKEN, BLOCKED, AISLE)
     const isAisle = displayType === 'AISLE'
+    // Visual hint: nếu activeTool là COUPLE/SWEETBOX và ô không pair được
+    // (chính nó hoặc partner bị block) → mờ + viền đỏ. Admin nhìn là biết.
+    const isBlockedForTool = !previewMode && isSeatBlockedForTool(seat, seats, activeTool, pendingChanges)
+    const blockedHint = isBlockedForTool ? ' opacity-40 ring-1 ring-red-500/40' : ''
     rendered.push(
       <button
         key={seat.id}
         onMouseDown={() => onMouseDown(seat, seats)}
         onMouseEnter={() => onMouseEnter(seat, seats)}
-        title={`${seat.seatNumber} — ${SEAT_TYPES.find(t => t.key === displayType)?.label}`}
+        title={isBlockedForTool
+          ? `${seat.seatNumber} — không thể đặt ghế đôi (chặn bởi lối đi / ghế hỏng)`
+          : `${seat.seatNumber} — ${SEAT_TYPES.find(t => t.key === displayType)?.label}`}
         className={`w-9 h-9 rounded-t-lg text-[10px] font-bold transition-all duration-100
           ${SEAT_BG[displayType]}
           ${isChanged ? 'ring-2 ring-[#ffc107] scale-105' : ''}
+          ${blockedHint}
           ${previewMode ? 'cursor-default' : 'cursor-pointer'}`}
       >
         {isAisle ? '' : displayType === 'HANDICAP' ? '♿' : seat.colNumber}

@@ -10,78 +10,11 @@ import type { SeatItem } from '@/hooks/useAdmin'
 import SeatEditorToolPanel from './components/SeatEditorToolPanel'
 import SeatEditorGrid from './components/SeatEditorGrid'
 import { SEAT_TYPES, type SeatTypeKey } from '@/types/seatEditor'
+import {
+  isDouble, getDoublePartner, getBlockingState, findOrphanCouple, findEmptyRows,
+} from './utils/seatPairing'
 
-/** Loại tool gộp đôi (chiếm 2 ô): COUPLE + SWEETBOX */
-const DOUBLE_TOOLS: SeatTypeKey[] = ['COUPLE', 'SWEETBOX']
-function isDouble(t: SeatTypeKey): boolean {
-  return DOUBLE_TOOLS.includes(t)
-}
-
-/**
- * Tìm ghế partner cho COUPLE/SWEETBOX — ghế lẻ ghép với ghế chẵn kề bên.
- * VD: col 1 ↔ col 2, col 3 ↔ col 4, ...
- */
-function getDoublePartner(seat: SeatItem, seats: SeatItem[]): SeatItem | null {
-  const isOdd = seat.colNumber % 2 === 1
-  const partnerCol = isOdd ? seat.colNumber + 1 : seat.colNumber - 1
-  return seats.find(s => s.colNumber === partnerCol) ?? null
-}
-
-/**
- * Quét pendingChanges tìm orphan COUPLE/SWEETBOX (1 nửa pending COUPLE
- * nhưng partner không pending cùng type hoặc partner đã ở loại khác trong DB).
- *
- * Trả message lỗi cho toast hoặc null nếu hợp lệ.
- */
-function findOrphanCouple(
-  pending: Map<number, SeatTypeKey>,
-  seatMap: { seatMap: Record<string, SeatItem[]> } | undefined,
-): string | null {
-  if (!seatMap) return null
-  const allSeats: SeatItem[] = Object.values(seatMap.seatMap).flat()
-  const byId = new Map(allSeats.map(s => [s.id, s]))
-
-  for (const [seatId, pendingType] of pending) {
-    if (pendingType !== 'COUPLE' && pendingType !== 'SWEETBOX') continue
-    const seat = byId.get(seatId)
-    if (!seat) continue
-    const partnerCol = seat.colNumber % 2 === 1 ? seat.colNumber + 1 : seat.colNumber - 1
-    const partner = allSeats.find(s => s.rowLabel === seat.rowLabel && s.colNumber === partnerCol)
-    if (!partner) {
-      return `Ghế ${seat.seatNumber} không có ghế cặp ở cột ${partnerCol}.`
-    }
-    const partnerPending = pending.get(partner.id)
-    // Partner cũng đang pending cùng type → OK
-    if (partnerPending === pendingType) continue
-    // Partner đang pending khác type → orphan
-    if (partnerPending) {
-      return `Ghế ${seat.seatNumber} (${pendingType}) không khớp với cặp ${partner.seatNumber} (${partnerPending}).`
-    }
-    // Partner không pending → check DB state
-    if (partner.seatType !== pendingType || partner.aisle) {
-      return `Ghế ${seat.seatNumber} không có cặp hợp lệ — ${partner.seatNumber} hiện là ${partner.aisle ? 'lối đi' : partner.seatType}.`
-    }
-  }
-  return null
-}
-
-/**
- * Trả về lý do tại sao ô không thể là 1 nửa của ghế đôi/sweetbox.
- * null = OK để pair. String = mô tả ngắn để hiển thị toast.
- *
- * Ưu tiên: pending change (FE chưa lưu) > flag DB (aisle/status).
- */
-function getBlockingState(seat: SeatItem, pending: Map<number, SeatTypeKey>): string | null {
-  const pendingType = pending.get(seat.id)
-  if (pendingType === 'AISLE') return 'lối đi'
-  if (pendingType === 'BROKEN') return 'ghế hỏng'
-  if (pendingType === 'BLOCKED') return 'ghế bị chặn'
-  if (pendingType) return null  // đang pending sang loại ghế khác → OK
-  if (seat.aisle) return 'lối đi'
-  if (seat.status === 'BROKEN') return 'ghế hỏng'
-  if (seat.status === 'BLOCKED') return 'ghế bị chặn'
-  return null
-}
+/* Pair logic tách sang ./utils/seatPairing.ts */
 
 export default function SeatMapEditorPage() {
   const { roomId } = useParams<{ roomId: string }>()
@@ -186,13 +119,23 @@ export default function SeatMapEditorPage() {
       toast.info('Không có thay đổi nào')
       return
     }
+    if (!seatMap) return
+    const allSeats: SeatItem[] = Object.values(seatMap.seatMap).flat()
+
     // Pre-save validation: scan orphan COUPLE/SWEETBOX trước khi gửi BE.
-    // Tránh BE reject với message dài, FE báo lỗi rõ ngay tại đây.
-    const orphanError = findOrphanCouple(pendingChanges, seatMap)
+    const orphanError = findOrphanCouple(pendingChanges, allSeats)
     if (orphanError) {
       toast.error(orphanError)
       return
     }
+
+    // Warn (không block) nếu có row bị 0% bookable sau thay đổi.
+    const rows = Object.entries(seatMap.seatMap).sort(([a], [b]) => a.localeCompare(b))
+    const emptyRows = findEmptyRows(pendingChanges, rows)
+    if (emptyRows.length > 0) {
+      toast.warning(`Hàng ${emptyRows.join(', ')} sẽ không còn ghế bán được. Vẫn tiếp tục lưu.`)
+    }
+
     bulkUpdateMut.mutate(pendingChanges, {
       onSuccess: () => setPendingChanges(new Map()),
     })
@@ -248,22 +191,22 @@ export default function SeatMapEditorPage() {
       </div>
 
       <div className="flex gap-6">
-        {!previewMode && (
-          <SeatEditorToolPanel
-            types={SEAT_TYPES}
-            activeTool={activeTool}
-            onSelectTool={setActiveTool}
-            rows={rows}
-            totalSeats={seatMap.totalSeats}
-            getDisplayType={getDisplayType}
-          />
-        )}
+        <SeatEditorToolPanel
+          types={SEAT_TYPES}
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          rows={rows}
+          totalSeats={seatMap.totalSeats}
+          getDisplayType={getDisplayType}
+          previewMode={previewMode}
+        />
 
         <SeatEditorGrid
           rows={rows}
           maxCols={maxCols}
           previewMode={previewMode}
           pendingChanges={pendingChanges}
+          activeTool={activeTool}
           getDisplayType={getDisplayType}
           onMouseDown={handleMouseDown}
           onMouseEnter={handleMouseEnter}
