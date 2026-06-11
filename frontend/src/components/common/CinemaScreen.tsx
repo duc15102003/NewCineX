@@ -9,18 +9,23 @@
  *
  * <p>Variant {@code size}:
  * - {@code lg}: trang chính (booking, POS, editor) — width 75%
- * - {@code sm}: dialog/mini preview — width 100% bounded
+ * - {@code md}: dialog preview lớn (Generate Seats) — width 80%, beam vừa
+ * - {@code sm}: mini preview compact — width max-md
  */
 interface CinemaScreenProps {
-  size?: 'lg' | 'sm'
+  size?: 'lg' | 'md' | 'sm'
 }
 
 export default function CinemaScreen({ size = 'lg' }: CinemaScreenProps) {
-  const widthClass = size === 'lg' ? 'w-3/4' : 'w-full max-w-md'
-  const labelClass = size === 'lg'
-    ? 'text-xs tracking-[0.3em]'
+  const widthClass = size === 'lg' ? 'w-3/4'
+    : size === 'md' ? 'w-4/5 max-w-2xl'
+    : 'w-full max-w-md'
+  const labelClass = size === 'lg' ? 'text-xs tracking-[0.3em]'
+    : size === 'md' ? 'text-xs tracking-[0.2em]'
     : 'text-[10px] tracking-wider'
-  const beamHeight = size === 'lg' ? 'h-8' : 'h-4'
+  const beamHeight = size === 'lg' ? 'h-8'
+    : size === 'md' ? 'h-6'
+    : 'h-4'
 
   return (
     <div className="flex justify-center mb-6">

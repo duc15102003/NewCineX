@@ -186,17 +186,17 @@ function PresetMiniMap({ roomType }: { roomType: RoomType }) {
   const layout = MINI_LAYOUTS[roomType]
   return (
     <div className="flex flex-col items-center">
-      <CinemaScreen size="sm" />
+      <CinemaScreen size="md" />
       <div className="inline-block">
         {layout.map((row, rowIdx) => (
-          <div key={rowIdx} className="flex gap-0.5 mb-0.5 justify-center">
+          <div key={rowIdx} className="flex gap-1 mb-1 justify-center">
             {row.map((cell, colIdx) => (
-              <span key={colIdx} className={`w-3 h-3 rounded-sm ${MINI_CELL_COLORS[cell]}`} title={MINI_CELL_NAMES[cell]} />
+              <span key={colIdx} className={`w-5 h-5 rounded-sm ${MINI_CELL_COLORS[cell]}`} title={MINI_CELL_NAMES[cell]} />
             ))}
           </div>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2 mt-3 text-[10px] text-gray-400 justify-center">
+      <div className="flex flex-wrap gap-3 mt-4 text-xs text-gray-400 justify-center">
         <MiniLegend color="bg-green-600" label="Thường" />
         <MiniLegend color="bg-yellow-600" label="VIP" />
         <MiniLegend color="bg-pink-600" label="Đôi" />
