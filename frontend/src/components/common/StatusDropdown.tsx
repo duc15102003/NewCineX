@@ -25,7 +25,7 @@ export default function StatusDropdown({ onArchive, onRestore, archiveLoading, r
     <div className="relative" ref={ref}>
       <Button variant="outline" onClick={() => setOpen(!open)}
         className="border-white/10 text-gray-300 hover:bg-white/5">
-        Trạng thái <ChevronDown size={14} className={`ml-1 transition-transform ${open ? 'rotate-180' : ''}`} />
+        Lưu trữ <ChevronDown size={14} className={`ml-1 transition-transform ${open ? 'rotate-180' : ''}`} />
       </Button>
 
       {open && (
