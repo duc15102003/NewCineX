@@ -32,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -472,6 +473,13 @@ public class SeatService {
     public SeatMapResponse bulkUpdateSeats(Long roomId, BulkUpdateSeatRequest request) {
         List<Seat> seats = seatRepository.findAllById(request.getSeatIds());
 
+        // Defense in depth: chặn orphan COUPLE/SWEETBOX. FE đã có pair-aware
+        // logic nhưng race condition hoặc client tự build payload có thể tạo
+        // ghế đôi không cặp → validate ở BE.
+        if (request.getSeatType() == SeatType.COUPLE || request.getSeatType() == SeatType.SWEETBOX) {
+            validateCouplePairing(roomId, seats, request.getSeatType());
+        }
+
         if (request.getStatus() != null) {
             seats.forEach(s -> s.setStatus(request.getStatus()));
             log.info("Bulk set status {} for {} seats", request.getStatus(), seats.size());
@@ -493,6 +501,48 @@ public class SeatService {
 
         seatRepository.saveAll(seats);
         return getSeatMap(roomId);
+    }
+
+    /**
+     * Validate mọi ghế đang được set thành COUPLE/SWEETBOX đều có cặp hợp lệ:
+     * <ul>
+     *   <li>Partner col (lẻ↔chẵn kề bên) phải tồn tại trong phòng.</li>
+     *   <li>Partner phải nằm trong batch update HOẶC đã sẵn cùng seatType và
+     *       không phải aisle ở DB.</li>
+     * </ul>
+     * Tránh case: paint A1=COUPLE nhưng A2 vẫn là VIP/AISLE → A1 mồ côi không
+     * bookable đúng cặp.
+     */
+    private void validateCouplePairing(Long roomId, List<Seat> seatsBeingUpdated, SeatType targetType) {
+        if (seatsBeingUpdated.isEmpty()) return;
+
+        // Load toàn bộ ghế ACTIVE của room (1 query) → map theo (row, col) để lookup partner.
+        List<Seat> allRoomSeats = seatRepository.findByRoomIdAndStorageStateOrderByRowLabelAscColNumberAsc(
+                roomId, StorageState.ACTIVE);
+        Map<String, Seat> byPos = allRoomSeats.stream()
+                .collect(Collectors.toMap(s -> s.getRowLabel() + ":" + s.getColNumber(), s -> s));
+        Set<Long> updatedIds = seatsBeingUpdated.stream().map(Seat::getId).collect(Collectors.toSet());
+
+        for (Seat seat : seatsBeingUpdated) {
+            int partnerCol = (seat.getColNumber() % 2 == 1) ? seat.getColNumber() + 1 : seat.getColNumber() - 1;
+            Seat partner = byPos.get(seat.getRowLabel() + ":" + partnerCol);
+
+            if (partner == null) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Ghế " + seat.getSeatNumber() + " không có ghế cặp ở cột " + partnerCol +
+                        " — không thể đặt " + (targetType == SeatType.SWEETBOX ? "Sweetbox" : "ghế đôi") + ".");
+            }
+            // Partner cũng đang được update → OK, cả 2 sẽ thành target type
+            if (updatedIds.contains(partner.getId())) continue;
+            // Partner không trong batch → DB state phải đã sẵn cùng type + không aisle
+            if (partner.getSeatType() != targetType || partner.isAisle()) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Ghế " + seat.getSeatNumber() + " không có cặp hợp lệ — ghế " +
+                        partner.getSeatNumber() + " hiện là " +
+                        (partner.isAisle() ? "lối đi" : partner.getSeatType().name()) +
+                        ". Cập nhật cả 2 ghế cùng lúc.");
+            }
+        }
     }
 
     @Transactional

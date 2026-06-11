@@ -28,6 +28,44 @@ function getDoublePartner(seat: SeatItem, seats: SeatItem[]): SeatItem | null {
 }
 
 /**
+ * Quét pendingChanges tìm orphan COUPLE/SWEETBOX (1 nửa pending COUPLE
+ * nhưng partner không pending cùng type hoặc partner đã ở loại khác trong DB).
+ *
+ * Trả message lỗi cho toast hoặc null nếu hợp lệ.
+ */
+function findOrphanCouple(
+  pending: Map<number, SeatTypeKey>,
+  seatMap: { seatMap: Record<string, SeatItem[]> } | undefined,
+): string | null {
+  if (!seatMap) return null
+  const allSeats: SeatItem[] = Object.values(seatMap.seatMap).flat()
+  const byId = new Map(allSeats.map(s => [s.id, s]))
+
+  for (const [seatId, pendingType] of pending) {
+    if (pendingType !== 'COUPLE' && pendingType !== 'SWEETBOX') continue
+    const seat = byId.get(seatId)
+    if (!seat) continue
+    const partnerCol = seat.colNumber % 2 === 1 ? seat.colNumber + 1 : seat.colNumber - 1
+    const partner = allSeats.find(s => s.rowLabel === seat.rowLabel && s.colNumber === partnerCol)
+    if (!partner) {
+      return `Ghế ${seat.seatNumber} không có ghế cặp ở cột ${partnerCol}.`
+    }
+    const partnerPending = pending.get(partner.id)
+    // Partner cũng đang pending cùng type → OK
+    if (partnerPending === pendingType) continue
+    // Partner đang pending khác type → orphan
+    if (partnerPending) {
+      return `Ghế ${seat.seatNumber} (${pendingType}) không khớp với cặp ${partner.seatNumber} (${partnerPending}).`
+    }
+    // Partner không pending → check DB state
+    if (partner.seatType !== pendingType || partner.aisle) {
+      return `Ghế ${seat.seatNumber} không có cặp hợp lệ — ${partner.seatNumber} hiện là ${partner.aisle ? 'lối đi' : partner.seatType}.`
+    }
+  }
+  return null
+}
+
+/**
  * Trả về lý do tại sao ô không thể là 1 nửa của ghế đôi/sweetbox.
  * null = OK để pair. String = mô tả ngắn để hiển thị toast.
  *
@@ -146,6 +184,13 @@ export default function SeatMapEditorPage() {
   function handleSave() {
     if (pendingChanges.size === 0) {
       toast.info('Không có thay đổi nào')
+      return
+    }
+    // Pre-save validation: scan orphan COUPLE/SWEETBOX trước khi gửi BE.
+    // Tránh BE reject với message dài, FE báo lỗi rõ ngay tại đây.
+    const orphanError = findOrphanCouple(pendingChanges, seatMap)
+    if (orphanError) {
+      toast.error(orphanError)
       return
     }
     bulkUpdateMut.mutate(pendingChanges, {
