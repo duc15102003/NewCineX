@@ -3,7 +3,6 @@ package com.cinex.module.seat.service;
 import com.cinex.module.room.entity.RoomType;
 import com.cinex.module.seat.dto.SeatGenerateRequest;
 
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 

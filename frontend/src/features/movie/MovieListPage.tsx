@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { X, Film, Clapperboard, MapPin } from 'lucide-react'
+import { X, Film, Clapperboard } from 'lucide-react'
 import { useMovies, useGenres } from '@/hooks/useMovies'
 import MovieGrid from '@/components/movie/MovieGrid'
 import SearchBar from '@/components/movie/SearchBar'

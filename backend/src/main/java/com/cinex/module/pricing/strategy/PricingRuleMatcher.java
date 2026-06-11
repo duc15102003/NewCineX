@@ -1,7 +1,6 @@
 package com.cinex.module.pricing.strategy;
 
 import com.cinex.module.pricing.entity.PricingRule;
-import com.cinex.module.pricing.entity.PricingRuleType;
 
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
