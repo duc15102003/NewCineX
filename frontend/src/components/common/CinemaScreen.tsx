@@ -28,7 +28,9 @@ export default function CinemaScreen({ size = 'lg' }: CinemaScreenProps) {
     : 'h-4'
 
   return (
-    <div className="flex justify-center mb-6">
+    // w-full ép wrapper chiếm full width parent — tránh bị shrink khi đặt
+    // trong flex-col items-center (PresetMiniMap, SeatEditorGrid...).
+    <div className="flex justify-center mb-6 w-full">
       <div className={`${widthClass} text-center`}>
         <div className="h-1 bg-gradient-to-r from-transparent via-[#ffc107] to-transparent rounded-full" />
         <div className={`${beamHeight} bg-gradient-to-b from-[#ffc107]/10 to-transparent`} />
