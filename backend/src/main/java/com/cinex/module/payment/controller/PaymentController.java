@@ -59,6 +59,19 @@ public class PaymentController {
         return ApiResponse.ok(paymentService.listPayments(filter, pageable));
     }
 
+    /**
+     * Liệt kê các payment race-condition cần admin xử lý refund thủ công.
+     * Trường hợp: MoMo callback đến muộn sau khi booking đã CANCELLED → tiền
+     * đã trừ user mà vé không issue. Admin vào trang này → click "Refund" cho
+     * từng payment để gọi MoMo refund API.
+     */
+    @GetMapping("/payments/needs-refund")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "(SuperAdmin) Danh sách payment cần refund thủ công (race condition)")
+    public ApiResponse<java.util.List<PaymentResponse>> listNeedsRefund() {
+        return ApiResponse.ok(paymentService.listNeedsRefund());
+    }
+
     @PostMapping("/payments/create")
     @Operation(summary = "Create payment for a booking")
     public ApiResponse<PaymentResponse> createPayment(@Valid @RequestBody CreatePaymentRequest request) {

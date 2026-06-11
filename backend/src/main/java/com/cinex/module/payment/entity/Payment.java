@@ -57,4 +57,13 @@ public class Payment extends BaseEntity {
 
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    /**
+     * Flag race condition: payment COMPLETED nhưng booking CANCELLED (vd MoMo
+     * callback đến muộn). Tiền đã trừ user mà vé không issue → admin phải
+     * refund thủ công. Query nhanh qua endpoint admin để xử lý hàng loạt.
+     */
+    @Column(name = "needs_refund", nullable = false)
+    @Builder.Default
+    private boolean needsRefund = false;
 }

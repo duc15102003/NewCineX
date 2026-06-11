@@ -47,14 +47,14 @@ public class GenreController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Create a new genre")
     public ApiResponse<GenreResponse> createGenre(@Valid @RequestBody GenreRequest request) {
         return ApiResponse.ok("Genre created", genreService.createGenre(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Update a genre")
     public ApiResponse<GenreResponse> updateGenre(
             @PathVariable Long id,
@@ -63,7 +63,7 @@ public class GenreController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Soft delete a genre")
     public ApiResponse<Void> deleteGenre(@PathVariable Long id) {
         genreService.deleteGenre(id);
@@ -71,14 +71,14 @@ public class GenreController {
     }
 
     @PostMapping("/{id}/restore")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Restore a soft-deleted genre")
     public ApiResponse<GenreResponse> restoreGenre(@PathVariable Long id) {
         return ApiResponse.ok("Genre restored", genreService.restoreGenre(id));
     }
 
     @PostMapping("/bulk-delete")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Bulk soft delete")
     public ApiResponse<Void> bulkDelete(@Valid @RequestBody BulkDeleteRequest request) {
         genreService.bulkDelete(request.getIds());
@@ -86,7 +86,7 @@ public class GenreController {
     }
 
     @PostMapping("/bulk-restore")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Bulk restore")
     public ApiResponse<Void> bulkRestore(@Valid @RequestBody BulkDeleteRequest request) {
         genreService.bulkRestore(request.getIds());

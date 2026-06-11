@@ -49,14 +49,14 @@ public class TheaterController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Tạo chi nhánh mới")
     public ApiResponse<TheaterResponse> create(@Valid @RequestBody TheaterRequest request) {
         return ApiResponse.ok("Tạo chi nhánh thành công", theaterService.create(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Cập nhật chi nhánh")
     public ApiResponse<TheaterResponse> update(@PathVariable Long id,
                                                @Valid @RequestBody TheaterRequest request) {
@@ -64,7 +64,7 @@ public class TheaterController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Lưu trữ chi nhánh (soft delete)")
     public ApiResponse<Void> archive(@PathVariable Long id) {
         theaterService.archive(id);
@@ -72,7 +72,7 @@ public class TheaterController {
     }
 
     @PostMapping("/bulk-archive")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Lưu trữ hàng loạt")
     public ApiResponse<Void> bulkArchive(@RequestBody List<Long> ids) {
         theaterService.bulkArchive(ids);
@@ -80,7 +80,7 @@ public class TheaterController {
     }
 
     @PostMapping("/bulk-restore")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Khôi phục hàng loạt")
     public ApiResponse<Void> bulkRestore(@RequestBody List<Long> ids) {
         theaterService.bulkRestore(ids);

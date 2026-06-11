@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <!--
+        Thêm needs_refund flag vào payments để track race condition:
+        payment đã COMPLETED nhưng booking CANCELLED (vd MoMo callback đến muộn
+        sau khi user/scheduler cancel) → tiền đã bị trừ user nhưng vé không
+        được issue → cần admin refund thủ công.
+
+        Trước đó chỉ log warn "[REFUND_NEEDED]" → admin phải grep log mỗi ngày.
+        Giờ query trực tiếp: SELECT * FROM payments WHERE needs_refund = 1.
+    -->
+
+    <changeSet id="023-add-needs-refund" author="cinex">
+        <addColumn tableName="payments">
+            <column name="needs_refund" type="BIT" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="023-index-needs-refund" author="cinex">
+        <!-- Index partial: chỉ index row needs_refund=1 vì 99.9% row = 0.
+             Admin query nhanh: list tất cả payment cần refund (thường < 100). -->
+        <createIndex tableName="payments" indexName="ix_payments_needs_refund">
+            <column name="needs_refund"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

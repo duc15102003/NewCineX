@@ -157,9 +157,11 @@ public class PaymentService {
 
             // [B4] Race condition: nếu booking đã CANCELLED (do user/scheduler hủy)
             // trong khi MoMo callback đến muộn → KHÔNG được set booking về CONFIRMED.
-            // Đánh dấu payment COMPLETED để có dấu vết tiền đã trừ → admin cần refund manual.
+            // Đánh dấu payment COMPLETED + needsRefund=true để admin query được
+            // (SELECT * FROM payments WHERE needs_refund = 1) → xử lý refund manual.
             if (booking.getStatus() != BookingStatus.HOLDING) {
-                log.warn("[REFUND_NEEDED] Payment {} COMPLETED nhưng booking {} đã ở trạng thái {} — cần admin xử lý hoàn tiền thủ công",
+                payment.setNeedsRefund(true);
+                log.warn("[REFUND_NEEDED] Payment {} COMPLETED nhưng booking {} đã ở trạng thái {} — đã flag needs_refund=true, admin xử lý hoàn tiền thủ công",
                         transactionCode, booking.getBookingCode(), booking.getStatus());
                 paymentRepository.save(payment);
                 return toPaymentResponse(payment, null);
@@ -235,6 +237,17 @@ public class PaymentService {
      * 4. Thành công → set status REFUNDED + save
      * 5. Thất bại → log error, KHÔNG throw (để booking vẫn cancel được, admin xử lý manual)
      */
+    /**
+     * Liệt kê các payment cần refund thủ công — gọi từ admin dashboard.
+     * Không filter theo theater scope vì SUPER_ADMIN only (xem cross-theater).
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<PaymentResponse> listNeedsRefund() {
+        return paymentRepository.findByNeedsRefundTrueOrderByPaidAtDesc().stream()
+                .map(p -> toPaymentResponse(p, null))
+                .toList();
+    }
+
     @Transactional
     @Auditable(action = "REFUND_PAYMENT", entityType = "Payment")
     public void refundPayment(Payment payment, String reason) {
@@ -250,6 +263,8 @@ public class PaymentService {
                 reason);
         if (success) {
             payment.setStatus(PaymentStatus.REFUNDED);
+            // Refund thành công → clear flag race-condition
+            payment.setNeedsRefund(false);
             paymentRepository.save(payment);
             log.info("Refunded payment {}", payment.getTransactionCode());
         } else {

@@ -40,5 +40,6 @@
     <include file="db/changelog/changes/020-fix-seat-check-constraints.xml"/>
     <include file="db/changelog/changes/021-reseed-seats-industry-standard.xml"/>
     <include file="db/changelog/changes/022-showtime-price-nullable.xml"/>
+    <include file="db/changelog/changes/023-payment-needs-refund.xml"/>
 
 </databaseChangeLog>

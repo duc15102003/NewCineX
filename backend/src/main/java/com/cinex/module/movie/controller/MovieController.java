@@ -54,14 +54,14 @@ public class MovieController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Create a new movie")
     public ApiResponse<MovieResponse> createMovie(@Valid @RequestBody MovieRequest request) {
         return ApiResponse.ok("Movie created", movieService.createMovie(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Update a movie")
     public ApiResponse<MovieResponse> updateMovie(
             @PathVariable Long id,
@@ -70,7 +70,7 @@ public class MovieController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Soft delete a movie")
     public ApiResponse<Void> deleteMovie(@PathVariable Long id) {
         movieService.deleteMovie(id);
@@ -78,14 +78,14 @@ public class MovieController {
     }
 
     @PostMapping("/{id}/restore")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Restore a soft-deleted movie")
     public ApiResponse<MovieResponse> restoreMovie(@PathVariable Long id) {
         return ApiResponse.ok("Movie restored", movieService.restoreMovie(id));
     }
 
     @PostMapping("/bulk-delete")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Bulk soft delete movies")
     public ApiResponse<Void> bulkDelete(@Valid @RequestBody BulkDeleteRequest request) {
         movieService.bulkDelete(request.getIds());
@@ -93,7 +93,7 @@ public class MovieController {
     }
 
     @PostMapping("/bulk-restore")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Bulk restore")
     public ApiResponse<Void> bulkRestore(@Valid @RequestBody BulkDeleteRequest request) {
         movieService.bulkRestore(request.getIds());
@@ -101,7 +101,7 @@ public class MovieController {
     }
 
     @PostMapping("/{id}/poster")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "(Admin) Upload movie poster")
     public ApiResponse<MovieResponse> uploadPoster(
             @PathVariable Long id,
