@@ -18,7 +18,7 @@ interface CinemaScreenProps {
 
 export default function CinemaScreen({ size = 'lg' }: CinemaScreenProps) {
   const widthClass = size === 'lg' ? 'w-3/4'
-    : size === 'md' ? 'w-4/5 max-w-2xl'
+    : size === 'md' ? 'w-full'
     : 'w-full max-w-md'
   const labelClass = size === 'lg' ? 'text-xs tracking-[0.3em]'
     : size === 'md' ? 'text-xs tracking-[0.2em]'
