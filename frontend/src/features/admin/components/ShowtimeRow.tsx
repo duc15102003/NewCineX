@@ -43,14 +43,24 @@ export default function ShowtimeRow({ showtime: s, index, selected, onToggleSele
           <span className="text-gray-300">
             Thường: <span className="text-white font-medium">{fmtVnd(s.basePrice)}</span>
           </span>
-          {s.vipPrice && (
+          {s.vipPrice != null && (
             <span className="text-gray-300">
               VIP: <span className="text-[#ffc107] font-medium">{fmtVnd(s.vipPrice)}</span>
             </span>
           )}
-          {s.couplePrice && (
+          {s.couplePrice != null && (
             <span className="text-gray-300">
               Đôi: <span className="text-purple-400 font-medium">{fmtVnd(s.couplePrice)}</span>
+            </span>
+          )}
+          {s.sweetboxPrice != null && (
+            <span className="text-gray-300">
+              Sweetbox: <span className="text-pink-400 font-medium">{fmtVnd(s.sweetboxPrice)}</span>
+            </span>
+          )}
+          {s.deluxePrice != null && (
+            <span className="text-gray-300">
+              Deluxe: <span className="text-cyan-400 font-medium">{fmtVnd(s.deluxePrice)}</span>
             </span>
           )}
         </div>

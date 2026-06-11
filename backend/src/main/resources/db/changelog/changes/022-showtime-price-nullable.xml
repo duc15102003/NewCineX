@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <!--
+        Mục tiêu: cho phép vip_price + couple_price NULL.
+
+        Lý do: phòng full ghế STANDARD không có ghế VIP/COUPLE → không nên
+        lưu giá vé giả cho loại ghế phòng KHÔNG CÓ. Trước đó schema bắt buộc
+        NOT NULL → service auto-fill default (120k/200k) cho cả phòng không
+        có VIP → list trang admin hiển thị giá sai.
+
+        sweetbox_price + deluxe_price đã nullable từ changeset 019 — giờ
+        unify cả 4 tier cao cấp đều nullable. basePrice vẫn NOT NULL vì
+        mọi phòng đều có STANDARD/HANDICAP dùng basePrice.
+    -->
+
+    <changeSet id="022-vip-price-nullable" author="cinex">
+        <dropNotNullConstraint
+                tableName="showtimes"
+                columnName="vip_price"
+                columnDataType="DECIMAL(12,0)"/>
+    </changeSet>
+
+    <changeSet id="022-couple-price-nullable" author="cinex">
+        <dropNotNullConstraint
+                tableName="showtimes"
+                columnName="couple_price"
+                columnDataType="DECIMAL(12,0)"/>
+    </changeSet>
+
+    <!--
+        Cleanup: nullify giá tier mà phòng KHÔNG có loại ghế tương ứng.
+        Áp dụng cho data cũ đã lưu giá rác (default 120k/200k cho cả phòng
+        full STANDARD) trước khi fix logic. An toàn vì:
+        - Phòng không có VIP → không ai book được ghế VIP → vipPrice chưa
+          từng được dùng cho booking thật.
+        - Admin nào set tay vipPrice cho phòng STANDARD-only (case rất hiếm,
+          chuẩn bị trước khi thêm seat) sẽ phải re-enter qua dialog Edit.
+    -->
+    <changeSet id="022-cleanup-vip-price" author="cinex">
+        <sql>
+            UPDATE showtimes
+            SET vip_price = NULL
+            WHERE vip_price IS NOT NULL
+              AND room_id NOT IN (
+                  SELECT DISTINCT room_id FROM seats
+                  WHERE seat_type = 'VIP'
+                    AND is_aisle = 0
+                    AND storage_state = 'ACTIVE'
+              );
+        </sql>
+    </changeSet>
+
+    <changeSet id="022-cleanup-couple-price" author="cinex">
+        <sql>
+            UPDATE showtimes
+            SET couple_price = NULL
+            WHERE couple_price IS NOT NULL
+              AND room_id NOT IN (
+                  SELECT DISTINCT room_id FROM seats
+                  WHERE seat_type = 'COUPLE'
+                    AND is_aisle = 0
+                    AND storage_state = 'ACTIVE'
+              );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -92,10 +92,17 @@ public class Showtime extends BaseEntity {
     @Column(name = "base_price", nullable = false, precision = 12, scale = 0)
     private BigDecimal basePrice;
 
-    @Column(name = "vip_price", nullable = false, precision = 12, scale = 0)
+    /**
+     * Giá ghế VIP — nullable. Null = phòng KHÔNG có ghế VIP nên không lưu giá.
+     * Trước changeset 022 column này NOT NULL → service auto-fill default cho cả phòng
+     * không có VIP → list hiển thị sai. Giờ nới về nullable, service skip auto-fill khi
+     * phòng không có loại ghế tương ứng.
+     */
+    @Column(name = "vip_price", precision = 12, scale = 0)
     private BigDecimal vipPrice;
 
-    @Column(name = "couple_price", nullable = false, precision = 12, scale = 0)
+    /** Giá ghế COUPLE — nullable, cùng lý do với {@link #vipPrice}. */
+    @Column(name = "couple_price", precision = 12, scale = 0)
     private BigDecimal couplePrice;
 
     /**

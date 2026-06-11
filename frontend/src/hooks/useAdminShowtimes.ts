@@ -15,6 +15,8 @@ export interface AdminShowtime {
   basePrice: number
   vipPrice: number | null
   couplePrice: number | null
+  sweetboxPrice: number | null
+  deluxePrice: number | null
   status: string
   storageState: string
   // Optional nested fields (legacy response shape)

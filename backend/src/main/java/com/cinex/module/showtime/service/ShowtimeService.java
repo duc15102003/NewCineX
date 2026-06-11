@@ -16,6 +16,7 @@ import com.cinex.module.room.repository.RoomRepository;
 import com.cinex.module.booking.entity.BookingStatus;
 import com.cinex.module.booking.repository.BookingRepository;
 import com.cinex.module.booking.repository.BookingSeatRepository;
+import com.cinex.module.seat.entity.SeatType;
 import com.cinex.module.seat.repository.SeatRepository;
 import com.cinex.module.showtime.dto.AppliedPricingRule;
 import com.cinex.module.showtime.dto.ShowtimeFilter;
@@ -37,7 +38,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -223,13 +227,16 @@ public class ShowtimeService {
         int bufferMinutes = systemConfigService.getInt("showtime.buffer_minutes", 15);
         LocalDateTime slotEndTime = endTime.plusMinutes(bufferMinutes);
 
-        // Fill giá vé mặc định theo RoomType nếu admin để trống
+        // Resolve giá per tier — skip auto-fill cho tier mà phòng KHÔNG có loại ghế đó.
+        // VD: phòng full STANDARD → vipPrice/couplePrice = null thay vì lưu giá rác.
+        Set<SeatType> roomSeatTypes = fetchRoomSeatTypes(room.getId());
         BigDecimal basePrice = resolvePrice(request.getBasePrice(), room.getType(), "base");
-        BigDecimal vipPrice = resolvePrice(request.getVipPrice(), room.getType(), "vip");
-        BigDecimal couplePrice = resolvePrice(request.getCouplePrice(), room.getType(), "couple");
+        BigDecimal vipPrice = resolveTierPrice(request.getVipPrice(), room.getType(), "vip", roomSeatTypes, SeatType.VIP);
+        BigDecimal couplePrice = resolveTierPrice(request.getCouplePrice(), room.getType(), "couple", roomSeatTypes, SeatType.COUPLE);
+        BigDecimal sweetboxPrice = resolveTierPrice(request.getSweetboxPrice(), room.getType(), "sweetbox", roomSeatTypes, SeatType.SWEETBOX);
+        BigDecimal deluxePrice = resolveTierPrice(request.getDeluxePrice(), room.getType(), "deluxe", roomSeatTypes, SeatType.DELUXE);
 
-        // Validate giá: thường <= VIP <= đôi (dùng giá đã resolve)
-        validatePriceHierarchy(basePrice, vipPrice, couplePrice);
+        validatePriceHierarchy(basePrice, vipPrice, couplePrice, sweetboxPrice, deluxePrice);
 
         // Kiểm tra phòng trống — dùng slotEndTime (room phải free đến hết slot dọn dẹp)
         List<Showtime> conflicts = showtimeRepository.findConflictingShowtimes(
@@ -251,6 +258,8 @@ public class ShowtimeService {
                 .basePrice(basePrice)
                 .vipPrice(vipPrice)
                 .couplePrice(couplePrice)
+                .sweetboxPrice(sweetboxPrice)
+                .deluxePrice(deluxePrice)
                 .status(ShowtimeStatus.SCHEDULED)
                 .build();
 
@@ -292,13 +301,15 @@ public class ShowtimeService {
         int bufferMinutes = systemConfigService.getInt("showtime.buffer_minutes", 15);
         LocalDateTime slotEndTime = endTime.plusMinutes(bufferMinutes);
 
-        // Fill giá vé mặc định theo RoomType nếu admin để trống
+        // Resolve giá per tier — xem comment ở createShowtime.
+        Set<SeatType> roomSeatTypes = fetchRoomSeatTypes(room.getId());
         BigDecimal basePrice = resolvePrice(request.getBasePrice(), room.getType(), "base");
-        BigDecimal vipPrice = resolvePrice(request.getVipPrice(), room.getType(), "vip");
-        BigDecimal couplePrice = resolvePrice(request.getCouplePrice(), room.getType(), "couple");
+        BigDecimal vipPrice = resolveTierPrice(request.getVipPrice(), room.getType(), "vip", roomSeatTypes, SeatType.VIP);
+        BigDecimal couplePrice = resolveTierPrice(request.getCouplePrice(), room.getType(), "couple", roomSeatTypes, SeatType.COUPLE);
+        BigDecimal sweetboxPrice = resolveTierPrice(request.getSweetboxPrice(), room.getType(), "sweetbox", roomSeatTypes, SeatType.SWEETBOX);
+        BigDecimal deluxePrice = resolveTierPrice(request.getDeluxePrice(), room.getType(), "deluxe", roomSeatTypes, SeatType.DELUXE);
 
-        // Validate giá: thường <= VIP <= đôi (dùng giá đã resolve)
-        validatePriceHierarchy(basePrice, vipPrice, couplePrice);
+        validatePriceHierarchy(basePrice, vipPrice, couplePrice, sweetboxPrice, deluxePrice);
 
         // Kiểm tra trùng giờ (loại trừ chính nó) — dùng slotEndTime
         List<Showtime> conflicts = showtimeRepository.findConflictingShowtimes(
@@ -319,6 +330,8 @@ public class ShowtimeService {
         showtime.setBasePrice(basePrice);
         showtime.setVipPrice(vipPrice);
         showtime.setCouplePrice(couplePrice);
+        showtime.setSweetboxPrice(sweetboxPrice);
+        showtime.setDeluxePrice(deluxePrice);
 
         showtimeRepository.save(showtime);
         log.info("Updated showtime {} (run #{})", id, movieRun.getId());
@@ -474,10 +487,15 @@ public class ShowtimeService {
     }
 
     /**
-     * Validate thứ tự giá ghế: thường <= VIP <= đôi.
-     * Business rule: ghế đôi luôn đắt nhất (2 người ngồi), VIP đắt hơn thường.
+     * Validate thứ tự giá ghế giữa các tier (chỉ check tier có giá, bỏ qua null).
+     * <ul>
+     *   <li>base <= vip <= couple <= sweetbox (sweetbox = couple cao cấp 2 ghế)</li>
+     *   <li>base <= vip <= deluxe (deluxe = single recliner cao cấp)</li>
+     * </ul>
+     * Sweetbox vs Deluxe độc lập — không so sánh với nhau.
      */
-    private void validatePriceHierarchy(BigDecimal base, BigDecimal vip, BigDecimal couple) {
+    private void validatePriceHierarchy(BigDecimal base, BigDecimal vip, BigDecimal couple,
+                                        BigDecimal sweetbox, BigDecimal deluxe) {
         if (vip != null && base != null && vip.compareTo(base) < 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "Giá VIP phải lớn hơn hoặc bằng giá thường");
@@ -490,6 +508,18 @@ public class ShowtimeService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "Giá ghế đôi phải lớn hơn hoặc bằng giá thường");
         }
+        if (sweetbox != null && couple != null && sweetbox.compareTo(couple) < 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Giá Sweetbox phải lớn hơn hoặc bằng giá ghế đôi");
+        }
+        if (deluxe != null && vip != null && deluxe.compareTo(vip) < 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Giá Deluxe phải lớn hơn hoặc bằng giá VIP");
+        }
+        if (deluxe != null && base != null && deluxe.compareTo(base) < 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Giá Deluxe phải lớn hơn hoặc bằng giá thường");
+        }
     }
 
     /**
@@ -497,13 +527,50 @@ public class ShowtimeService {
      * Nếu để null → tự fill từ system_config theo RoomType.
      * Nếu config cũng không có → fallback hard-code (an toàn).
      *
-     * @param tier "base" / "vip" / "couple"
+     * Dùng cho basePrice — luôn cần fill vì mọi phòng đều có STANDARD/HANDICAP.
+     *
+     * @param tier "base" / "vip" / "couple" / "sweetbox" / "deluxe"
      */
     private BigDecimal resolvePrice(BigDecimal input, RoomType roomType, String tier) {
         if (input != null) {
             return input;
         }
         return getDefaultPrice(roomType, tier);
+    }
+
+    /**
+     * Resolve giá cho 1 tier OPTIONAL (VIP/COUPLE/SWEETBOX/DELUXE).
+     * <ul>
+     *   <li>Admin nhập giá → giữ nguyên (kể cả khi phòng tạm chưa có loại ghế đó —
+     *       admin có thể chuẩn bị giá trước khi sắp xếp seat layout).</li>
+     *   <li>Để trống + phòng KHÔNG có loại ghế tương ứng → trả null
+     *       (không lưu giá rác, list trang admin không hiển thị tier này).</li>
+     *   <li>Để trống + phòng CÓ loại ghế → auto-fill từ system_config (UX cũ).</li>
+     * </ul>
+     */
+    private BigDecimal resolveTierPrice(BigDecimal input, RoomType roomType, String tier,
+                                        Set<SeatType> roomSeatTypes, SeatType requiredType) {
+        if (input != null) {
+            return input;
+        }
+        if (!roomSeatTypes.contains(requiredType)) {
+            return null;
+        }
+        return getDefaultPrice(roomType, tier);
+    }
+
+    /**
+     * Lấy tập loại ghế ACTIVE có trong phòng (loại trừ aisle/lối đi).
+     * Dùng để biết có nên auto-fill giá cho tier nào không.
+     */
+    private Set<SeatType> fetchRoomSeatTypes(Long roomId) {
+        List<Object[]> rows = seatRepository.countSeatsByTypeInRoom(roomId, StorageState.ACTIVE);
+        if (rows.isEmpty()) {
+            return EnumSet.noneOf(SeatType.class);
+        }
+        return rows.stream()
+                .map(row -> (SeatType) row[0])
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(SeatType.class)));
     }
 
     /**
