@@ -101,7 +101,7 @@ export default function MovieFormDialog({ open, onOpenChange, editingId }: Movie
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="xl" className="bg-[#201b11] border-white/5 text-white rounded-2xl">
+      <DialogContent size="xl" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
         <DialogHeader>
           <DialogTitle>{isEditMode ? 'Chỉnh sửa phim' : 'Thêm mới phim'}</DialogTitle>
         </DialogHeader>

@@ -82,7 +82,7 @@ export default function RoomFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="md" className="bg-[#201b11] border-white/5 text-white rounded-2xl">
+      <DialogContent size="md" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
         <DialogHeader>
           <DialogTitle>{editingItem ? 'Chỉnh sửa phòng chiếu' : 'Thêm mới phòng chiếu'}</DialogTitle>
         </DialogHeader>

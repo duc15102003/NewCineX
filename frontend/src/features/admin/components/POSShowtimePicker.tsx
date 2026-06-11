@@ -11,7 +11,7 @@ export interface POSShowtimePickerProps {
 /** Carousel cuộn ngang chọn suất chiếu cho POS. */
 export default function POSShowtimePicker({ showtimes, selectedId, onSelect }: POSShowtimePickerProps) {
   return (
-    <Card className="bg-[#201b11] border-white/5 rounded-2xl">
+    <Card className="bg-[#201b11] border-[#3f382d] rounded-2xl">
       <CardHeader className="pb-2">
         <CardTitle className="text-white text-base">Suất chiếu hôm nay ({showtimes.length})</CardTitle>
       </CardHeader>

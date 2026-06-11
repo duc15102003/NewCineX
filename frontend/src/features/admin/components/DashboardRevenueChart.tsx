@@ -14,7 +14,7 @@ export interface DashboardRevenueChartProps {
 /** Biểu đồ area doanh thu theo thời gian. */
 export default function DashboardRevenueChart({ data }: DashboardRevenueChartProps) {
   return (
-    <Card className="bg-[#201b11] border border-white/5 rounded-2xl">
+    <Card className="bg-[#201b11] border border-[#3f382d] rounded-2xl">
       <CardHeader className="pb-2">
         <CardTitle className="text-white text-base font-semibold">Biểu đồ doanh thu</CardTitle>
       </CardHeader>

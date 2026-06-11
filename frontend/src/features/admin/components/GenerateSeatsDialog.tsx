@@ -52,7 +52,7 @@ export default function GenerateSeatsDialog({ roomId, roomType, onClose }: Gener
 
   return (
     <Dialog open={roomId !== null} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent size="lg" className="bg-[#201b11] border-white/5 text-white rounded-2xl max-w-5xl">
+      <DialogContent size="lg" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl max-w-5xl">
         <DialogHeader>
           <DialogTitle>Tạo sơ đồ ghế</DialogTitle>
         </DialogHeader>

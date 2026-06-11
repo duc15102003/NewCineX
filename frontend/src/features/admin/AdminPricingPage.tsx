@@ -205,7 +205,7 @@ export default function AdminPricingPage() {
   const renderRuleRow = (r: PricingRule, idx: number) => {
     const isArchived = r.storageState === 'ARCHIVED'
     return (
-      <TableRow key={r.id} className={`border-white/5 hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
+      <TableRow key={r.id} className={`border-[#3f382d] hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
         <TableCell className="whitespace-nowrap">
           <input type="checkbox" checked={selectedIds.has(r.id)}
             onChange={() => toggleSelect(r.id)} className="accent-[#ffc107]" />
@@ -325,10 +325,10 @@ export default function AdminPricingPage() {
       </FilterDrawer>
 
       {/* Table */}
-      <div className="rounded-2xl border border-white/5 overflow-hidden">
+      <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/5 hover:bg-transparent">
+            <TableRow className="border-[#3f382d] hover:bg-transparent">
               <TableHead className="w-10">
                 <input type="checkbox" checked={rules.length > 0 && selectedIds.size === rules.length}
                   onChange={toggleAll} className="accent-[#ffc107]" />

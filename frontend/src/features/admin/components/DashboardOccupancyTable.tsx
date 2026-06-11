@@ -25,7 +25,7 @@ export default function DashboardOccupancyTable({ items, date }: Props) {
   )
 
   return (
-    <Card className="bg-[#201b11] border border-white/5 rounded-2xl">
+    <Card className="bg-[#201b11] border border-[#3f382d] rounded-2xl">
       <CardHeader className="pb-2">
         <CardTitle className="text-white text-base font-semibold flex items-center gap-2">
           <Users size={16} className="text-[#ffc107]" />

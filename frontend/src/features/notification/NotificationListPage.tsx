@@ -164,7 +164,7 @@ export default function NotificationListPage() {
               <div
                 key={n.id}
                 onClick={() => handleCardClick(n)}
-                className={`bg-[#201b11] border border-white/5 hover:bg-white/5 rounded-2xl p-4 cursor-pointer transition-colors ${
+                className={`bg-[#201b11] border border-[#3f382d] hover:bg-white/5 rounded-2xl p-4 cursor-pointer transition-colors ${
                   !n.read ? 'border-l-4 border-l-[#ffc107]' : ''
                 }`}
               >

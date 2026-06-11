@@ -57,10 +57,10 @@ export default function AdminConfigPage() {
   return (
     <div className="space-y-4">
       {/* Table — bỏ heading rườm rà, đồng bộ pattern các trang admin khác */}
-      <div className="rounded-2xl border border-white/5 overflow-hidden">
+      <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/5 hover:bg-transparent">
+            <TableRow className="border-[#3f382d] hover:bg-transparent">
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Tên cấu hình</TableHead>
               <TableHead className="text-gray-400">Mô tả</TableHead>
@@ -70,7 +70,7 @@ export default function AdminConfigPage() {
           </TableHeader>
           <TableBody>
             {configs.map((c, index) => (
-              <TableRow key={c.configKey} className="border-white/5 hover:bg-white/5 group">
+              <TableRow key={c.configKey} className="border-[#3f382d] hover:bg-white/5 group">
                 <TableCell className="text-gray-500 text-sm">{index + 1}</TableCell>
                 <TableCell className="font-mono text-[#ffc107] text-sm">{c.configKey}</TableCell>
                 <TableCell className="text-gray-400 text-sm">

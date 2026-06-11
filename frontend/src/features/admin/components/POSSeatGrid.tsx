@@ -24,7 +24,7 @@ export default function POSSeatGrid({
   roomName, rows, selectedSeats, occupiedIds, onToggleSeat,
 }: POSSeatGridProps) {
   return (
-    <Card className="bg-[#201b11] border-white/5 rounded-2xl">
+    <Card className="bg-[#201b11] border-[#3f382d] rounded-2xl">
       <CardHeader className="pb-2">
         <CardTitle className="text-white text-base">Sơ đồ ghế — {roomName}</CardTitle>
       </CardHeader>

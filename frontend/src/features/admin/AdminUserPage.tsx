@@ -98,10 +98,10 @@ export default function AdminUserPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/5 overflow-hidden">
+      <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/5 hover:bg-transparent">
+            <TableRow className="border-[#3f382d] hover:bg-transparent">
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Username</TableHead>
               <TableHead className="text-gray-400">Email</TableHead>
@@ -122,7 +122,7 @@ export default function AdminUserPage() {
             {users.map((u, index) => {
               const isArchived = u.storageState === 'ARCHIVED'
               return (
-              <TableRow key={u.id} className={`border-white/5 hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
+              <TableRow key={u.id} className={`border-[#3f382d] hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
                 <TableCell className="text-gray-500 text-sm whitespace-nowrap">{page * PAGE_SIZE + index + 1}</TableCell>
                 <TableCell className="whitespace-nowrap">
                   <span onClick={() => openEdit(u)}

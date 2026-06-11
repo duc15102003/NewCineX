@@ -126,7 +126,7 @@ export default function AdminComboPage() {
     const isArchived = c.storageState === 'ARCHIVED'
     const lineSavings = c.regularPrice - c.price
     return (
-      <TableRow key={c.id} className={`border-white/5 hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
+      <TableRow key={c.id} className={`border-[#3f382d] hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
         <TableCell className="whitespace-nowrap">
           <input type="checkbox" checked={selectedIds.has(c.id)}
             onChange={() => toggleSelect(c.id)} className="accent-[#ffc107]" />
@@ -210,10 +210,10 @@ export default function AdminComboPage() {
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
 
       {/* Table */}
-      <div className="rounded-2xl border border-white/5 overflow-hidden">
+      <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/5 hover:bg-transparent">
+            <TableRow className="border-[#3f382d] hover:bg-transparent">
               <TableHead className="w-10">
                 <input type="checkbox" checked={combos.length > 0 && selectedIds.size === combos.length}
                   onChange={toggleAll} className="accent-[#ffc107]" />

@@ -181,7 +181,7 @@ export default function POSPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {snacks.map(s => (
                 <button key={s.id} onClick={() => addSnack(s)}
-                  className="bg-[#201b11] border border-white/5 rounded-2xl p-3 text-left hover:border-[#ffc107]/30 transition-colors group">
+                  className="bg-[#201b11] border border-[#3f382d] rounded-2xl p-3 text-left hover:border-[#ffc107]/30 transition-colors group">
                   {s.imageUrl ? (
                     <img src={s.imageUrl} alt={s.name} className="w-full h-24 object-cover rounded-lg mb-2" />
                   ) : (
@@ -208,7 +208,7 @@ export default function POSPage() {
       </div>
 
       {/* Right: Cart */}
-      <div className="w-80 bg-[#201b11] border border-white/5 rounded-2xl p-4 flex flex-col shrink-0">
+      <div className="w-80 bg-[#201b11] border border-[#3f382d] rounded-2xl p-4 flex flex-col shrink-0">
         <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
           <ShoppingCart size={16} className="text-[#ffc107]" /> Giỏ hàng ({cart.length})
         </h3>

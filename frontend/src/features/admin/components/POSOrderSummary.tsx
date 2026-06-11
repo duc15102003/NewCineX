@@ -25,7 +25,7 @@ export default function POSOrderSummary({
   paymentMethod, onPaymentMethodChange, onConfirmSale,
 }: POSOrderSummaryProps) {
   return (
-    <Card className="bg-[#201b11] border-white/5 rounded-2xl">
+    <Card className="bg-[#201b11] border-[#3f382d] rounded-2xl">
       <CardContent className="p-5">
         <div className="flex flex-col md:flex-row gap-6">
           <div className="flex-1 space-y-3">

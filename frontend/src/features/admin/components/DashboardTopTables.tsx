@@ -37,7 +37,7 @@ interface TopMoviesTableProps {
 
 function TopMoviesTable({ items }: TopMoviesTableProps) {
   return (
-    <Card className="bg-[#201b11] border border-white/5 rounded-2xl">
+    <Card className="bg-[#201b11] border border-[#3f382d] rounded-2xl">
       <CardHeader className="pb-2">
         <CardTitle className="text-white text-base font-semibold">
           Thống kê phim ({items?.length ?? 0})
@@ -87,7 +87,7 @@ interface TopSnacksTableProps {
 
 function TopSnacksTable({ items }: TopSnacksTableProps) {
   return (
-    <Card className="bg-[#201b11] border border-white/5 rounded-2xl">
+    <Card className="bg-[#201b11] border border-[#3f382d] rounded-2xl">
       <CardHeader className="pb-2">
         <CardTitle className="text-white text-base font-semibold">
           Thống kê đồ ăn ({items?.length ?? 0})

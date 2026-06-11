@@ -179,7 +179,7 @@ export default function CheckInPage() {
       {/* QR Scanner Mode */}
       {mode === 'scan' && (
         <div className="space-y-3">
-          <div className="bg-[#201b11] border border-white/5 rounded-2xl overflow-hidden">
+          <div className="bg-[#201b11] border border-[#3f382d] rounded-2xl overflow-hidden">
             <div id="qr-reader" className="w-full" />
             {!scanning && (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400">

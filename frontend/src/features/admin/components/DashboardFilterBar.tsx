@@ -23,7 +23,7 @@ export interface DashboardFilterBarProps {
 export default function DashboardFilterBar(props: DashboardFilterBarProps) {
   const { from, to, activeDays, onDateChange, onQuickRange, onExportPdf, onExportExcel } = props
   return (
-    <Card className="bg-[#201b11] border border-white/5 rounded-2xl">
+    <Card className="bg-[#201b11] border border-[#3f382d] rounded-2xl">
       <CardContent className="p-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">

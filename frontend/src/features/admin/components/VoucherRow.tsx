@@ -20,7 +20,7 @@ export interface VoucherRowProps {
 /** Row trong bảng AdminVoucherPage — code, scope, discount, usage, expiry. */
 export default function VoucherRow({ voucher: v, index, selected, onToggleSelect, onEdit }: VoucherRowProps) {
   return (
-    <TableRow className="border-white/5 hover:bg-white/5 group">
+    <TableRow className="border-[#3f382d] hover:bg-white/5 group">
       <TableCell className="whitespace-nowrap">
         <input type="checkbox" checked={selected}
           onChange={() => onToggleSelect(v.id)} className="accent-[#ffc107]" />

@@ -215,10 +215,10 @@ export default function AdminSnackPage() {
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
 
       {/* Table */}
-      <div className="rounded-2xl border border-white/5 overflow-hidden">
+      <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/5 hover:bg-transparent">
+            <TableRow className="border-[#3f382d] hover:bg-transparent">
               <TableHead className="w-10">
                 <input type="checkbox" checked={snacks.length > 0 && selectedIds.size === snacks.length}
                   onChange={toggleAll} className="accent-[#ffc107]" />

@@ -20,7 +20,7 @@ export interface SeatEditorGridProps {
 export default function SeatEditorGrid(props: SeatEditorGridProps) {
   return (
     <div className="flex-1 overflow-auto">
-      <div className="bg-[#201b11] border border-white/5 rounded-2xl p-6 min-w-fit">
+      <div className="bg-[#201b11] border border-[#3f382d] rounded-2xl p-6 min-w-fit">
         <CinemaScreen size="lg" />
         <ColumnLabels maxCols={props.maxCols} />
         <div className="space-y-1.5 select-none">

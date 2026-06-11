@@ -31,7 +31,7 @@ export default function MovieRow({
 }: MovieRowProps) {
   const isArchived = m.storageState === 'ARCHIVED'
   return (
-    <TableRow className={`border-white/5 hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
+    <TableRow className={`border-[#3f382d] hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
       <TableCell className="whitespace-nowrap">
         <input type="checkbox" checked={selected}
           onChange={() => onToggleSelect(m.id)} className="accent-[#ffc107]" />

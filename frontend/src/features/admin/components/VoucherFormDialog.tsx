@@ -117,7 +117,7 @@ export default function VoucherFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg" className="bg-[#201b11] border-white/5 text-white rounded-2xl">
+      <DialogContent size="lg" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
         <DialogHeader>
           <DialogTitle>{editingItem ? 'Chỉnh sửa voucher' : 'Thêm voucher mới'}</DialogTitle>
         </DialogHeader>

@@ -16,7 +16,7 @@ export interface ShowtimeRowProps {
 export default function ShowtimeRow({ showtime: s, index, selected, onToggleSelect, onEdit }: ShowtimeRowProps) {
   const isArchived = s.storageState === 'ARCHIVED'
   return (
-    <TableRow className={`border-white/5 hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
+    <TableRow className={`border-[#3f382d] hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
       <TableCell className="whitespace-nowrap">
         <input type="checkbox" checked={selected}
           onChange={() => onToggleSelect(s.id)} className="accent-[#ffc107]" />

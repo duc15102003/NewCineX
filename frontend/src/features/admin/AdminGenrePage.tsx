@@ -164,10 +164,10 @@ export default function AdminGenrePage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl border border-white/5 overflow-hidden">
+      <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/5 hover:bg-transparent">
+            <TableRow className="border-[#3f382d] hover:bg-transparent">
               <TableHead className="w-10">
                 <input type="checkbox" checked={genres.length > 0 && selectedIds.size === genres.length}
                   onChange={toggleAll} className="accent-[#ffc107]" />
@@ -185,7 +185,7 @@ export default function AdminGenrePage() {
               </TableRow>
             )}
             {genres.map((g, index) => (
-              <TableRow key={g.id} className="border-white/5 hover:bg-white/5 group">
+              <TableRow key={g.id} className="border-[#3f382d] hover:bg-white/5 group">
                 <TableCell className="whitespace-nowrap">
                   <input type="checkbox" checked={selectedIds.has(g.id)}
                     onChange={() => toggleSelect(g.id)} className="accent-[#ffc107]" />
@@ -220,7 +220,7 @@ export default function AdminGenrePage() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent size="md" className="bg-[#201b11] border-white/5 text-white rounded-2xl">
+        <DialogContent size="md" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
           <DialogHeader>
             <DialogTitle>{editingItem ? 'Chỉnh sửa thể loại' : 'Thêm thể loại mới'}</DialogTitle>
           </DialogHeader>

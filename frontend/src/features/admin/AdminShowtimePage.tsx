@@ -220,10 +220,10 @@ export default function AdminShowtimePage() {
       />
 
       {/* Table */}
-      <div className="rounded-2xl border border-white/5 overflow-hidden">
+      <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/5 hover:bg-transparent">
+            <TableRow className="border-[#3f382d] hover:bg-transparent">
               <TableHead className="w-10">
                 <input type="checkbox" checked={showtimes.length > 0 && selectedIds.size === showtimes.length}
                   onChange={toggleAll} className="accent-[#ffc107]" />

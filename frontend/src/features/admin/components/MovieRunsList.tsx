@@ -26,7 +26,7 @@ export default function MovieRunsList({ runs, isLoading, onCreate, onEdit, onArc
       <div className="rounded-xl border border-white/5 overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/5 hover:bg-transparent">
+            <TableRow className="border-[#3f382d] hover:bg-transparent">
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Thời gian</TableHead>
               <TableHead className="text-gray-400">Loại</TableHead>
@@ -68,7 +68,7 @@ interface MovieRunRowProps {
 function MovieRunRow({ run, index, onEdit, onArchive }: MovieRunRowProps) {
   const isArchived = run.storageState === 'ARCHIVED'
   return (
-    <TableRow className={`border-white/5 hover:bg-white/5 ${isArchived ? 'opacity-50' : ''}`}>
+    <TableRow className={`border-[#3f382d] hover:bg-white/5 ${isArchived ? 'opacity-50' : ''}`}>
       <TableCell className="text-gray-500 text-sm">{index + 1}</TableCell>
       <TableCell className="whitespace-nowrap">
         <div className="text-sm">

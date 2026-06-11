@@ -86,7 +86,7 @@ export default function DashboardStatsCards({ stats, isLoading }: DashboardStats
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
       {STAT_CARDS.map(({ label, key, icon: Icon, iconBg, iconColor, glow, format }) => (
-        <Card key={key} className={`bg-[#201b11] border border-white/5 rounded-2xl shadow-lg ${glow} hover:border-white/10 transition-colors`}>
+        <Card key={key} className={`bg-[#201b11] border border-[#3f382d] rounded-2xl shadow-lg ${glow} hover:border-white/10 transition-colors`}>
           <CardContent className="p-4 flex items-center gap-3">
             <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${iconBg}`}>
               <Icon size={18} className={iconColor} />
@@ -104,7 +104,7 @@ export default function DashboardStatsCards({ stats, isLoading }: DashboardStats
 
 function StatCardSkeleton() {
   return (
-    <div className="bg-[#201b11] border border-white/5 rounded-2xl p-4 animate-pulse">
+    <div className="bg-[#201b11] border border-[#3f382d] rounded-2xl p-4 animate-pulse">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-white/5" />
         <div className="flex-1 space-y-2">

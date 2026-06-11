@@ -35,7 +35,7 @@ export default function ReviewRow({
 }: ReviewRowProps) {
   const isArchived = review.storageState === 'ARCHIVED'
   return (
-    <TableRow className="border-white/5 hover:bg-white/5 group">
+    <TableRow className="border-[#3f382d] hover:bg-white/5 group">
       <TableCell className="whitespace-nowrap">
         <input type="checkbox" checked={selected}
           onChange={onToggleSelect} className="accent-[#ffc107]" />

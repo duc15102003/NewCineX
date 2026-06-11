@@ -25,7 +25,7 @@ export interface SnackRowProps {
 /** Row trong bảng AdminSnackPage. Tách để page < 300 dòng và testable độc lập. */
 export default function SnackRow({ snack: s, index, selected, onToggleSelect, onEdit, onUpload }: SnackRowProps) {
   return (
-    <TableRow className="border-white/5 hover:bg-white/5 group">
+    <TableRow className="border-[#3f382d] hover:bg-white/5 group">
       <TableCell className="whitespace-nowrap">
         <input type="checkbox" checked={selected}
           onChange={() => onToggleSelect(s.id)} className="accent-[#ffc107]" />

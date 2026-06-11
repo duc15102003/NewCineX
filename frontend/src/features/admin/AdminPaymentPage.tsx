@@ -65,7 +65,7 @@ export default function AdminPaymentPage() {
   }
 
   const renderPaymentRow = (p: AdminPayment, idx: number) => (
-    <TableRow key={p.id} className="border-white/5 hover:bg-white/5 group">
+    <TableRow key={p.id} className="border-[#3f382d] hover:bg-white/5 group">
       <TableCell className="text-gray-500 text-sm whitespace-nowrap">{idx + 1}</TableCell>
       <TableCell className="font-mono text-[#ffc107] text-sm whitespace-nowrap">
         <span onClick={() => setViewItem(p)} className="cursor-pointer hover:underline">
@@ -140,10 +140,10 @@ export default function AdminPaymentPage() {
       {payments.length === 0 ? (
         <EmptyState message="Không có giao dịch nào" />
       ) : (
-        <div className="rounded-2xl border border-white/5 overflow-hidden">
+        <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow className="border-white/5 hover:bg-transparent">
+              <TableRow className="border-[#3f382d] hover:bg-transparent">
                 <TableHead className="text-gray-400 w-12">#</TableHead>
                 <TableHead className="text-gray-400">Mã giao dịch</TableHead>
                 <TableHead className="text-gray-400">Mã booking</TableHead>

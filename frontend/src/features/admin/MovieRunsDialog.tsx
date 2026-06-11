@@ -114,7 +114,7 @@ export default function MovieRunsDialog({ open, onClose, movieId, movieTitle }: 
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent size="xl" className="bg-[#201b11] border-white/5 text-white rounded-2xl">
+        <DialogContent size="xl" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {mode === 'form' && (

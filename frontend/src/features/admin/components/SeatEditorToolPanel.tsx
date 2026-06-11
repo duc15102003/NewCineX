@@ -46,7 +46,7 @@ function ToolPicker({ types, activeTool, onSelectTool, previewMode }: ToolPicker
   const specialTypes = types.filter(t => ['AISLE', 'BROKEN', 'BLOCKED'].includes(t.key))
 
   return (
-    <div className="bg-[#201b11] border border-white/5 rounded-2xl p-4">
+    <div className="bg-[#201b11] border border-[#3f382d] rounded-2xl p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-white">Công cụ vẽ</h3>
         {previewMode && (
@@ -101,7 +101,7 @@ function ToolButton({ meta, active, disabled, onClick }: ToolButtonProps) {
 
 function Instructions() {
   return (
-    <div className="bg-[#201b11] border border-white/5 rounded-2xl p-4">
+    <div className="bg-[#201b11] border border-[#3f382d] rounded-2xl p-4">
       <h3 className="text-sm font-semibold text-white mb-3">Hướng dẫn</h3>
       <ul className="space-y-1.5 text-xs text-gray-400">
         <li><strong className="text-white">Click</strong> hoặc <strong className="text-white">kéo chuột</strong> để vẽ</li>
@@ -122,7 +122,7 @@ interface StatsProps {
 
 function Stats({ types, rows, totalSeats, getDisplayType }: StatsProps) {
   return (
-    <div className="bg-[#201b11] border border-white/5 rounded-2xl p-4">
+    <div className="bg-[#201b11] border border-[#3f382d] rounded-2xl p-4">
       <h3 className="text-sm font-semibold text-white mb-3">Thống kê</h3>
       {types.map(({ key, label, bgClass, width }) => {
         const count = rows.reduce(

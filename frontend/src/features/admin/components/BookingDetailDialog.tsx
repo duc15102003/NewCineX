@@ -13,7 +13,7 @@ export interface BookingDetailDialogProps {
 export default function BookingDetailDialog({ booking, onClose }: BookingDetailDialogProps) {
   return (
     <Dialog open={!!booking} onOpenChange={() => onClose()}>
-      <DialogContent size="md" className="bg-[#201b11] border-white/5 text-white rounded-2xl">
+      <DialogContent size="md" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
         <DialogHeader>
           <DialogTitle>Chi tiết booking</DialogTitle>
         </DialogHeader>
