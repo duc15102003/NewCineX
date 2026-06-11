@@ -21,6 +21,9 @@ public class ShowtimeSpecification {
         if (!Boolean.TRUE.equals(filter.getIncludeDeleted())) {
             spec = spec.and(notDeleted());
         }
+        if (filter.getKeyword() != null && !filter.getKeyword().isBlank()) {
+            spec = spec.and(hasKeyword(filter.getKeyword()));
+        }
         if (filter.getMovieId() != null) {
             spec = spec.and(hasMovie(filter.getMovieId()));
         }
@@ -54,6 +57,19 @@ public class ShowtimeSpecification {
             spec = spec.and(hasPriceBetween(filter.getMinPrice(), filter.getMaxPrice()));
         }
         return spec;
+    }
+
+    /**
+     * Search text trên movie.title — case-insensitive LIKE.
+     * Match FE input "Tìm theo tên phim..." trên trang quản trị suất chiếu.
+     * Lý do search trên {@code movie.title} chứ không phải FK movieId: user gõ
+     * tên thay vì chọn từ dropdown → phải fuzzy match.
+     */
+    public static Specification<Showtime> hasKeyword(String keyword) {
+        return (root, query, cb) -> {
+            String pattern = "%" + keyword.toLowerCase() + "%";
+            return cb.like(cb.lower(root.get("movie").get("title")), pattern);
+        };
     }
 
     public static Specification<Showtime> hasMovie(Long movieId) {

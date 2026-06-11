@@ -13,6 +13,9 @@ import java.time.LocalDateTime;
 @Setter
 public class ShowtimeFilter {
 
+    /** Search text — LIKE trên movie.title (case-insensitive). FE input "Tìm theo tên phim...". */
+    private String keyword;
+
     private Long movieId;
     private Long roomId;
     /** Lọc theo chi nhánh — sau F1 (Theater). JOIN room → theater. */
