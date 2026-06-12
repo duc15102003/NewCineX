@@ -79,6 +79,26 @@ export function useShowtimeDetail(id: number | undefined) {
 }
 
 /**
+ * Top-N suất chiếu mới nhất MỖI chi nhánh — phục vụ grouped overview ở admin.
+ * Mỗi chi nhánh luôn show đúng N items đều nhau, không phụ thuộc pagination.
+ *
+ * Chuẩn industry "recent activity by group" pattern (Power BI / Salesforce admin).
+ */
+export function useShowtimeRecentByTheater(enabled: boolean, limit = 5) {
+  return useQuery({
+    queryKey: ['admin', 'showtimes', 'recent-by-theater', limit],
+    enabled,
+    staleTime: 30 * 1000,
+    queryFn: async () => {
+      const res = await api.get<ApiResponse<AdminShowtime[]>>('/api/showtimes/recent-by-theater', {
+        params: { limit },
+      })
+      return res.data.data
+    },
+  })
+}
+
+/**
  * Đếm số suất chiếu tổng theo từng chi nhánh — phục vụ grouped header
  * ở "Tất cả chi nhánh" view. Trả Map { theaterId → count }.
  */

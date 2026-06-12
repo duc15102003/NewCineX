@@ -23,8 +23,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -54,6 +56,14 @@ public class ShowtimeController {
     @Operation(summary = "(Admin) Total showtime count grouped by theaterId — phục vụ grouped view")
     public ApiResponse<Map<Long, Long>> countsByTheater() {
         return ApiResponse.ok(showtimeService.countByTheater());
+    }
+
+    @GetMapping("/recent-by-theater")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Top-N suất chiếu mới nhất mỗi chi nhánh — phục vụ grouped overview")
+    public ApiResponse<List<ShowtimeListResponse>> recentByTheater(
+            @RequestParam(defaultValue = "5") int limit) {
+        return ApiResponse.ok(showtimeService.getRecentByTheater(limit));
     }
 
     @PostMapping

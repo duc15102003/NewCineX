@@ -22,7 +22,7 @@ import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
 import { groupByTheater } from '@/utils/groupByTheater'
 import type { AdminShowtime, AdminShowtimeParams } from '@/hooks/useAdminShowtimes'
-import { useShowtimeCountsByTheater } from '@/hooks/useAdminShowtimes'
+import { useShowtimeCountsByTheater, useShowtimeRecentByTheater } from '@/hooks/useAdminShowtimes'
 import type { AdminMovie } from '@/hooks/useAdminMovies'
 import { OPTIONS_DROPDOWN_PAGE_SIZE } from '@/utils/constants'
 
@@ -85,13 +85,18 @@ export default function AdminShowtimePage() {
     [appliedFilter],
   )
 
+  // Grouped mode (Tất cả chi nhánh): KHÔNG paginate flat list. Lấy top-N MỖI
+  // chi nhánh từ endpoint riêng → mỗi chi nhánh show đều nhau (5 suất). Chuẩn
+  // industry "recent activity by group" — tránh distribution lệch 9 vs 11 do
+  // paginate-then-group.
+  const isGroupedMode = !adminTheater
   const { data: pageData } = useAdminShowtimes(queryParams)
-  const showtimes = pageData?.content ?? []
-  const totalPages = pageData?.totalPages ?? 0
+  const { data: recentByTheater = [] } = useShowtimeRecentByTheater(isGroupedMode, 5)
+  const showtimes = isGroupedMode ? recentByTheater : (pageData?.content ?? [])
+  const totalPages = isGroupedMode ? 0 : (pageData?.totalPages ?? 0)
 
-  // Fetch count THẬT theo theater chỉ khi đang ở "Tất cả chi nhánh" mode.
-  // Count này cố định cho cả phiên (staleTime 1 phút) nên không gọi mỗi click filter.
-  const { data: theaterCounts = {} } = useShowtimeCountsByTheater(!adminTheater)
+  // Count THẬT theo theater — chỉ fetch ở grouped mode.
+  const { data: theaterCounts = {} } = useShowtimeCountsByTheater(isGroupedMode)
 
   // Movies + rooms cho filter dropdown (cần riêng — form dialog có instance riêng nhưng RQ dedupe)
   const { data: moviesData } = useAdminMovies({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
@@ -104,8 +109,8 @@ export default function AdminShowtimePage() {
   const { data: roomsData } = useAdminRooms({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
   const rooms = roomsData?.content ?? []
 
-  // Grouped view khi SUPER_ADMIN xem "Tất cả chi nhánh"
-  const showGrouped = !adminTheater
+  // Grouped view khi SUPER_ADMIN xem "Tất cả chi nhánh" — alias isGroupedMode
+  const showGrouped = isGroupedMode
   const groupedShowtimes = useMemo(
     () => (showGrouped ? groupByTheater(showtimes) : null),
     [showtimes, showGrouped],
@@ -231,6 +236,13 @@ export default function AdminShowtimePage() {
         movies={movies}
         rooms={rooms}
       />
+
+      {/* Hint banner cho grouped mode — giải thích vì sao mỗi chi nhánh chỉ 5 suất */}
+      {isGroupedMode && (
+        <div className="text-xs text-gray-400 px-4 py-2.5 rounded-xl border border-[#3f382d] bg-[#201b11]">
+          Đang xem tổng quan: hiển thị <strong className="text-amber-50">5 suất chiếu mới nhất</strong> mỗi chi nhánh. Chọn chi nhánh cụ thể ở dropdown trên cùng để xem đầy đủ + phân trang.
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-2xl border border-[#3f382d] overflow-hidden">

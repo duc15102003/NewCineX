@@ -68,6 +68,18 @@ public class ShowtimeService {
      * USER + SUPER_ADMIN giữ filter nguyên (USER vẫn xem showtime public toàn hệ thống).
      */
     /**
+     * Top-N suất chiếu mới nhất MỖI chi nhánh — phục vụ grouped overview ở admin
+     * (Tất cả chi nhánh). Chuẩn "recent activity by group" pattern: mỗi chi nhánh
+     * luôn show đúng N items đều nhau, không phụ thuộc pagination.
+     */
+    @Transactional(readOnly = true)
+    public List<ShowtimeListResponse> getRecentByTheater(int limitPerTheater) {
+        return showtimeRepository.findTopNPerTheater(limitPerTheater).stream()
+                .map(this::toListResponseWithPricing)
+                .toList();
+    }
+
+    /**
      * Đếm số suất chiếu chưa archived theo từng chi nhánh — phục vụ grouped view
      * "Tất cả chi nhánh" ở admin. Trả Map<theaterId, count>.
      */

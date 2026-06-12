@@ -19,14 +19,39 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
     /**
      * Group by theater và đếm số suất chiếu chưa archived — dùng cho grouped view
      * ở admin (Tất cả chi nhánh). Trả {@code Object[]{theaterId, count}} cho mỗi chi nhánh.
-     *
-     * <p>Trước đó FE chỉ count items trên trang hiện tại (sau pagination) → mismatch
-     * khi user filter theo theater (page 1 có 24 item của Hà Nội, thực ra Hà Nội có 446).
      */
     @Query("SELECT s.room.theater.id, COUNT(s) FROM Showtime s " +
             "WHERE s.storageState IS NULL OR s.storageState <> :archived " +
             "GROUP BY s.room.theater.id")
     List<Object[]> countByTheater(@Param("archived") StorageState archived);
+
+    /**
+     * Top-N suất chiếu mới nhất MỖI chi nhánh — dùng cho grouped overview ở admin.
+     *
+     * <p>Trước đó "Tất cả chi nhánh" lấy page 50 sort createdAt DESC → group lại theo
+     * theater → mỗi chi nhánh ra số lượng KHÔNG ĐỀU (Hà Nội 11, Đà Nẵng 9...) tùy
+     * lúc tạo suất → confusing.
+     *
+     * <p>Giờ dùng SQL Server ROW_NUMBER() OVER (PARTITION BY theater_id ORDER BY
+     * created_at DESC) → mỗi chi nhánh luôn show ĐÚNG N suất mới nhất. Chuẩn industry
+     * cho "recent activity by group" dashboard pattern.
+     *
+     * <p>Native query vì JPQL không hỗ trợ window function. Trả Showtime entity →
+     * service map sang ShowtimeListResponse.
+     */
+    @Query(value = """
+            SELECT t.*
+            FROM (
+                SELECT s.*,
+                       ROW_NUMBER() OVER (PARTITION BY r.theater_id ORDER BY s.created_at DESC) AS rn
+                FROM showtimes s
+                INNER JOIN rooms r ON s.room_id = r.id
+                WHERE s.storage_state IS NULL OR s.storage_state <> 'ARCHIVED'
+            ) t
+            WHERE t.rn <= :limitPerTheater
+            ORDER BY t.theater_id, t.created_at DESC
+            """, nativeQuery = true)
+    List<Showtime> findTopNPerTheater(@Param("limitPerTheater") int limitPerTheater);
 
     /**
      * Kiểm tra phòng có suất chiếu active (SCHEDULED/ONGOING) chưa archived hay không.
