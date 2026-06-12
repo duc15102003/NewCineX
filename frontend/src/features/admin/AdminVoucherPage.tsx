@@ -19,10 +19,12 @@ import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
 import { groupByTheater } from '@/utils/groupByTheater'
 import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const EMPTY_FILTER: AdminVoucherFilter = {}
 
 export default function AdminVoucherPage() {
+  usePageTitle('Quản lý voucher')
   const [keyword, setKeyword] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)

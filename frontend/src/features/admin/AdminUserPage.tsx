@@ -13,6 +13,7 @@ import { useAdminUsers } from '@/hooks/useAdmin'
 import type { AdminUser, AdminUserFilter } from '@/hooks/useAdminUsers'
 import { label, ROLE_LABELS, STORAGE_STATE_LABELS } from '@/utils/labels'
 import { ROLE_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const PAGE_SIZE = 15
 
@@ -26,6 +27,7 @@ const EMPTY_FILTER: AdminUserFilter = {
 }
 
 export default function AdminUserPage() {
+  usePageTitle('Quản lý người dùng')
   const [page, setPage] = useState(0)
   const [appliedFilter, setAppliedFilter] = useState<AdminUserFilter>(EMPTY_FILTER)
   const [draftFilter, setDraftFilter] = useState<AdminUserFilter>(EMPTY_FILTER)

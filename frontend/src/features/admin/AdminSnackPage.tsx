@@ -21,6 +21,7 @@ import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
 import { groupByTheater } from '@/utils/groupByTheater'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 /** Danh mục snack — match BE convention (lưu chuỗi tiếng Việt).
     KHÔNG có 'Combo' vì đã tách module Combo riêng — bán Snack thuần ở đây để không trùng. */
@@ -31,6 +32,7 @@ const EMPTY_SNACK_FILTER: SnackFilterDraft = {
 }
 
 export default function AdminSnackPage() {
+  usePageTitle('Quản lý đồ ăn')
   const [keyword, setKeyword] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)

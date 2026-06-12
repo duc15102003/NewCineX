@@ -4,8 +4,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Pencil, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
-import Loading from '@/components/common/Loading'
+import TableSkeleton from '@/components/common/TableSkeleton'
 import { useAdminConfigs, useUpdateConfig } from '@/hooks/useConfig'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 // Mô tả + loại dữ liệu cho từng config key
 const CONFIG_META: Record<string, { desc: string; type: 'number' | 'text'; min?: number }> = {
@@ -14,6 +15,7 @@ const CONFIG_META: Record<string, { desc: string; type: 'number' | 'text'; min?:
 }
 
 export default function AdminConfigPage() {
+  usePageTitle('Cấu hình hệ thống')
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
 
@@ -52,8 +54,6 @@ export default function AdminConfigPage() {
     })
   }
 
-  if (isLoading) return <Loading />
-
   return (
     <div className="space-y-4">
       {/* Table — bỏ heading rườm rà, đồng bộ pattern các trang admin khác */}
@@ -68,6 +68,7 @@ export default function AdminConfigPage() {
               <TableHead className="text-gray-400 text-right">Thao tác</TableHead>
             </TableRow>
           </TableHeader>
+          {isLoading ? <TableSkeleton rows={8} columns={5} /> : (
           <TableBody>
             {configs.map((c, index) => (
               <TableRow key={c.configKey} className="border-[#3f382d] hover:bg-white/5 group">
@@ -125,6 +126,7 @@ export default function AdminConfigPage() {
               </TableRow>
             )}
           </TableBody>
+          )}
         </Table>
       </div>
     </div>

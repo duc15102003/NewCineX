@@ -17,6 +17,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useGenreDetail } from '@/hooks/useAdminGenres'
 import type { AdminGenre, AdminGenreFilter } from '@/hooks/useAdminGenres'
 import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 interface GenreFormData {
   name: string
@@ -30,6 +31,7 @@ const EMPTY_FILTER: AdminGenreFilter = {
 }
 
 export default function AdminGenrePage() {
+  usePageTitle('Quản lý thể loại phim')
   const [appliedFilter, setAppliedFilter] = useState<AdminGenreFilter>(EMPTY_FILTER)
   const [draftFilter, setDraftFilter] = useState<AdminGenreFilter>(EMPTY_FILTER)
   const [drawerOpen, setDrawerOpen] = useState(false)

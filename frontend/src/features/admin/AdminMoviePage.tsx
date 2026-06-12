@@ -21,10 +21,12 @@ import {
 import { useAuthStore } from '@/store/authStore'
 import { useGenres } from '@/hooks/useMovies'
 import type { AdminMovieFilter } from '@/types/movie'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const LIST_PAGE_SIZE = 10
 
 export default function AdminMoviePage() {
+  usePageTitle('Quản lý phim')
   const [page, setPage] = useState(0)
   const [keyword, setKeyword] = useState('')
   const [sort, setSort] = useState<string>('createdAt,desc')

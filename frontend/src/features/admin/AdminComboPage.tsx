@@ -21,8 +21,10 @@ import { groupByTheater } from '@/utils/groupByTheater'
 import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
 import { fmtVnd, label, STORAGE_STATE_LABELS } from '@/utils/labels'
 import { STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 export default function AdminComboPage() {
+  usePageTitle('Quản lý combo')
   const [keyword, setKeyword] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)

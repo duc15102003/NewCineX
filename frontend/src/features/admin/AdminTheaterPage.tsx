@@ -20,6 +20,7 @@ import type { TheaterParams } from '@/hooks/useAdminTheaters'
 import { useAuthStore } from '@/store/authStore'
 import { label, STORAGE_STATE_LABELS } from '@/utils/labels'
 import { THEATER_STATUS_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const THEATER_STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Hoạt động',
@@ -38,6 +39,7 @@ const EMPTY_FILTER: TheaterParams = {
 }
 
 export default function AdminTheaterPage() {
+  usePageTitle('Quản lý chi nhánh')
   const [appliedFilter, setAppliedFilter] = useState<TheaterParams>(EMPTY_FILTER)
   const [draftFilter, setDraftFilter] = useState<TheaterParams>(EMPTY_FILTER)
   const [drawerOpen, setDrawerOpen] = useState(false)

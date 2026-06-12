@@ -22,6 +22,7 @@ import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
 import { groupByTheater } from '@/utils/groupByTheater'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const SELECT_CLS =
   'w-full h-10 rounded-md border border-white/10 bg-[#2a2317] text-white text-sm px-3 focus:outline-none focus:ring-1 focus:ring-[#ffc107]'
@@ -74,6 +75,7 @@ function formatMultiplier(m: number): string {
 }
 
 export default function AdminPricingPage() {
+  usePageTitle('Quy tắc giá')
   const [keyword, setKeyword] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)

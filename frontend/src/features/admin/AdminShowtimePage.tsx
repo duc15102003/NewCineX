@@ -24,6 +24,7 @@ import { useAuthStore } from '@/store/authStore'
 import type { AdminShowtime, AdminShowtimeParams } from '@/hooks/useAdminShowtimes'
 import type { AdminMovie } from '@/hooks/useAdminMovies'
 import { OPTIONS_DROPDOWN_PAGE_SIZE } from '@/utils/constants'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const EMPTY_FILTER: ShowtimeFilterDraft = {
   theaterId: '',
@@ -36,6 +37,7 @@ const EMPTY_FILTER: ShowtimeFilterDraft = {
 const LIST_PAGE_SIZE = 10
 
 export default function AdminShowtimePage() {
+  usePageTitle('Quản lý suất chiếu')
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())

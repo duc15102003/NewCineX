@@ -15,11 +15,13 @@ import { useAdminRooms } from '@/hooks/useAdminRooms'
 import { useMovies } from '@/hooks/useMovies'
 import BookingFilterDrawer from './components/BookingFilterDrawer'
 import BookingDetailDialog from './components/BookingDetailDialog'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const EMPTY_FILTER: AdminBookingFilter = {}
 const PAGE_SIZE = 20
 
 export default function AdminBookingPage() {
+  usePageTitle('Quản lý booking')
   const [page, setPage] = useState(0)
   const [keyword, setKeyword] = useState('')
   const [viewBooking, setViewBooking] = useState<AdminBooking | null>(null)

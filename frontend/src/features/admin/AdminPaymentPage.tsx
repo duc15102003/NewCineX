@@ -20,12 +20,14 @@ import {
   type AdminPaymentFilter,
 } from '@/hooks/useAdminPayments'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const PAGE_SIZE = 20
 
 const EMPTY_FILTER: AdminPaymentFilter = {}
 
 export default function AdminPaymentPage() {
+  usePageTitle('Quản lý thanh toán')
   const [page, setPage] = useState(0)
   const [keyword, setKeyword] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)

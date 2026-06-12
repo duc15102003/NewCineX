@@ -20,6 +20,7 @@ import type { AdminRoom, AdminRoomParams } from '@/hooks/useAdminRooms'
 import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const EMPTY_ROOM_FILTER: RoomFilterDraft = {
   type: '', status: '', minSeats: '', maxSeats: '', includeDeleted: true,
@@ -33,6 +34,7 @@ interface RoomGroup {
 }
 
 export default function AdminRoomPage() {
+  usePageTitle('Quản lý phòng chiếu')
   const [keyword, setKeyword] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
