@@ -32,7 +32,7 @@ import java.util.UUID;
  *
  * Docs: https://developers.momo.vn/v3/vi/docs/payment/api/wallet/pay
  */
-@Component("VNPAY")  // Giữ tên VNPAY trong factory vì FE gửi paymentMethod=VNPAY
+@Component("MOMO")
 @Slf4j
 public class MoMoPaymentProcessor implements PaymentProcessor {
 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import type { BookingListItem } from '@/types/booking'
 import { label, BOOKING_STATUS_LABELS, fmtDateTime, fmtVnd } from '@/utils/labels'
 import Loading from '@/components/common/Loading'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 type BadgeVariant = 'warning' | 'success' | 'default' | 'destructive' | 'secondary' | 'outline'
 
@@ -75,6 +76,7 @@ function BookingCard({ item, onClick }: { item: BookingListItem; onClick: () => 
 }
 
 export default function MyTicketsPage() {
+  usePageTitle('Vé của tôi')
   const navigate = useNavigate()
   const [page, setPage] = useState(0)
   const { data, isLoading, isError } = useMyBookings(page)

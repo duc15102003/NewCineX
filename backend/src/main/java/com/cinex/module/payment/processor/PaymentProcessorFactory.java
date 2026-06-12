@@ -16,14 +16,14 @@ import java.util.Map;
  * - Factory: thêm method mới → tạo class mới + đăng ký → code cũ KHÔNG SỬA
  *
  * Spring tự inject Map<String, PaymentProcessor>:
- * - key = @Component("VNPAY") → "VNPAY"
- * - value = MockPaymentProcessor instance
+ * - key = @Component("MOMO") → "MOMO"
+ * - value = MoMoPaymentProcessor instance
  */
 @Component
 @RequiredArgsConstructor
 public class PaymentProcessorFactory {
 
-    // Spring tự inject: {"VNPAY": MockPaymentProcessor, "CASH": CashPaymentProcessor, "MOMO": ...}
+    // Spring tự inject: {"MOMO": MoMoPaymentProcessor, "CASH": CashPaymentProcessor, ...}
     private final Map<String, PaymentProcessor> processors;
 
     public PaymentProcessor getProcessor(PaymentMethod method) {

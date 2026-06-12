@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -9,6 +9,7 @@ import {
 } from '@/hooks/useBooking'
 import { useSeatWebSocket } from '@/hooks/useWebSocket'
 import { usePublicConfigNumber } from '@/hooks/useConfig'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import Loading from '@/components/common/Loading'
 
 import SeatMap from './components/SeatMap'
@@ -25,22 +26,55 @@ export default function SeatSelectionPage() {
   const id = Number(showtimeId)
 
   const { data, isLoading, isError } = useShowtimeSeatMap(id)
+  usePageTitle(data?.showtime?.movieTitle ? `Chọn ghế — ${data.showtime.movieTitle}` : 'Chọn ghế')
   const holdSeats = useHoldSeats()
   const validateVoucherMut = useValidateVoucher()
   // Hold minutes từ system_config (admin có thể chỉnh) — KHÔNG hardcode "10 phút"
   const { data: holdMinutes = 10 } = usePublicConfigNumber('booking.hold_minutes', 10)
 
-  const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([])
+  // Restore selection từ localStorage khi mount — tránh mất ghế đang chọn khi
+  // user lỡ F5 / đóng tab nhầm. Key scope theo showtimeId để không lẫn lộn
+  // giữa các suất chiếu khác nhau. Voucher CODE cũng restore nhưng VOUCHER
+  // RESULT để user re-apply (tránh stale discount khi user back lại sau lâu).
+  const storageKey = `cinex.booking.seat-selection.${id}`
+  const initialState = readPersistedState(storageKey)
+
+  const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>(initialState.selectedSeatIds)
   const [occupiedSeatIds, setOccupiedSeatIds] = useState<number[]>([])
-  const [voucherCode, setVoucherCode] = useState('')
+  const [voucherCode, setVoucherCode] = useState(initialState.voucherCode)
   const [voucherResult, setVoucherResult] = useState<VoucherValidateResult | null>(null)
   const [showVoucherList, setShowVoucherList] = useState(true)
   const [ageConfirmOpen, setAgeConfirmOpen] = useState(false)
 
+  // Persist mỗi khi selection / voucher code thay đổi. Bỏ qua initial render
+  // (đã restore xong) để tránh ghi đè state bằng chính nó.
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    if (selectedSeatIds.length === 0 && !voucherCode) {
+      localStorage.removeItem(storageKey)
+    } else {
+      localStorage.setItem(storageKey, JSON.stringify({ selectedSeatIds, voucherCode }))
+    }
+  }, [selectedSeatIds, voucherCode, storageKey])
+
   // Ghế đã occupied — load qua hook, đồng bộ vào local state để WS có thể patch tăng dần
   const { data: initialOccupied = [] } = useOccupiedSeats(id || null)
   useEffect(() => {
-    if (initialOccupied.length > 0) setOccupiedSeatIds(initialOccupied)
+    if (initialOccupied.length === 0) return
+    setOccupiedSeatIds(initialOccupied)
+    // Sau F5 restore: nếu ghế đã chọn nằm trong occupied (người khác giành
+    // trong lúc user offline) → loại ra + báo cho user biết, tránh user click
+    // "Giữ ghế" rồi BE từ chối.
+    setSelectedSeatIds(prev => {
+      const stolen = prev.filter(sid => initialOccupied.includes(sid))
+      if (stolen.length === 0) return prev
+      toast.warning(`${stolen.length} ghế đã được người khác đặt — đã bỏ khỏi danh sách của bạn`)
+      return prev.filter(sid => !initialOccupied.includes(sid))
+    })
   }, [initialOccupied])
 
   // WebSocket: nhận update ghế real-time
@@ -146,12 +180,26 @@ export default function SeatSelectionPage() {
   }
 
   async function doHoldSeats() {
-    const result = await holdSeats.mutateAsync({
-      showtimeId: id,
-      seatIds: selectedSeatIds,
-      voucherCode: voucherCode.trim() || undefined,
-    })
-    navigate(`/payment/${result.bookingId}`)
+    try {
+      const result = await holdSeats.mutateAsync({
+        showtimeId: id,
+        seatIds: selectedSeatIds,
+        voucherCode: voucherCode.trim() || undefined,
+      })
+      // Hold thành công → BE đã lock ghế dưới bookingId, không cần state ở
+      // page này nữa. Clear để lần sau quay lại trang chọn ghế bắt đầu lại từ
+      // đầu, không restore selection cũ.
+      localStorage.removeItem(storageKey)
+      navigate(`/payment/${result.bookingId}`)
+    } catch {
+      // Toast generic đã hiện từ hook onError. Show thêm toast với nút "Thử
+      // lại" để user re-attempt mà không phải scroll xuống click button nữa.
+      // Đặc biệt hữu ích khi user trên mobile, button có thể bị che bởi keyboard.
+      toast.error('Giữ ghế thất bại', {
+        action: { label: 'Thử lại', onClick: () => doHoldSeats() },
+        duration: 10_000,
+      })
+    }
   }
 
   async function handleHoldSeats() {
@@ -245,6 +293,36 @@ export default function SeatSelectionPage() {
       )}
     </div>
   )
+}
+
+// ============================================================
+//  Helpers
+// ============================================================
+
+interface PersistedState {
+  selectedSeatIds: number[]
+  voucherCode: string
+}
+
+const EMPTY_STATE: PersistedState = { selectedSeatIds: [], voucherCode: '' }
+
+/**
+ * Đọc state từ localStorage — defensive: storage có thể bị corrupted (user
+ * sửa tay, browser sync conflict). Mọi lỗi → trả empty state thay vì throw.
+ */
+function readPersistedState(key: string): PersistedState {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return EMPTY_STATE
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed.selectedSeatIds)) return EMPTY_STATE
+    return {
+      selectedSeatIds: parsed.selectedSeatIds.filter((n: unknown) => typeof n === 'number'),
+      voucherCode: typeof parsed.voucherCode === 'string' ? parsed.voucherCode : '',
+    }
+  } catch {
+    return EMPTY_STATE
+  }
 }
 
 // ============================================================

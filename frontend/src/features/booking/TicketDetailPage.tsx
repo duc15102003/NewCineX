@@ -9,6 +9,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { label, BOOKING_STATUS_LABELS, SEAT_TYPE_LABELS, ROOM_TYPE_LABELS, fmtDateTime, fmtVnd, needsAgeConfirm, AGE_RATING_LABELS } from '@/utils/labels'
 import { IdCard } from 'lucide-react'
 import Loading from '@/components/common/Loading'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 type BadgeVariant = 'warning' | 'success' | 'default' | 'destructive' | 'secondary' | 'outline'
 
@@ -30,6 +31,7 @@ export default function TicketDetailPage() {
 
   const { data: booking, isLoading: loadingBooking } = useBookingDetail(bookingId)
   const { data: ticket, isLoading: loadingTicket } = useTicket(bookingId)
+  usePageTitle(booking ? `Vé ${booking.bookingCode}` : 'Chi tiết vé')
   const cancelBooking = useCancelBooking()
   const [confirmOpen, setConfirmOpen] = useState(false)
 

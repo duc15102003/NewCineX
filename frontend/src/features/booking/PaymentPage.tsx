@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Clock, ShieldCheck, Lock } from 'lucide-react'
 import { useBookingDetail, useCreatePayment } from '@/hooks/useBooking'
 import { usePublicConfigNumber } from '@/hooks/useConfig'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -11,7 +13,7 @@ import { fmtDateTime, label, ROOM_TYPE_LABELS, fmtVnd } from '@/utils/labels'
 
 const PAYMENT_METHODS = [
   {
-    value: 'VNPAY',
+    value: 'MOMO',
     label: 'MoMo',
     description: 'Thanh toán qua ví MoMo (QR, ví điện tử)',
     icon: '📱',
@@ -24,8 +26,9 @@ export default function PaymentPage() {
   const id = Number(bookingId)
 
   const { data: booking, isLoading } = useBookingDetail(id)
+  usePageTitle(booking ? `Thanh toán vé ${booking.bookingCode}` : 'Thanh toán')
   const createPayment = useCreatePayment()
-  const [selectedMethod, setSelectedMethod] = useState('VNPAY')
+  const [selectedMethod, setSelectedMethod] = useState('MOMO')
 
   const { data: holdMinutes = 10 } = usePublicConfigNumber('booking.hold_minutes', 10)
 
@@ -63,16 +66,26 @@ export default function PaymentPage() {
     `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
   async function handlePayment() {
-    const result = await createPayment.mutateAsync({
-      bookingId: id,
-      paymentMethod: selectedMethod,
-    })
-    if (result.paymentUrl) {
-      // Chuyển sang cổng thanh toán
-      window.location.href = result.paymentUrl
-    } else {
-      // Tiền mặt → trang kết quả
-      navigate(`/payment/result?bookingId=${id}`)
+    try {
+      const result = await createPayment.mutateAsync({
+        bookingId: id,
+        paymentMethod: selectedMethod,
+      })
+      if (result.paymentUrl) {
+        // Chuyển sang cổng thanh toán
+        window.location.href = result.paymentUrl
+      } else {
+        // Tiền mặt → trang kết quả
+        navigate(`/payment/result?bookingId=${id}`)
+      }
+    } catch {
+      // Toast generic đã hiện từ hook onError. Show thêm action "Thử lại"
+      // để user retry ngay — đặc biệt khi network hiccup giữa lúc đếm
+      // ngược, đỡ phải scroll xuống click nút (mobile UX).
+      toast.error('Khởi tạo thanh toán thất bại', {
+        action: { label: 'Thử lại', onClick: () => handlePayment() },
+        duration: 10_000,
+      })
     }
   }
 
@@ -85,6 +98,12 @@ export default function PaymentPage() {
       </div>
     )
   }
+
+  // Đã hết hạn HOLD → vé bị BE auto-cancel, button thanh toán không nên click
+  // được nữa. useEffect cũng redirect khi secondsLeft = 0, nhưng vẫn defensive
+  // ở UI tránh race condition giữa timer tick và click.
+  const isExpired = booking.status === 'HOLDING' && secondsLeft === 0
+  const canPay = booking.status === 'HOLDING' && !isExpired && !createPayment.isPending
 
   return (
     <div className="min-h-screen bg-[#181309] text-white py-10 px-4">
@@ -192,11 +211,15 @@ export default function PaymentPage() {
         <Button
           onClick={handlePayment}
           loading={createPayment.isPending}
-          disabled={createPayment.isPending}
-          className="w-full bg-[#ffc107] hover:bg-[#e6ac06] text-black font-bold h-12 text-base"
+          disabled={!canPay}
+          className="w-full bg-[#ffc107] hover:bg-[#e6ac06] text-black font-bold h-12 text-base disabled:bg-gray-600 disabled:text-gray-300 disabled:cursor-not-allowed"
         >
           <Lock size={16} className="mr-2" />
-          {createPayment.isPending ? 'Đang xử lý...' : `Thanh toán an toàn ${fmtVnd(booking.totalAmount)}`}
+          {createPayment.isPending
+            ? 'Đang xử lý...'
+            : isExpired
+              ? 'Vé đã hết hạn — chọn lại ghế'
+              : `Thanh toán an toàn ${fmtVnd(booking.totalAmount)}`}
         </Button>
 
         {/* Trust signals — pattern e-commerce: lock icon + mã hóa + redirect MoMo */}

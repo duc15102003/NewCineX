@@ -3,20 +3,27 @@ import { Monitor, Sparkles, Gem, Film, Armchair, TicketCheck } from 'lucide-reac
 import { useMovies } from '@/hooks/useMovies'
 import MovieGrid from '@/components/movie/MovieGrid'
 import { MovieGridSkeleton } from '@/components/common/Skeleton'
+import DataErrorState from '@/components/common/DataErrorState'
 import { cdnImage } from '@/utils/image'
 import { useAuthStore } from '@/store/authStore'
 import { useTheaterStore } from '@/store/theaterStore'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 export default function HomePage() {
+  usePageTitle('Trang chủ')
   // Theater context F1: cả "Đang chiếu" và "Sắp chiếu" đều lọc theo chi nhánh user đã chọn.
   // - "Đang chiếu" = phim có showtime endTime >= now tại CN đó
   // - "Sắp chiếu" = phim COMING_SOON đã có MovieRun upcoming tại CN đó (chuẩn CGV/Lotte)
   // Chi nhánh chưa có đợt chiếu nào → "Sắp chiếu" rỗng → đúng kỳ vọng user.
   const { currentTheater } = useTheaterStore()
-  const { data: nowShowing, isLoading: loadingNow } = useMovies({
+  const {
+    data: nowShowing, isLoading: loadingNow, isError: errorNow, refetch: refetchNow,
+  } = useMovies({
     showing: true, theaterId: currentTheater?.id, size: 10,
   })
-  const { data: comingSoon, isLoading: loadingComing } = useMovies({
+  const {
+    data: comingSoon, isLoading: loadingComing, isError: errorComing, refetch: refetchComing,
+  } = useMovies({
     status: 'COMING_SOON', theaterId: currentTheater?.id, size: 10,
   })
   const { isLoggedIn } = useAuthStore()
@@ -95,6 +102,11 @@ export default function HomePage() {
         </div>
         {loadingNow ? (
           <MovieGridSkeleton count={10} />
+        ) : errorNow ? (
+          <DataErrorState
+            message="Không tải được phim đang chiếu. Có thể do mất kết nối — vui lòng thử lại."
+            onRetry={() => refetchNow()}
+          />
         ) : (
           <MovieGrid movies={nowShowing?.content || []} emptyMessage="Chưa có phim đang chiếu" />
         )}
@@ -113,6 +125,11 @@ export default function HomePage() {
         </div>
         {loadingComing ? (
           <MovieGridSkeleton count={10} />
+        ) : errorComing ? (
+          <DataErrorState
+            message="Không tải được phim sắp chiếu. Có thể do mất kết nối — vui lòng thử lại."
+            onRetry={() => refetchComing()}
+          />
         ) : (
           <MovieGrid movies={comingSoon?.content || []} emptyMessage="Chưa có phim sắp chiếu" />
         )}

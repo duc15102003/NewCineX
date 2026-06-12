@@ -52,7 +52,7 @@ public class PaymentService {
      *
      * Luồng:
      * 1. Kiểm tra booking HOLDING + chưa có payment
-     * 2. Factory chọn processor theo method (VNPAY/MOMO/CASH)
+     * 2. Factory chọn processor theo method (MOMO/CASH/CARD_POS/TRANSFER)
      * 3. Processor tạo payment → trả URL redirect
      * 4. Lưu Payment record (PENDING)
      */

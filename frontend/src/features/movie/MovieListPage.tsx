@@ -6,6 +6,8 @@ import MovieGrid from '@/components/movie/MovieGrid'
 import SearchBar from '@/components/movie/SearchBar'
 import GenreFilter from '@/components/movie/GenreFilter'
 import Loading from '@/components/common/Loading'
+import DataErrorState from '@/components/common/DataErrorState'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import SortDropdown, { MOVIE_SORT_OPTIONS } from '@/components/common/SortDropdown'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
@@ -23,6 +25,7 @@ export default function MovieListPage() {
   const initialTab = searchParams.get('status') || 'showing'
 
   const [tab, setTab] = useState(initialTab)
+  usePageTitle(tab === 'showing' ? 'Phim đang chiếu' : 'Phim sắp chiếu')
   const [keyword, setKeyword] = useState('')
   const [genreId, setGenreId] = useState<number | null>(null)
   const [page, setPage] = useState(0)
@@ -36,7 +39,7 @@ export default function MovieListPage() {
 
   // "Đang chiếu" = phim có showtime endTime >= now tại CN đang chọn
   // "Sắp chiếu" = phim COMING_SOON có MovieRun upcoming tại CN đó (BE auto join)
-  const { data: moviePage, isLoading } = useMovies({
+  const { data: moviePage, isLoading, isError, refetch } = useMovies({
     ...advancedFilter,
     keyword: keyword || undefined,
     genreId: genreId || undefined,
@@ -131,6 +134,11 @@ export default function MovieListPage() {
       {/* Movie Grid */}
       {isLoading ? (
         <Loading />
+      ) : isError ? (
+        <DataErrorState
+          message="Không tải được danh sách phim. Có thể do mất kết nối — vui lòng thử lại."
+          onRetry={() => refetch()}
+        />
       ) : (
         <>
           <MovieGrid

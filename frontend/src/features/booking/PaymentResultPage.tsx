@@ -5,8 +5,10 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import Loading from '@/components/common/Loading'
 import { fmtDateTime, label, ROOM_TYPE_LABELS, fmtVnd } from '@/utils/labels'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 export default function PaymentResultPage() {
+  usePageTitle('Kết quả thanh toán')
   const [params] = useSearchParams()
 
   // Từ callback VNPay (transactionCode) hoặc từ CASH (bookingId)

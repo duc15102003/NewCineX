@@ -12,7 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Loading from '@/components/common/Loading'
 import { fmtDate } from '@/utils/labels'
-import { Camera } from 'lucide-react'
+import { Camera, Loader2 } from 'lucide-react'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 // Schema cập nhật thông tin
 const profileSchema = z.object({
@@ -43,6 +44,7 @@ const passwordSchema = z
 type PasswordForm = z.infer<typeof passwordSchema>
 
 export default function ProfilePage() {
+  usePageTitle('Hồ sơ cá nhân')
   const { data: profile, isLoading } = useProfile()
   const updateProfile = useUpdateProfile()
   const changePassword = useChangePassword()
@@ -127,7 +129,8 @@ export default function ProfilePage() {
         <Card className="bg-[#201b11] border-white/5 text-white rounded-2xl">
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              {/* Avatar */}
+              {/* Avatar — overlay loading khi upload để user biết đang xử lý
+                  + tránh click lặp lại lúc đang chờ. */}
               <div className="relative group w-16 h-16 flex-shrink-0">
                 {profile.avatarUrl ? (
                   <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover" />
@@ -136,13 +139,29 @@ export default function ProfilePage() {
                     {(profile.fullName ?? profile.username).charAt(0).toUpperCase()}
                   </div>
                 )}
-                <label className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                  <Camera size={20} className="text-white" />
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) uploadAvatar.mutate(file)
-                  }} />
-                </label>
+                {uploadAvatar.isPending ? (
+                  // Đang upload → overlay đặc + spinner; KHÔNG cho click thêm.
+                  <div className="absolute inset-0 rounded-full bg-black/70 flex items-center justify-center">
+                    <Loader2 size={20} className="text-[#ffc107] animate-spin" />
+                  </div>
+                ) : (
+                  <label className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <Camera size={20} className="text-white" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadAvatar.isPending}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) uploadAvatar.mutate(file)
+                        // Reset input để cho phép upload lại cùng file (sau khi
+                        // delete) — browser cache value=last selected nếu không reset.
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                )}
               </div>
               <div>
                 <p className="font-semibold text-lg">{profile.fullName ?? profile.username}</p>

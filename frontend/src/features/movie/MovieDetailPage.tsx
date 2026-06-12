@@ -29,11 +29,13 @@ import { Button } from '@/components/ui/button'
 import { MovieDetailSkeleton } from '@/components/common/Skeleton'
 import { useAuthStore } from '@/store/authStore'
 import LoginPromptModal from '@/components/common/LoginPromptModal'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 export default function MovieDetailPage() {
   const { id } = useParams<{ id: string }>()
   const movieId = Number(id)
   const { data: movie, isLoading } = useMovie(movieId)
+  usePageTitle(movie ? `Phim ${movie.title}` : undefined)
 
   // Chọn ngày xem suất chiếu (mặc định hôm nay). Dùng local timezone tránh shift múi giờ.
   const today = toLocalDateString(new Date())

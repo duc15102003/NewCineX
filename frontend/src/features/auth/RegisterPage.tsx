@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const registerSchema = z.object({
   fullName: z.string().optional(),
@@ -23,6 +24,7 @@ const registerSchema = z.object({
 type RegisterForm = z.infer<typeof registerSchema>
 
 export default function RegisterPage() {
+  usePageTitle('Đăng ký tài khoản')
   const isLoggedIn = useAuthStore(s => s.isLoggedIn)
   // mode='onTouched': lỗi xuất hiện sau lần blur đầu rồi update theo onChange
   // → user nhập email sai → blur → thấy lỗi → fix → lỗi tự biến mất khi đúng
