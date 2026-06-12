@@ -2,6 +2,7 @@ package com.cinex.common.config;
 
 import com.cinex.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -29,7 +30,7 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
 
-    @org.springframework.beans.factory.annotation.Value("${app.frontend-url:http://localhost:5173}")
+    @Value("${app.frontend-url:http://localhost:5173}")
     private String frontendUrl;
 
     /**

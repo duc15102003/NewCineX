@@ -88,15 +88,25 @@ export default function AdminShowtimePage() {
   const totalPages = pageData?.totalPages ?? 0
   const tableCols = showAllTheaters ? 8 : 7
 
-  // Movies + rooms cho filter dropdown (cần riêng — form dialog có instance riêng nhưng RQ dedupe)
-  const { data: moviesData } = useAdminMovies({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
+  // Movies + rooms cho filter dropdown. PHẢI scope theo chi nhánh đang chọn —
+  // nếu admin đứng ở Hà Nội mà dropdown show phòng/phim của các CN khác → user
+  // confused. Dùng scopedTheaterId thay vì adminTheater.id để BRANCH_ADMIN
+  // (đã lock theater) cũng được scope. (Form dialog có instance riêng nhưng
+  // RQ dedupe nên không double fetch.)
+  const { data: moviesData } = useAdminMovies({
+    size: OPTIONS_DROPDOWN_PAGE_SIZE,
+    theaterId: scopedTheaterId ?? undefined,
+  })
   const movies = useMemo(
     () => (moviesData?.content ?? []).filter(
       (m: AdminMovie) => m.status === 'NOW_SHOWING' || m.status === 'COMING_SOON',
     ),
     [moviesData],
   )
-  const { data: roomsData } = useAdminRooms({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
+  const { data: roomsData } = useAdminRooms({
+    size: OPTIONS_DROPDOWN_PAGE_SIZE,
+    theaterId: scopedTheaterId ?? undefined,
+  })
   const rooms = roomsData?.content ?? []
   const { data: theaters = [] } = useTheaterOptions()
 

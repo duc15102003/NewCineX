@@ -26,14 +26,22 @@ export default function AdminBookingPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [adv, setAdv] = useState<AdminBookingFilter>(EMPTY_FILTER)
 
-  // Movies + rooms cho dropdown (lấy nhiều để admin chọn)
-  const { data: moviePage } = useMovies({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
-  const movies = moviePage?.content ?? []
-  const { data: roomPage } = useAdminRooms({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
-  const rooms = roomPage?.content ?? []
-
-  // Admin theater context — null = tất cả; có id = filter theo theater đó
+  // Admin theater context — null = tất cả; có id = filter theo theater đó.
+  // KHAI BÁO TRƯỚC useMovies/useAdminRooms để pass theaterId scope dropdown.
   const { currentTheater: adminTheater } = useAdminTheaterStore()
+
+  // Movies + rooms cho dropdown — scope theo chi nhánh đang chọn để admin
+  // đứng ở Hà Nội không thấy phòng/phim CN khác trong filter.
+  const { data: moviePage } = useMovies({
+    size: OPTIONS_DROPDOWN_PAGE_SIZE,
+    theaterId: adminTheater?.id,
+  })
+  const movies = moviePage?.content ?? []
+  const { data: roomPage } = useAdminRooms({
+    size: OPTIONS_DROPDOWN_PAGE_SIZE,
+    theaterId: adminTheater?.id,
+  })
+  const rooms = roomPage?.content ?? []
 
   const filter: AdminBookingFilter = {
     ...adv,

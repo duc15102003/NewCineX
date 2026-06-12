@@ -41,8 +41,17 @@ export default function ShowtimeFormDialog({
   const isEditMode = editingId != null
 
   const { data: showtimeDetail } = useShowtimeDetail(editingId ?? undefined)
-  const { data: moviesData } = useAdminMovies({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
-  const { data: roomsData } = useAdminRooms({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
+  // Khi theater bị lock (BRANCH_ADMIN hoặc super admin đã pick 1 CN) → CHỈ
+  // load phòng/phim của CN đó (tránh leak CN khác + tiết kiệm bandwidth).
+  // Khi "Tất cả chi nhánh" → load all, form có cascading filter client-side.
+  const { data: moviesData } = useAdminMovies({
+    size: OPTIONS_DROPDOWN_PAGE_SIZE,
+    theaterId: scopedTheaterId ?? undefined,
+  })
+  const { data: roomsData } = useAdminRooms({
+    size: OPTIONS_DROPDOWN_PAGE_SIZE,
+    theaterId: scopedTheaterId ?? undefined,
+  })
   const { data: theaters = [] } = useTheaterOptions()
   const { isBranchAdmin } = useAuthStore()
 
