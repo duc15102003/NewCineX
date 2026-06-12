@@ -5,11 +5,13 @@ import NumberRangeInput from '@/components/common/NumberRangeInput'
 import { ROOM_TYPE_LABELS, SHOWTIME_STATUS_LABELS } from '@/utils/labels'
 import type { AdminMovie } from '@/hooks/useAdminMovies'
 import type { AdminRoom } from '@/hooks/useAdminRooms'
+import type { Theater } from '@/hooks/useAdminTheaters'
 
 const SELECT_CLS =
   'w-full h-10 rounded-md border border-white/10 bg-[#2a2317] text-white text-sm px-3 focus:outline-none focus:ring-1 focus:ring-[#ffc107]'
 
 export interface ShowtimeFilterDraft {
+  theaterId: string
   movieId: string
   roomId: string
   status: string
@@ -32,11 +34,18 @@ export interface ShowtimeFilterDrawerProps {
   onReset: () => void
   movies: AdminMovie[]
   rooms: AdminRoom[]
+  theaters: Theater[]
+  /**
+   * Hiện field "Chi nhánh" — chỉ ON khi user đang ở "Tất cả chi nhánh" mode
+   * (super admin chưa pick chi nhánh nào). Khi đã pick theater hoặc là branch
+   * admin → field bị ẩn vì redundant với theater switcher cấp trên.
+   */
+  showTheaterFilter: boolean
 }
 
-/** Filter nâng cao cho list showtime: phim, phòng, ngày, khoảng giờ, khoảng giá. */
+/** Filter nâng cao cho list showtime: chi nhánh, phim, phòng, ngày, khoảng giờ, khoảng giá. */
 export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
-  const { open, onOpenChange, draftFilter, onSetDraft, onApply, onReset, movies, rooms } = props
+  const { open, onOpenChange, draftFilter, onSetDraft, onApply, onReset, movies, rooms, theaters, showTheaterFilter } = props
   return (
     <FilterDrawer
       open={open}
@@ -44,6 +53,23 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
       onApply={onApply}
       onReset={onReset}
     >
+      {showTheaterFilter && (
+        <FilterField label="Chi nhánh">
+          <select
+            value={draftFilter.theaterId}
+            onChange={(e) => onSetDraft('theaterId', e.target.value)}
+            className={SELECT_CLS}
+          >
+            <option value="">Tất cả chi nhánh</option>
+            {theaters.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}{t.city ? ` — ${t.city}` : ''}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+      )}
+
       <FilterField label="Phim">
         <select
           value={draftFilter.movieId}

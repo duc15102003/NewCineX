@@ -16,6 +16,7 @@ import ShowtimeRow from './components/ShowtimeRow'
 import {
   useAdminShowtimes, useAdminMovies, useAdminRooms,
   useBulkDeleteShowtimes, useBulkRestoreShowtimes,
+  useTheaterOptions,
 } from '@/hooks/useAdmin'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
@@ -24,6 +25,7 @@ import type { AdminMovie } from '@/hooks/useAdminMovies'
 import { OPTIONS_DROPDOWN_PAGE_SIZE } from '@/utils/constants'
 
 const EMPTY_FILTER: ShowtimeFilterDraft = {
+  theaterId: '',
   movieId: '', roomId: '', status: '', roomType: '',
   startDate: '', startTimeFrom: '', startTimeTo: '',
   minPrice: '', maxPrice: '',
@@ -55,7 +57,10 @@ export default function AdminShowtimePage() {
   const queryParams = useMemo<AdminShowtimeParams>(() => {
     const p: AdminShowtimeParams = { page, size: LIST_PAGE_SIZE }
     if (keyword) p.keyword = keyword
+    // Theater switcher (cấp trên) ưu tiên hơn filter drawer. Khi xem "Tất cả
+    // chi nhánh" và user pick chi nhánh trong filter → mới áp dụng filter.theaterId.
     if (adminTheater?.id) p.theaterId = adminTheater.id
+    else if (appliedFilter.theaterId) p.theaterId = Number(appliedFilter.theaterId)
     if (appliedFilter.movieId) p.movieId = Number(appliedFilter.movieId)
     if (appliedFilter.roomId) p.roomId = Number(appliedFilter.roomId)
     if (appliedFilter.status) p.status = appliedFilter.status
@@ -91,6 +96,7 @@ export default function AdminShowtimePage() {
   )
   const { data: roomsData } = useAdminRooms({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
   const rooms = roomsData?.content ?? []
+  const { data: theaters = [] } = useTheaterOptions()
 
   const bulkDeleteMut = useBulkDeleteShowtimes()
   const bulkRestoreMut = useBulkRestoreShowtimes()
@@ -204,6 +210,8 @@ export default function AdminShowtimePage() {
         onReset={resetFilter}
         movies={movies}
         rooms={rooms}
+        theaters={theaters}
+        showTheaterFilter={!theaterLocked}
       />
 
       {/* Table */}
