@@ -18,6 +18,7 @@ import MovieRow from './components/MovieRow'
 import {
   useAdminMovies, useUploadPoster, useBulkDeleteMovies, useBulkRestoreMovies,
 } from '@/hooks/useAdmin'
+import { useAuthStore } from '@/store/authStore'
 import { useGenres } from '@/hooks/useMovies'
 import type { AdminMovieFilter } from '@/types/movie'
 
@@ -35,6 +36,8 @@ export default function AdminMoviePage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploadId, setUploadId] = useState<number | null>(null)
+  // RBAC: Movie CRUD chỉ SUPER_ADMIN — BRANCH_ADMIN xem read-only.
+  const isSuperAdmin = useAuthStore(s => s.isSuperAdmin())
   // Dialog quản lý đợt chiếu (MovieRun)
   const [runsDialogOpen, setRunsDialogOpen] = useState(false)
   const [runsMovie, setRunsMovie] = useState<{ id: number; title: string } | null>(null)
@@ -139,17 +142,20 @@ export default function AdminMoviePage() {
             />
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
-            <Plus size={16} className="mr-1" /> Thêm mới
-          </Button>
-          <StatusDropdown
-            onArchive={handleBulkArchive}
-            onRestore={handleBulkRestore}
-            archiveLoading={bulkDeleteMut.isPending}
-            restoreLoading={bulkRestoreMut.isPending}
-          />
-        </div>
+        {/* Movie CRUD chỉ SUPER_ADMIN — BRANCH_ADMIN xem read-only, ẩn nút Create + Bulk */}
+        {isSuperAdmin && (
+          <div className="flex items-center gap-2">
+            <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
+              <Plus size={16} className="mr-1" /> Thêm mới
+            </Button>
+            <StatusDropdown
+              onArchive={handleBulkArchive}
+              onRestore={handleBulkRestore}
+              archiveLoading={bulkDeleteMut.isPending}
+              restoreLoading={bulkRestoreMut.isPending}
+            />
+          </div>
+        )}
       </div>
 
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />

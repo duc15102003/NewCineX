@@ -13,6 +13,7 @@ import FilterDrawer, { FilterTrigger, FilterField } from '@/components/common/Fi
 import { label, STORAGE_STATE_LABELS } from '@/utils/labels'
 import { STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 import { useAdminGenres, useCreateGenre, useUpdateGenre, useBulkDeleteGenres, useBulkRestoreGenres } from '@/hooks/useAdmin'
+import { useAuthStore } from '@/store/authStore'
 import { useGenreDetail } from '@/hooks/useAdminGenres'
 import type { AdminGenre, AdminGenreFilter } from '@/hooks/useAdminGenres'
 import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
@@ -38,6 +39,8 @@ export default function AdminGenrePage() {
   const [editingItem, setEditingItem] = useState<AdminGenre | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // RBAC: Genre CRUD chỉ SUPER_ADMIN — BRANCH_ADMIN xem read-only.
+  const isSuperAdmin = useAuthStore(s => s.isSuperAdmin())
 
   // Auto-load detail khi mở Edit — React Query cache theo id, đỡ phải tự catch error
   const { data: editingDetail } = useGenreDetail(editingId)
@@ -149,18 +152,20 @@ export default function AdminGenrePage() {
             </Button>
           )}
         </div>
-        {/* RIGHT: Add + Bulk actions */}
-        <div className="flex items-center gap-2">
-          <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
-            <Plus size={16} className="mr-1" /> Thêm mới
-          </Button>
-          <StatusDropdown
-            onArchive={handleBulkArchive}
-            onRestore={handleBulkRestore}
-            archiveLoading={bulkDeleteMut.isPending}
-            restoreLoading={bulkRestoreMut.isPending}
-          />
-        </div>
+        {/* RIGHT: Add + Bulk actions — chỉ SUPER_ADMIN (Genre là content chung) */}
+        {isSuperAdmin && (
+          <div className="flex items-center gap-2">
+            <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
+              <Plus size={16} className="mr-1" /> Thêm mới
+            </Button>
+            <StatusDropdown
+              onArchive={handleBulkArchive}
+              onRestore={handleBulkRestore}
+              archiveLoading={bulkDeleteMut.isPending}
+              restoreLoading={bulkRestoreMut.isPending}
+            />
+          </div>
+        )}
       </div>
 
       {/* Table */}

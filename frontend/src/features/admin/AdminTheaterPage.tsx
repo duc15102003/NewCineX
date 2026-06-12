@@ -17,6 +17,7 @@ import {
   useBulkArchiveTheaters, useBulkRestoreTheaters,
 } from '@/hooks/useAdminTheaters'
 import type { TheaterParams } from '@/hooks/useAdminTheaters'
+import { useAuthStore } from '@/store/authStore'
 import { label, STORAGE_STATE_LABELS } from '@/utils/labels'
 import { THEATER_STATUS_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 
@@ -44,6 +45,8 @@ export default function AdminTheaterPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // RBAC: Theater CRUD chỉ SUPER_ADMIN — BRANCH_ADMIN xem read-only.
+  const isSuperAdmin = useAuthStore(s => s.isSuperAdmin())
 
   const { data: pageData } = useAdminTheaters({ ...appliedFilter, size: PAGE_SIZE, sort: SORT })
   const theaters = pageData?.content ?? []
@@ -122,17 +125,20 @@ export default function AdminTheaterPage() {
             </Button>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
-            <Plus size={16} className="mr-1" /> Thêm chi nhánh
-          </Button>
-          <StatusDropdown
-            onArchive={handleBulkArchive}
-            onRestore={handleBulkRestore}
-            archiveLoading={bulkArchiveMut.isPending}
-            restoreLoading={bulkRestoreMut.isPending}
-          />
-        </div>
+        {/* Theater CRUD chỉ SUPER_ADMIN — BRANCH_ADMIN xem read-only */}
+        {isSuperAdmin && (
+          <div className="flex items-center gap-2">
+            <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
+              <Plus size={16} className="mr-1" /> Thêm chi nhánh
+            </Button>
+            <StatusDropdown
+              onArchive={handleBulkArchive}
+              onRestore={handleBulkRestore}
+              archiveLoading={bulkArchiveMut.isPending}
+              restoreLoading={bulkRestoreMut.isPending}
+            />
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-[#3f382d] overflow-hidden bg-[#201b11]">
