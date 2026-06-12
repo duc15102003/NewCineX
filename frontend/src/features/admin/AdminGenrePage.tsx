@@ -169,7 +169,7 @@ export default function AdminGenrePage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
+      <div className="rounded-2xl border border-[#3f382d] overflow-clip">
         <Table>
           <TableHeader>
             <TableRow className="border-[#3f382d] hover:bg-transparent">

@@ -141,7 +141,7 @@ export default function AdminTheaterPage() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-[#3f382d] overflow-hidden bg-[#201b11]">
+      <div className="rounded-2xl border border-[#3f382d] overflow-clip bg-[#201b11]">
         <Table>
           <TableHeader>
             <TableRow className="border-[#3f382d] hover:bg-transparent">

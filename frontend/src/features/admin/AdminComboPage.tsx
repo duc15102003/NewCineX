@@ -210,7 +210,7 @@ export default function AdminComboPage() {
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
 
       {/* Table */}
-      <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
+      <div className="rounded-2xl border border-[#3f382d] overflow-clip">
         <Table>
           <TableHeader>
             <TableRow className="border-[#3f382d] hover:bg-transparent">

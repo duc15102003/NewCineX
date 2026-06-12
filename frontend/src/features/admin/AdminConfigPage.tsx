@@ -57,7 +57,7 @@ export default function AdminConfigPage() {
   return (
     <div className="space-y-4">
       {/* Table — bỏ heading rườm rà, đồng bộ pattern các trang admin khác */}
-      <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
+      <div className="rounded-2xl border border-[#3f382d] overflow-clip">
         <Table>
           <TableHeader>
             <TableRow className="border-[#3f382d] hover:bg-transparent">
