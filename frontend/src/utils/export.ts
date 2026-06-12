@@ -102,7 +102,8 @@ export function exportPDF({ title, subtitle, columns, rows, fileName, sections }
       renderTable(section.rows, cursorY)
 
       // Lấy vị trí Y sau bảng vừa vẽ
-      const finalY = (doc as any).lastAutoTable?.finalY ?? cursorY + 30
+      // jspdf-autotable plugin mở rộng jsPDF với property này — TS không biết.
+      const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? cursorY + 30
       cursorY = finalY + 12 // Khoảng cách giữa 2 bảng
     })
   } else {
@@ -131,7 +132,9 @@ export function exportPDF({ title, subtitle, columns, rows, fileName, sections }
  * Xuất Excel — nhiều bảng gộp trong 1 sheet, có tiêu đề và subtitle
  */
 export function exportExcel({ title, subtitle, columns, rows, fileName, sections }: ExportData) {
-  const allRows: any[][] = [
+  // unknown[][] thay vì any[][] — type-safe hơn, downstream xlsx.aoa_to_sheet
+  // chấp nhận string/number/Date/null mixed cell value.
+  const allRows: unknown[][] = [
     [title],
     [subtitle || `Xuất ngày ${new Date().toLocaleDateString('vi-VN')}`],
     [],

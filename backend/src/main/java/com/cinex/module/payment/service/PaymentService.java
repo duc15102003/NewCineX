@@ -174,19 +174,9 @@ public class PaymentService {
             booking.getBookingSeats().forEach(bs -> bs.setStatus(BookingSeatStatus.BOOKED));
             bookingRepository.save(booking);
 
-            // Force initialize LAZY associations TRƯỚC khi publish event.
-            //
-            // Tại sao? @TransactionalEventListener(AFTER_COMMIT) + @Async → listener chạy ở
-            // thread khác SAU KHI transaction đã commit + Session đã đóng. Lúc đó access
-            // booking.getUser().getEmail() (proxy LAZY) → Hibernate cần Session để fetch
-            // → Session closed → SQLException "The statement is closed.".
-            //
-            // Cách fix: gọi getter trong transaction này → proxy initialize ngay → khi
-            // listener access sau, data đã có sẵn trong entity, không cần Session.
-            booking.getUser().getEmail();
-            booking.getShowtime().getMovie().getTitle();
-            booking.getShowtime().getRoom().getName();
-            booking.getBookingSeats().forEach(bs -> bs.getSeat().getSeatNumber());
+            // KHÔNG cần force-init LAZY nữa: paymentRepository.findByTransactionCode
+            // đã @EntityGraph fetch toàn bộ graph (user, movie, room, seats) trong
+            // 1 query → @Async listener access không gặp LazyInitializationException.
 
             // Publish event → listener gửi email (async, sau khi commit transaction)
             eventPublisher.publishEvent(new PaymentCompletedEvent(this, payment));

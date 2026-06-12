@@ -1,6 +1,7 @@
 package com.cinex.module.payment.repository;
 
 import com.cinex.module.payment.entity.Payment;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -11,6 +12,17 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
 
     Optional<Payment> findByBookingId(Long bookingId);
 
+    /**
+     * Load payment với toàn bộ graph cần cho callback flow (user email, movie title,
+     * room name, seat numbers). Dùng @EntityGraph để 1 query JOIN FETCH hết, tránh
+     * N+1 + force-init thủ công khi publish @Async PaymentCompletedEvent.
+     */
+    @EntityGraph(attributePaths = {
+            "booking.user",
+            "booking.showtime.movie",
+            "booking.showtime.room",
+            "booking.bookingSeats.seat",
+    })
     Optional<Payment> findByTransactionCode(String transactionCode);
 
     /**

@@ -14,6 +14,7 @@ import com.cinex.module.booking.service.BookingCheckInService;
 import com.cinex.module.booking.service.BookingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -95,15 +96,15 @@ public class BookingController {
     @PostMapping("/check-in")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "(Admin/Staff) Check-in — nhận qrToken (quét QR) hoặc bookingCode (nhập tay)")
-    public ApiResponse<BookingResponse> checkIn(@RequestParam String code) {
-        return ApiResponse.ok("Checked in", bookingCheckInService.checkIn(code));
+    public ApiResponse<BookingResponse> checkIn(@RequestParam String code, HttpServletRequest httpRequest) {
+        return ApiResponse.ok("Checked in", bookingCheckInService.checkIn(code, httpRequest));
     }
 
     @GetMapping("/check-in/preview")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "(Admin/Staff) Preview booking info trước khi admit/reject — read-only")
-    public ApiResponse<BookingResponse> previewCheckIn(@RequestParam String code) {
-        return ApiResponse.ok(bookingCheckInService.previewCheckIn(code));
+    public ApiResponse<BookingResponse> previewCheckIn(@RequestParam String code, HttpServletRequest httpRequest) {
+        return ApiResponse.ok(bookingCheckInService.previewCheckIn(code, httpRequest));
     }
 
     @PostMapping("/check-in/reject")
@@ -111,8 +112,9 @@ public class BookingController {
     @Operation(summary = "(Admin/Staff) Từ chối check-in tại cổng — vd không đủ tuổi sau verify CCCD")
     public ApiResponse<BookingResponse> rejectCheckIn(
             @RequestParam String code,
-            @RequestParam(defaultValue = "UNDER_AGE") String reason) {
-        return ApiResponse.ok("Vé đã bị từ chối", bookingCheckInService.rejectCheckIn(code, reason));
+            @RequestParam(defaultValue = "UNDER_AGE") String reason,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok("Vé đã bị từ chối", bookingCheckInService.rejectCheckIn(code, reason, httpRequest));
     }
 
     @GetMapping("/showtimes/{showtimeId}/occupied-seats")

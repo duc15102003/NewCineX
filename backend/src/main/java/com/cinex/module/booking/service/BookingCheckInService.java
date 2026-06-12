@@ -3,11 +3,13 @@ package com.cinex.module.booking.service;
 import com.cinex.common.audit.Auditable;
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
+import com.cinex.common.util.ClientIpUtil;
 import com.cinex.module.booking.dto.BookingResponse;
 import com.cinex.module.booking.entity.Booking;
 import com.cinex.module.booking.entity.BookingStatus;
 import com.cinex.module.booking.mapper.BookingResponseMapper;
 import com.cinex.module.booking.repository.BookingRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,14 +33,19 @@ public class BookingCheckInService {
 
     private final BookingRepository bookingRepository;
     private final BookingResponseMapper bookingResponseMapper;
+    private final CheckInRateLimitService rateLimitService;
 
     /**
      * Check-in vé tại cổng: CONFIRMED → CHECKED_IN.
      * Idempotent: vé đã CHECKED_IN sẽ throw error rõ ràng.
+     *
+     * <p>Rate limit theo IP để chống brute-force bookingCode khi credential ADMIN leak.
      */
     @Transactional
-    public BookingResponse checkIn(String code) {
-        Booking booking = lookup(code, true);
+    public BookingResponse checkIn(String code, HttpServletRequest httpRequest) {
+        String ip = ClientIpUtil.resolve(httpRequest);
+        rateLimitService.checkBlockedByIp(ip);
+        Booking booking = lookupWithRateLimit(code, ip, true);
 
         if (booking.getStatus() == BookingStatus.CHECKED_IN) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Vé đã được sử dụng");
@@ -51,6 +58,7 @@ public class BookingCheckInService {
         booking.setStatus(BookingStatus.CHECKED_IN);
         bookingRepository.save(booking);
 
+        rateLimitService.clearFails(ip);
         log.info("Booking {} checked in", booking.getBookingCode());
         return bookingResponseMapper.toResponse(booking);
     }
@@ -61,8 +69,10 @@ public class BookingCheckInService {
      * (T16, T18...) → staff verify CCCD vật lý → click Admit hoặc Reject.
      */
     @Transactional(readOnly = true)
-    public BookingResponse previewCheckIn(String code) {
-        return bookingResponseMapper.toResponse(lookup(code, false));
+    public BookingResponse previewCheckIn(String code, HttpServletRequest httpRequest) {
+        String ip = ClientIpUtil.resolve(httpRequest);
+        rateLimitService.checkBlockedByIp(ip);
+        return bookingResponseMapper.toResponse(lookupWithRateLimit(code, ip, false));
     }
 
     /**
@@ -74,8 +84,10 @@ public class BookingCheckInService {
      */
     @Transactional
     @Auditable(action = "REJECT_CHECK_IN", entityType = "Booking")
-    public BookingResponse rejectCheckIn(String code, String reason) {
-        Booking booking = lookup(code, false);
+    public BookingResponse rejectCheckIn(String code, String reason, HttpServletRequest httpRequest) {
+        String ip = ClientIpUtil.resolve(httpRequest);
+        rateLimitService.checkBlockedByIp(ip);
+        Booking booking = lookupWithRateLimit(code, ip, false);
 
         if (booking.getStatus() == BookingStatus.CHECKED_IN) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
@@ -95,9 +107,9 @@ public class BookingCheckInService {
 
     /**
      * Tìm booking theo qrToken (ưu tiên) hoặc bookingCode (fallback manual).
-     * Log warning khi fallback để audit pattern brute-force.
+     * Record fail vào rate limit nếu BOOKING_NOT_FOUND (chống brute-force).
      */
-    private Booking lookup(String code, boolean logFallback) {
+    private Booking lookupWithRateLimit(String code, String ip, boolean logFallback) {
         return bookingRepository.findByQrToken(code)
                 .or(() -> {
                     if (logFallback) {
@@ -105,7 +117,9 @@ public class BookingCheckInService {
                     }
                     return bookingRepository.findByBookingCode(code);
                 })
-                .orElseThrow(() -> new BusinessException(ErrorCode.BOOKING_NOT_FOUND,
-                        "Booking not found: " + code));
+                .orElseThrow(() -> {
+                    rateLimitService.recordFailByIp(ip);
+                    return new BusinessException(ErrorCode.BOOKING_NOT_FOUND, "Booking not found: " + code);
+                });
     }
 }

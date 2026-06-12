@@ -3,6 +3,7 @@ package com.cinex.module.auth.service;
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
 import com.cinex.common.service.EmailService;
+import com.cinex.common.util.ClientIpUtil;
 import com.cinex.module.config.service.SystemConfigService;
 import com.cinex.common.util.SecurityUtil;
 import com.cinex.module.auth.dto.AuthResponse;
@@ -97,7 +98,7 @@ public class AuthService {
     @Transactional
     public void verifyEmail(String token, HttpServletRequest httpRequest) {
         // Rate-limit theo IP — chống brute force token + DoS DB qua spam request
-        String ip = resolveClientIp(httpRequest);
+        String ip = ClientIpUtil.resolve(httpRequest);
         emailVerifyRateLimitService.checkBlockedByIp(ip);
         emailVerifyRateLimitService.recordAttemptByIp(ip);
 
@@ -124,7 +125,7 @@ public class AuthService {
     @Transactional
     public AuthResponse login(LoginRequest request, HttpServletRequest httpRequest) {
         String username = request.getUsername();
-        String ip = resolveClientIp(httpRequest);
+        String ip = ClientIpUtil.resolve(httpRequest);
 
         // Chặn brute force: nếu username HOẶC IP đang bị Redis rate-limit → throw 429 sớm
         loginRateLimitService.checkBlocked(username);
@@ -222,7 +223,7 @@ public class AuthService {
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request, HttpServletRequest httpRequest) {
         String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
-        String ip = resolveClientIp(httpRequest);
+        String ip = ClientIpUtil.resolve(httpRequest);
 
         // Check rate limit TRƯỚC khi query DB → tránh attacker dùng để enum email
         forgotPasswordRateLimitService.checkBlockedByEmail(email);
@@ -253,7 +254,7 @@ public class AuthService {
      */
     @Transactional
     public void resetPassword(ResetPasswordRequest request, HttpServletRequest httpRequest) {
-        String ip = resolveClientIp(httpRequest);
+        String ip = ClientIpUtil.resolve(httpRequest);
         emailVerifyRateLimitService.checkBlockedByIp(ip);
         emailVerifyRateLimitService.recordAttemptByIp(ip);
 
@@ -329,17 +330,5 @@ public class AuthService {
         return builder.build();
     }
 
-    /**
-     * Lấy client IP, ưu tiên header X-Forwarded-For (nếu BE đứng sau proxy/load balancer).
-     * Format X-Forwarded-For: "client, proxy1, proxy2" → IP đầu là client.
-     */
-    private String resolveClientIp(HttpServletRequest request) {
-        if (request == null) return null;
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int commaIdx = xff.indexOf(',');
-            return (commaIdx > 0 ? xff.substring(0, commaIdx) : xff).trim();
-        }
-        return request.getRemoteAddr();
-    }
+    /* resolveClientIp đã tách sang com.cinex.common.util.ClientIpUtil */
 }
