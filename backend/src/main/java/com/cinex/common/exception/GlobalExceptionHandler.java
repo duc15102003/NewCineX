@@ -43,10 +43,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
+        // Chỉ join các message tiếng Việt — KHÔNG prefix field name (vì field name
+        // là Java camelCase, user thấy "newPassword: ..." sẽ confusing). DTO phải
+        // tự viết message rõ trong @NotBlank/@Pattern/@Size... để user hiểu được.
         String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
+                .map(fe -> fe.getDefaultMessage())
                 .reduce((a, b) -> a + "; " + b)
-                .orElse("Validation failed");
+                .orElse("Dữ liệu không hợp lệ");
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(ErrorCode.INVALID_REQUEST.name(), message));
     }

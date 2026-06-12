@@ -33,6 +33,10 @@ const EMPTY_FILTER: ShowtimeFilterDraft = {
 }
 
 const LIST_PAGE_SIZE = 10
+// Grouped view (Tất cả chi nhánh) — page size lớn hơn để mỗi chi nhánh hiển thị
+// đại diện được số suất chiếu thực tế, không bị "Hà Nội: 2 suất" do trùng lặp
+// page 1 chỉ chứa 2 item của Hà Nội. Khi chọn 1 chi nhánh cụ thể → quay về 10.
+const GROUPED_PAGE_SIZE = 100
 
 export default function AdminShowtimePage() {
   const [keyword, setKeyword] = useState('')
@@ -54,8 +58,12 @@ export default function AdminShowtimePage() {
   const scopedTheaterId = adminTheater?.id ?? (isBranchAdmin() ? userTheaterId : null)
   const theaterLocked = scopedTheaterId != null
 
+  // Grouped view = chưa chọn chi nhánh cụ thể → dùng size lớn hơn để overview
+  // toàn bộ các chi nhánh. Filter theo chi nhánh → quay về size mặc định 10.
+  const pageSize = adminTheater ? LIST_PAGE_SIZE : GROUPED_PAGE_SIZE
+
   const queryParams = useMemo<AdminShowtimeParams>(() => {
-    const p: AdminShowtimeParams = { page, size: LIST_PAGE_SIZE }
+    const p: AdminShowtimeParams = { page, size: pageSize }
     if (keyword) p.keyword = keyword
     if (adminTheater?.id) p.theaterId = adminTheater.id
     if (appliedFilter.movieId) p.movieId = Number(appliedFilter.movieId)
@@ -69,7 +77,7 @@ export default function AdminShowtimePage() {
     if (appliedFilter.maxPrice) p.maxPrice = Number(appliedFilter.maxPrice)
     if (appliedFilter.includeDeleted === 'true') p.includeDeleted = true
     return p
-  }, [keyword, page, appliedFilter, adminTheater])
+  }, [keyword, page, pageSize, appliedFilter, adminTheater])
 
   const activeFilterCount = useMemo(
     () => Object.values(appliedFilter).filter((v) => v !== '').length,
@@ -261,7 +269,7 @@ export default function AdminShowtimePage() {
               )
             })}
 
-            {!showGrouped && showtimes.map((s, index) => renderShowtimeRow(s, page * LIST_PAGE_SIZE + index))}
+            {!showGrouped && showtimes.map((s, index) => renderShowtimeRow(s, page * pageSize + index))}
           </TableBody>
         </Table>
       </div>

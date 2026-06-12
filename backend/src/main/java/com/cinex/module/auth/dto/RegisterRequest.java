@@ -3,7 +3,6 @@ package com.cinex.module.auth.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -24,10 +23,10 @@ public class RegisterRequest {
 
     @NotBlank(message = "Mật khẩu là bắt buộc")
     @Pattern(
+            // Pattern .{8,100} đã bao gồm length check → không cần @Size song song.
             regexp = "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d).{8,100}$",
             message = "Mật khẩu phải ≥ 8 ký tự, có chữ HOA, chữ thường và số"
     )
-    @Size(min = 8, max = 100)
     private String password;
 
     private String fullName;
