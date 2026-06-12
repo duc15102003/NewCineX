@@ -78,6 +78,22 @@ export function useShowtimeDetail(id: number | undefined) {
   })
 }
 
+/**
+ * Đếm số suất chiếu tổng theo từng chi nhánh — phục vụ grouped header
+ * ở "Tất cả chi nhánh" view. Trả Map { theaterId → count }.
+ */
+export function useShowtimeCountsByTheater(enabled: boolean) {
+  return useQuery({
+    queryKey: ['admin', 'showtimes', 'counts-by-theater'],
+    enabled,
+    staleTime: 60 * 1000, // 1 phút — tránh hit BE mỗi lần render
+    queryFn: async () => {
+      const res = await api.get<ApiResponse<Record<string, number>>>('/api/showtimes/counts-by-theater')
+      return res.data.data
+    },
+  })
+}
+
 export function useAdminShowtimes(params: AdminShowtimeParams = {}) {
   return useQuery({
     queryKey: ['admin', 'showtimes', params],

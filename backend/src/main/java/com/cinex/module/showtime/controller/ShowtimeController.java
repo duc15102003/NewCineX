@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/showtimes")
 @RequiredArgsConstructor
@@ -45,6 +47,13 @@ public class ShowtimeController {
     @Operation(summary = "Get showtime detail with available seats")
     public ApiResponse<ShowtimeResponse> getShowtime(@PathVariable Long id) {
         return ApiResponse.ok(showtimeService.getShowtime(id));
+    }
+
+    @GetMapping("/counts-by-theater")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Total showtime count grouped by theaterId — phục vụ grouped view")
+    public ApiResponse<Map<Long, Long>> countsByTheater() {
+        return ApiResponse.ok(showtimeService.countByTheater());
     }
 
     @PostMapping

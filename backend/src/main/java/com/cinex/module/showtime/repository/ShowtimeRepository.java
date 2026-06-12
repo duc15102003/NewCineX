@@ -17,6 +17,18 @@ import java.util.Optional;
 public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSpecificationExecutor<Showtime> {
 
     /**
+     * Group by theater và đếm số suất chiếu chưa archived — dùng cho grouped view
+     * ở admin (Tất cả chi nhánh). Trả {@code Object[]{theaterId, count}} cho mỗi chi nhánh.
+     *
+     * <p>Trước đó FE chỉ count items trên trang hiện tại (sau pagination) → mismatch
+     * khi user filter theo theater (page 1 có 24 item của Hà Nội, thực ra Hà Nội có 446).
+     */
+    @Query("SELECT s.room.theater.id, COUNT(s) FROM Showtime s " +
+            "WHERE s.storageState IS NULL OR s.storageState <> :archived " +
+            "GROUP BY s.room.theater.id")
+    List<Object[]> countByTheater(@Param("archived") StorageState archived);
+
+    /**
      * Kiểm tra phòng có suất chiếu active (SCHEDULED/ONGOING) chưa archived hay không.
      * Dùng để chặn xóa Room / xóa Movie khi vẫn còn suất chiếu phụ thuộc.
      */

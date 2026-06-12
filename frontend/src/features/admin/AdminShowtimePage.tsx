@@ -22,6 +22,7 @@ import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
 import { groupByTheater } from '@/utils/groupByTheater'
 import type { AdminShowtime, AdminShowtimeParams } from '@/hooks/useAdminShowtimes'
+import { useShowtimeCountsByTheater } from '@/hooks/useAdminShowtimes'
 import type { AdminMovie } from '@/hooks/useAdminMovies'
 import { OPTIONS_DROPDOWN_PAGE_SIZE } from '@/utils/constants'
 
@@ -33,10 +34,10 @@ const EMPTY_FILTER: ShowtimeFilterDraft = {
 }
 
 const LIST_PAGE_SIZE = 10
-// Grouped view (Tất cả chi nhánh) — page size lớn hơn để mỗi chi nhánh hiển thị
-// đại diện được số suất chiếu thực tế, không bị "Hà Nội: 2 suất" do trùng lặp
-// page 1 chỉ chứa 2 item của Hà Nội. Khi chọn 1 chi nhánh cụ thể → quay về 10.
-const GROUPED_PAGE_SIZE = 100
+// Grouped view: lấy nhiều item hơn để mỗi chi nhánh hiển thị 1 vài suất sample.
+// Count THẬT của mỗi chi nhánh đến từ endpoint /counts-by-theater (xem
+// useShowtimeCountsByTheater), header sẽ show "X / Y suất chiếu".
+const GROUPED_PAGE_SIZE = 50
 
 export default function AdminShowtimePage() {
   const [keyword, setKeyword] = useState('')
@@ -87,6 +88,10 @@ export default function AdminShowtimePage() {
   const { data: pageData } = useAdminShowtimes(queryParams)
   const showtimes = pageData?.content ?? []
   const totalPages = pageData?.totalPages ?? 0
+
+  // Fetch count THẬT theo theater chỉ khi đang ở "Tất cả chi nhánh" mode.
+  // Count này cố định cho cả phiên (staleTime 1 phút) nên không gọi mỗi click filter.
+  const { data: theaterCounts = {} } = useShowtimeCountsByTheater(!adminTheater)
 
   // Movies + rooms cho filter dropdown (cần riêng — form dialog có instance riêng nhưng RQ dedupe)
   const { data: moviesData } = useAdminMovies({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
@@ -260,6 +265,7 @@ export default function AdminShowtimePage() {
                     onToggle={() => toggleGroup(group.theaterId)}
                     theaterName={group.theaterName}
                     theaterCity={group.theaterCity}
+                    totalCount={theaterCounts[String(group.theaterId)]}
                     itemCount={group.items.length}
                     itemLabel="suất chiếu"
                     colSpan={6}
