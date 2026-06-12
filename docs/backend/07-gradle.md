@@ -245,10 +245,191 @@ testImplementation 'org.springframework.boot:spring-boot-starter-test'
 | Scope | Compile | Runtime (JAR) | Test | Ví dụ |
 |---|---|---|---|---|
 | `implementation` | Co | Co | Co | Spring, JWT |
+| `api` | Co (+ leak ra consumer) | Co | Co | Public API library |
 | `runtimeOnly` | Khong | Co | Co | JDBC driver |
 | `compileOnly` | Co | Khong | Khong | Lombok |
 | `annotationProcessor` | Chay luc compile | Khong | Khong | Lombok, MapStruct |
 | `testImplementation` | Khong | Khong | Co | JUnit, Mockito |
+
+---
+
+## 4.5. `api` scope — Multi-module Project (Senior must-know)
+
+### Tại sao CineX hiện chưa có `api`
+
+CineX là **single-module Spring Boot app** (1 file `build.gradle`). Khi project chỉ 1 module, `implementation` đủ dùng. Không cần `api`.
+
+`api` scope chỉ relevant khi:
+- Project **multi-module** (vd `core/`, `web/`, `cli/` chia ra), hoặc
+- Bạn **build library** để team khác/public consume (vd publish lên Maven Central).
+
+→ Đây là kiến thức Senior phải biết (phỏng vấn luôn hỏi), nhưng CineX chưa apply.
+
+### Setup — Cần plugin `java-library`
+
+Plugin mặc định Spring Boot dùng (`java`) **không có** scope `api`. Phải đổi sang `java-library`:
+
+```groovy
+// build.gradle (module library)
+plugins {
+    id 'java-library'   // ← không phải 'java'
+}
+
+dependencies {
+    api 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
+    implementation 'org.slf4j:slf4j-api:2.0.13'
+}
+```
+
+### `implementation` vs `api` — Khác biệt cốt lõi
+
+Cùng giúp compile + runtime. Khác ở chỗ **expose ra module/project khác như thế nào**:
+
+| Scope | Module khác consume bạn có thấy dependency này không? |
+|---|---|
+| `implementation` | ❌ Không. Bị giấu (encapsulated). |
+| `api` | ✅ Có. Leak ra consumer (transitive). |
+
+### Ví dụ cụ thể
+
+Giả sử có 2 module:
+
+```
+project/
+├── core/         ← Library module
+│   └── build.gradle
+└── web/          ← App consume core
+    └── build.gradle
+```
+
+**Case 1: `core` dùng `implementation`**
+
+```groovy
+// core/build.gradle
+plugins { id 'java-library' }
+dependencies {
+    implementation 'com.google.guava:guava:33.0.0-jre'
+}
+```
+
+```java
+// core/src/main/java/com/cinex/core/MyService.java
+import com.google.common.collect.ImmutableList;  // ← OK trong core
+
+public class MyService {
+    public ImmutableList<String> getItems() { ... }
+}
+```
+
+```groovy
+// web/build.gradle
+dependencies {
+    implementation project(':core')
+}
+```
+
+```java
+// web/src/main/java/com/cinex/web/Controller.java
+import com.cinex.core.MyService;
+import com.google.common.collect.ImmutableList;  // ← COMPILE ERROR!
+                                                   // Guava bị "giấu" do `implementation` ở core
+public class Controller {
+    private MyService service;
+    public void handle() {
+        ImmutableList<String> items = service.getItems();  // ← FAIL
+    }
+}
+```
+
+→ `web` không thấy `guava` mặc dù `core` đang return type `ImmutableList<String>`. **Compile fail**.
+
+**Case 2: `core` đổi sang `api`**
+
+```groovy
+// core/build.gradle
+plugins { id 'java-library' }
+dependencies {
+    api 'com.google.guava:guava:33.0.0-jre'   // ← đổi từ implementation
+}
+```
+
+`web` không thay đổi gì. Compile **PASS**. `web` tự động "thấy" guava qua transitive dependency.
+
+### Quy tắc vàng: khi nào dùng `api`?
+
+**Dùng `api`** khi class của library xuất hiện trong **public signature** (return type / parameter / public field / extends / implements) của method/class bạn expose.
+
+```java
+// public method return ImmutableList<String> (từ guava)
+public ImmutableList<String> getItems() { ... }
+//     ^^^^^^^^^^^^^ ← từ guava, leak ra public API
+```
+
+→ Consumer của `core` PHẢI biết `ImmutableList` để type-check. → Phải `api`.
+
+**Dùng `implementation`** khi class chỉ dùng **internal** trong method body.
+
+```java
+public List<String> getItems() {  // ← return List (java standard)
+    ImmutableList<String> internal = ImmutableList.of("a", "b");  // ← guava internal
+    return new ArrayList<>(internal);
+}
+```
+
+→ Consumer không cần biết guava. → `implementation` đủ.
+
+### Tại sao quan trọng — Build time + ABI
+
+#### Lý do 1: Build performance
+
+Khi `core` dùng `implementation guava`:
+- `core` compile → chỉ `core` recompile khi `guava` đổi.
+- `web` không touch (vì không thấy `guava`).
+- **Faster incremental build**.
+
+Khi `core` dùng `api guava`:
+- `core` đổi → `web` cũng phải recompile (vì transitive).
+- Slower.
+
+→ Default `implementation`. Chỉ `api` khi BẮT BUỘC.
+
+#### Lý do 2: ABI stability
+
+Library tốt minimize public API. Dùng `implementation` = giấu càng nhiều internal càng tốt. Library có thể đổi `guava` → `caffeine` mà consumer không phải sửa code.
+
+`api` = consumer phụ thuộc → khó refactor.
+
+### CineX có nên migrate `java-library` + `api`?
+
+**Hiện tại: KHÔNG.**
+
+CineX single-module Spring Boot app. App KHÔNG được consume bởi project khác. → `implementation` đủ.
+
+**Trong tương lai có thể có:**
+
+- Tách `cinex-domain` module chứa entity/DTO chia sẻ giữa app + CLI tool / analytics → cần `java-library` + `api` cho `cinex-domain` để app + CLI consume entity types.
+- Publish SDK client cho 3rd party → cần `java-library`.
+
+→ Khi đó implement theo pattern Section này.
+
+### Câu phỏng vấn mẫu
+
+> **Q**: `implementation` vs `api`?
+
+**A**:
+- Cả 2 cho compile + runtime cho module hiện tại.
+- Khác: `api` **leak transitive dependency ra consumer**, `implementation` thì không.
+- Default `implementation` cho encapsulation + faster build.
+- Dùng `api` chỉ khi dependency's type xuất hiện trong **public signature** (return/param/field) → consumer cần thấy để type-check.
+- Cần plugin `java-library` (default `java` không có scope `api`).
+
+> **Q**: Tại sao default nên `implementation`?
+
+**A**: Encapsulation + build speed. Library refactor internal dependency mà consumer không cần biết. Recompile chỉ module thật sự đổi, không cascade.
+
+> **Q**: Java standard `List` return type, dùng implementation guava OK?
+
+**A**: OK. `List` là interface JDK, consumer không cần biết về guava. Internal dùng `Lists.newArrayList()` của guava, return `List` standard → `implementation guava` đủ.
 
 ---
 
