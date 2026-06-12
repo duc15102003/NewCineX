@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
+import TableSkeleton from '@/components/common/TableSkeleton'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
 
 import ShowtimeFormDialog from './components/ShowtimeFormDialog'
@@ -82,9 +83,10 @@ export default function AdminShowtimePage() {
   // "Tất cả chi nhánh" → thêm cột Chi nhánh trong row để user phân biệt suất
   // thuộc rạp nào. Filter theo chi nhánh cụ thể → ẩn cột vì trùng lặp.
   const showAllTheaters = !adminTheater
-  const { data: pageData } = useAdminShowtimes(queryParams)
+  const { data: pageData, isLoading } = useAdminShowtimes(queryParams)
   const showtimes = pageData?.content ?? []
   const totalPages = pageData?.totalPages ?? 0
+  const tableCols = showAllTheaters ? 8 : 7
 
   // Movies + rooms cho filter dropdown (cần riêng — form dialog có instance riêng nhưng RQ dedupe)
   const { data: moviesData } = useAdminMovies({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
@@ -232,15 +234,18 @@ export default function AdminShowtimePage() {
               <TableHead className="text-gray-400">Lưu trữ</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {showtimes.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={showAllTheaters ? 8 : 7} className="text-center text-gray-500 py-10">Chưa có suất chiếu</TableCell>
-              </TableRow>
-            )}
-
-            {showtimes.map((s, index) => renderShowtimeRow(s, page * LIST_PAGE_SIZE + index))}
-          </TableBody>
+          {isLoading && !pageData ? (
+            <TableSkeleton rows={LIST_PAGE_SIZE} columns={tableCols} />
+          ) : (
+            <TableBody>
+              {showtimes.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={tableCols} className="text-center text-gray-500 py-10">Chưa có suất chiếu</TableCell>
+                </TableRow>
+              )}
+              {showtimes.map((s, index) => renderShowtimeRow(s, page * LIST_PAGE_SIZE + index))}
+            </TableBody>
+          )}
         </Table>
       </div>
 

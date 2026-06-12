@@ -2,8 +2,8 @@ import { useState, useMemo } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import Loading from '@/components/common/Loading'
 import EmptyState from '@/components/common/EmptyState'
+import TableSkeleton from '@/components/common/TableSkeleton'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
 import { Building2, DoorOpen, X } from 'lucide-react'
 import { label, BOOKING_STATUS_LABELS, fmtDateTime, fmtVnd } from '@/utils/labels'
@@ -72,7 +72,8 @@ export default function AdminBookingPage() {
     <BookingRow key={b.id} booking={b} index={idx} showTheater={showAllTheaters} onClick={setViewBooking} />
   )
 
-  if (isLoading && !data) return <Loading />
+  const tableCols = showAllTheaters ? 10 : 9
+  const showSkeleton = isLoading && !data
 
   return (
     <div className="space-y-4">
@@ -96,7 +97,7 @@ export default function AdminBookingPage() {
         </div>
       </div>
 
-      {bookings.length === 0 ? (
+      {!showSkeleton && bookings.length === 0 ? (
         <EmptyState message="Không có booking nào" />
       ) : (
         <div className="rounded-2xl border border-[#3f382d] overflow-clip">
@@ -116,9 +117,13 @@ export default function AdminBookingPage() {
                 <TableHead className="text-gray-400">Ngày đặt</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {bookings.map((b, index) => renderBookingRow(b, page * PAGE_SIZE + index))}
-            </TableBody>
+            {showSkeleton ? (
+              <TableSkeleton rows={PAGE_SIZE} columns={tableCols} />
+            ) : (
+              <TableBody>
+                {bookings.map((b, index) => renderBookingRow(b, page * PAGE_SIZE + index))}
+              </TableBody>
+            )}
           </Table>
         </div>
       )}

@@ -5,8 +5,8 @@ import { Building2, X } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import Loading from '@/components/common/Loading'
 import EmptyState from '@/components/common/EmptyState'
+import TableSkeleton from '@/components/common/TableSkeleton'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
 
 import PaymentFilterDrawer from './components/PaymentFilterDrawer'
@@ -110,7 +110,8 @@ export default function AdminPaymentPage() {
     setPage(0)
   }
 
-  if (isLoading && !data) return <Loading />
+  const tableCols = showAllTheaters ? 8 : 7
+  const showSkeleton = isLoading && !data
 
   return (
     <div className="space-y-4">
@@ -136,7 +137,7 @@ export default function AdminPaymentPage() {
       </div>
 
       {/* Table */}
-      {payments.length === 0 ? (
+      {!showSkeleton && payments.length === 0 ? (
         <EmptyState message="Không có giao dịch nào" />
       ) : (
         <div className="rounded-2xl border border-[#3f382d] overflow-clip">
@@ -154,9 +155,13 @@ export default function AdminPaymentPage() {
                 <TableHead className="text-gray-400">Thanh toán lúc</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {payments.map((p, index) => renderPaymentRow(p, page * PAGE_SIZE + index))}
-            </TableBody>
+            {showSkeleton ? (
+              <TableSkeleton rows={PAGE_SIZE} columns={tableCols} />
+            ) : (
+              <TableBody>
+                {payments.map((p, index) => renderPaymentRow(p, page * PAGE_SIZE + index))}
+              </TableBody>
+            )}
           </Table>
         </div>
       )}
