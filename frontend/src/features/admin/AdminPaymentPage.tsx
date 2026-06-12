@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { X } from 'lucide-react'
+import { Building2, X } from 'lucide-react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input'
 import Loading from '@/components/common/Loading'
 import EmptyState from '@/components/common/EmptyState'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
-import TheaterGroupHeaderRow from '@/components/admin/TheaterGroupHeaderRow'
 
 import PaymentFilterDrawer from './components/PaymentFilterDrawer'
 import PaymentDetailDialog from './components/PaymentDetailDialog'
@@ -21,7 +20,6 @@ import {
   type AdminPaymentFilter,
 } from '@/hooks/useAdminPayments'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
-import { groupByTheater } from '@/utils/groupByTheater'
 
 const PAGE_SIZE = 20
 
@@ -49,20 +47,9 @@ export default function AdminPaymentPage() {
   const payments = data?.content ?? []
   const totalPages = data?.totalPages ?? 0
 
-  // Grouped view khi SUPER_ADMIN xem 'Tất cả chi nhánh'
-  const showGrouped = !adminTheater
-  const groupedPayments = useMemo(
-    () => (showGrouped ? groupByTheater(payments) : null),
-    [payments, showGrouped],
-  )
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
-  const toggleGroup = (theaterId: number) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      next.has(theaterId) ? next.delete(theaterId) : next.add(theaterId)
-      return next
-    })
-  }
+  // "Tất cả chi nhánh" → thêm cột Chi nhánh trong row; ẩn nếu đã filter
+  // 1 chi nhánh (redundant). Bỏ grouped view — xem note ở AdminShowtimePage.
+  const showAllTheaters = !adminTheater
 
   const renderPaymentRow = (p: AdminPayment, idx: number) => (
     <TableRow key={p.id} className="border-[#3f382d] hover:bg-white/5 group">
@@ -79,6 +66,18 @@ export default function AdminPaymentPage() {
           </Link>
         )}
       </TableCell>
+      {showAllTheaters && (
+        <TableCell className="whitespace-nowrap">
+          {p.theaterName ? (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-200">
+              <Building2 size={12} className="text-[#ffc107]" />
+              {p.theaterName}
+            </span>
+          ) : (
+            <span className="text-xs text-gray-500">—</span>
+          )}
+        </TableCell>
+      )}
       <TableCell className="whitespace-nowrap">
         <span className={`text-xs px-2 py-1 rounded border ${PAYMENT_METHOD_COLORS[p.method] ?? ''}`}>
           {label(PAYMENT_METHOD_LABELS, p.method)}
@@ -147,6 +146,7 @@ export default function AdminPaymentPage() {
                 <TableHead className="text-gray-400 w-12">#</TableHead>
                 <TableHead className="text-gray-400">Mã giao dịch</TableHead>
                 <TableHead className="text-gray-400">Mã booking</TableHead>
+                {showAllTheaters && <TableHead className="text-gray-400">Chi nhánh</TableHead>}
                 <TableHead className="text-gray-400">Phương thức</TableHead>
                 <TableHead className="text-gray-400">Số tiền</TableHead>
                 <TableHead className="text-gray-400">Trạng thái</TableHead>
@@ -155,24 +155,7 @@ export default function AdminPaymentPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {showGrouped && groupedPayments && groupedPayments.map((group) => {
-                const isCollapsed = collapsedGroups.has(group.theaterId)
-                return (
-                  <React.Fragment key={`group-${group.theaterId}`}>
-                    <TheaterGroupHeaderRow
-                      collapsed={isCollapsed}
-                      onToggle={() => toggleGroup(group.theaterId)}
-                      theaterName={group.theaterName}
-                      theaterCity={group.theaterCity}
-                      itemCount={group.items.length}
-                      itemLabel="giao dịch"
-                      colSpan={8}
-                    />
-                    {!isCollapsed && group.items.map((p, idx) => renderPaymentRow(p, idx))}
-                  </React.Fragment>
-                )
-              })}
-              {!showGrouped && payments.map((p, index) => renderPaymentRow(p, page * PAGE_SIZE + index))}
+              {payments.map((p, index) => renderPaymentRow(p, page * PAGE_SIZE + index))}
             </TableBody>
           </Table>
         </div>

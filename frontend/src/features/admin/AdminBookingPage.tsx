@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Loading from '@/components/common/Loading'
 import EmptyState from '@/components/common/EmptyState'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
-import { DoorOpen, X } from 'lucide-react'
+import { Building2, DoorOpen, X } from 'lucide-react'
 import { label, BOOKING_STATUS_LABELS, fmtDateTime, fmtVnd } from '@/utils/labels'
 import { BOOKING_STATUS_COLORS as STATUS_COLORS } from '@/utils/colors'
 import { useAdminBookings, type AdminBooking, type AdminBookingFilter } from '@/hooks/useAdminBookings'
@@ -13,8 +13,6 @@ import { OPTIONS_DROPDOWN_PAGE_SIZE } from '@/utils/constants'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAdminRooms } from '@/hooks/useAdminRooms'
 import { useMovies } from '@/hooks/useMovies'
-import { groupByTheater } from '@/utils/groupByTheater'
-import TheaterGroupHeaderRow from '@/components/admin/TheaterGroupHeaderRow'
 import BookingFilterDrawer from './components/BookingFilterDrawer'
 import BookingDetailDialog from './components/BookingDetailDialog'
 
@@ -49,20 +47,11 @@ export default function AdminBookingPage() {
   const bookings = data?.content ?? []
   const totalPages = data?.totalPages ?? 0
 
-  // Grouped view: SUPER_ADMIN + chưa chọn chi nhánh → gom theo theater
-  const showGrouped = !adminTheater
-  const groupedBookings = useMemo(
-    () => (showGrouped ? groupByTheater(bookings) : null),
-    [bookings, showGrouped],
-  )
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
-  const toggleGroup = (theaterId: number) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      next.has(theaterId) ? next.delete(theaterId) : next.add(theaterId)
-      return next
-    })
-  }
+  // "Tất cả chi nhánh" → thêm cột Chi nhánh trong row để phân biệt; ẩn nếu
+  // đã filter theo 1 chi nhánh (redundant). Bỏ grouped view vì paginate-
+  // then-group gây uneven distribution (9 vs 11/page) — xem note ở
+  // AdminShowtimePage refactor.
+  const showAllTheaters = !adminTheater
 
   // Đếm số filter đang áp dụng (không tính keyword/page/size)
   const activeCount = useMemo(() => {
@@ -80,7 +69,7 @@ export default function AdminBookingPage() {
   }
 
   const renderBookingRow = (b: AdminBooking, idx: number) => (
-    <BookingRow key={b.id} booking={b} index={idx} onClick={setViewBooking} />
+    <BookingRow key={b.id} booking={b} index={idx} showTheater={showAllTheaters} onClick={setViewBooking} />
   )
 
   if (isLoading && !data) return <Loading />
@@ -118,6 +107,7 @@ export default function AdminBookingPage() {
                 <TableHead className="text-gray-400">Mã booking</TableHead>
                 <TableHead className="text-gray-400">Người đặt</TableHead>
                 <TableHead className="text-gray-400">Phim</TableHead>
+                {showAllTheaters && <TableHead className="text-gray-400">Chi nhánh</TableHead>}
                 <TableHead className="text-gray-400">Suất chiếu</TableHead>
                 <TableHead className="text-gray-400">Phòng</TableHead>
                 <TableHead className="text-gray-400">Số ghế</TableHead>
@@ -127,24 +117,7 @@ export default function AdminBookingPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {showGrouped && groupedBookings && groupedBookings.map((group) => {
-                const isCollapsed = collapsedGroups.has(group.theaterId)
-                return (
-                  <React.Fragment key={`group-${group.theaterId}`}>
-                    <TheaterGroupHeaderRow
-                      collapsed={isCollapsed}
-                      onToggle={() => toggleGroup(group.theaterId)}
-                      theaterName={group.theaterName}
-                      theaterCity={group.theaterCity}
-                      itemCount={group.items.length}
-                      itemLabel="vé"
-                      colSpan={10}
-                    />
-                    {!isCollapsed && group.items.map((b, idx) => renderBookingRow(b, idx))}
-                  </React.Fragment>
-                )
-              })}
-              {!showGrouped && bookings.map((b, index) => renderBookingRow(b, page * PAGE_SIZE + index))}
+              {bookings.map((b, index) => renderBookingRow(b, page * PAGE_SIZE + index))}
             </TableBody>
           </Table>
         </div>
@@ -183,10 +156,12 @@ export default function AdminBookingPage() {
 interface BookingRowProps {
   booking: AdminBooking
   index: number
+  /** Render cột Chi nhánh khi đang xem "Tất cả chi nhánh". */
+  showTheater?: boolean
   onClick: (b: AdminBooking) => void
 }
 
-function BookingRow({ booking: b, index, onClick }: BookingRowProps) {
+function BookingRow({ booking: b, index, showTheater, onClick }: BookingRowProps) {
   return (
     <TableRow className="border-[#3f382d] hover:bg-white/5 group">
       <TableCell className="text-gray-500 text-sm whitespace-nowrap">{index + 1}</TableCell>
@@ -195,6 +170,19 @@ function BookingRow({ booking: b, index, onClick }: BookingRowProps) {
       </TableCell>
       <TableCell className="text-gray-300 whitespace-nowrap">{b.username}</TableCell>
       <TableCell className="text-gray-300 whitespace-nowrap">{b.movieTitle}</TableCell>
+      {showTheater && (
+        <TableCell className="whitespace-nowrap">
+          {b.theaterName ? (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-200">
+              <Building2 size={12} className="text-[#ffc107]" />
+              <span>{b.theaterName}</span>
+              {b.theaterCity && <span className="text-gray-500">— {b.theaterCity}</span>}
+            </span>
+          ) : (
+            <span className="text-xs text-gray-500">—</span>
+          )}
+        </TableCell>
+      )}
       <TableCell className="text-gray-300 whitespace-nowrap">{fmtDateTime(b.startTime)}</TableCell>
       <TableCell className="whitespace-nowrap">
         {b.roomName && (
