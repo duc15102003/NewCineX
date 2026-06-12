@@ -42,7 +42,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -67,31 +66,6 @@ public class ShowtimeService {
      * <b>RBAC scope:</b> Branch ADMIN bị override filter.theaterId thành chi nhánh của mình.
      * USER + SUPER_ADMIN giữ filter nguyên (USER vẫn xem showtime public toàn hệ thống).
      */
-    /**
-     * Top-N suất chiếu mới nhất MỖI chi nhánh — phục vụ grouped overview ở admin
-     * (Tất cả chi nhánh). Chuẩn "recent activity by group" pattern: mỗi chi nhánh
-     * luôn show đúng N items đều nhau, không phụ thuộc pagination.
-     */
-    @Transactional(readOnly = true)
-    public List<ShowtimeListResponse> getRecentByTheater(int limitPerTheater) {
-        return showtimeRepository.findTopNPerTheater(limitPerTheater).stream()
-                .map(this::toListResponseWithPricing)
-                .toList();
-    }
-
-    /**
-     * Đếm số suất chiếu chưa archived theo từng chi nhánh — phục vụ grouped view
-     * "Tất cả chi nhánh" ở admin. Trả Map<theaterId, count>.
-     */
-    @Transactional(readOnly = true)
-    public Map<Long, Long> countByTheater() {
-        return showtimeRepository.countByTheater(StorageState.ARCHIVED).stream()
-                .collect(Collectors.toMap(
-                        row -> ((Number) row[0]).longValue(),
-                        row -> ((Number) row[1]).longValue()
-                ));
-    }
-
     @Transactional(readOnly = true)
     public Page<ShowtimeListResponse> listShowtimes(ShowtimeFilter filter, Pageable pageable) {
         Long scopedTheaterId = securityService.getCurrentUserTheaterId();

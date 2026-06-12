@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -8,7 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
-import TheaterGroupHeaderRow from '@/components/admin/TheaterGroupHeaderRow'
 
 import ShowtimeFormDialog from './components/ShowtimeFormDialog'
 import ShowtimeFilterDrawer, { type ShowtimeFilterDraft } from './components/ShowtimeFilterDrawer'
@@ -20,9 +19,7 @@ import {
 } from '@/hooks/useAdmin'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
-import { groupByTheater } from '@/utils/groupByTheater'
 import type { AdminShowtime, AdminShowtimeParams } from '@/hooks/useAdminShowtimes'
-import { useShowtimeCountsByTheater, useShowtimeRecentByTheater } from '@/hooks/useAdminShowtimes'
 import type { AdminMovie } from '@/hooks/useAdminMovies'
 import { OPTIONS_DROPDOWN_PAGE_SIZE } from '@/utils/constants'
 
@@ -34,10 +31,6 @@ const EMPTY_FILTER: ShowtimeFilterDraft = {
 }
 
 const LIST_PAGE_SIZE = 10
-// Grouped view: lấy nhiều item hơn để mỗi chi nhánh hiển thị 1 vài suất sample.
-// Count THẬT của mỗi chi nhánh đến từ endpoint /counts-by-theater (xem
-// useShowtimeCountsByTheater), header sẽ show "X / Y suất chiếu".
-const GROUPED_PAGE_SIZE = 50
 
 export default function AdminShowtimePage() {
   const [keyword, setKeyword] = useState('')
@@ -59,12 +52,8 @@ export default function AdminShowtimePage() {
   const scopedTheaterId = adminTheater?.id ?? (isBranchAdmin() ? userTheaterId : null)
   const theaterLocked = scopedTheaterId != null
 
-  // Grouped view = chưa chọn chi nhánh cụ thể → dùng size lớn hơn để overview
-  // toàn bộ các chi nhánh. Filter theo chi nhánh → quay về size mặc định 10.
-  const pageSize = adminTheater ? LIST_PAGE_SIZE : GROUPED_PAGE_SIZE
-
   const queryParams = useMemo<AdminShowtimeParams>(() => {
-    const p: AdminShowtimeParams = { page, size: pageSize }
+    const p: AdminShowtimeParams = { page, size: LIST_PAGE_SIZE }
     if (keyword) p.keyword = keyword
     if (adminTheater?.id) p.theaterId = adminTheater.id
     if (appliedFilter.movieId) p.movieId = Number(appliedFilter.movieId)
@@ -78,25 +67,19 @@ export default function AdminShowtimePage() {
     if (appliedFilter.maxPrice) p.maxPrice = Number(appliedFilter.maxPrice)
     if (appliedFilter.includeDeleted === 'true') p.includeDeleted = true
     return p
-  }, [keyword, page, pageSize, appliedFilter, adminTheater])
+  }, [keyword, page, appliedFilter, adminTheater])
 
   const activeFilterCount = useMemo(
     () => Object.values(appliedFilter).filter((v) => v !== '').length,
     [appliedFilter],
   )
 
-  // Grouped mode (Tất cả chi nhánh): KHÔNG paginate flat list. Lấy top-N MỖI
-  // chi nhánh từ endpoint riêng → mỗi chi nhánh show đều nhau (5 suất). Chuẩn
-  // industry "recent activity by group" — tránh distribution lệch 9 vs 11 do
-  // paginate-then-group.
-  const isGroupedMode = !adminTheater
+  // "Tất cả chi nhánh" → thêm cột Chi nhánh trong row để user phân biệt suất
+  // thuộc rạp nào. Filter theo chi nhánh cụ thể → ẩn cột vì trùng lặp.
+  const showAllTheaters = !adminTheater
   const { data: pageData } = useAdminShowtimes(queryParams)
-  const { data: recentByTheater = [] } = useShowtimeRecentByTheater(isGroupedMode, 5)
-  const showtimes = isGroupedMode ? recentByTheater : (pageData?.content ?? [])
-  const totalPages = isGroupedMode ? 0 : (pageData?.totalPages ?? 0)
-
-  // Count THẬT theo theater — chỉ fetch ở grouped mode.
-  const { data: theaterCounts = {} } = useShowtimeCountsByTheater(isGroupedMode)
+  const showtimes = pageData?.content ?? []
+  const totalPages = pageData?.totalPages ?? 0
 
   // Movies + rooms cho filter dropdown (cần riêng — form dialog có instance riêng nhưng RQ dedupe)
   const { data: moviesData } = useAdminMovies({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
@@ -108,21 +91,6 @@ export default function AdminShowtimePage() {
   )
   const { data: roomsData } = useAdminRooms({ size: OPTIONS_DROPDOWN_PAGE_SIZE })
   const rooms = roomsData?.content ?? []
-
-  // Grouped view khi SUPER_ADMIN xem "Tất cả chi nhánh" — alias isGroupedMode
-  const showGrouped = isGroupedMode
-  const groupedShowtimes = useMemo(
-    () => (showGrouped ? groupByTheater(showtimes) : null),
-    [showtimes, showGrouped],
-  )
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
-  const toggleGroup = (theaterId: number) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      next.has(theaterId) ? next.delete(theaterId) : next.add(theaterId)
-      return next
-    })
-  }
 
   const bulkDeleteMut = useBulkDeleteShowtimes()
   const bulkRestoreMut = useBulkRestoreShowtimes()
@@ -187,6 +155,7 @@ export default function AdminShowtimePage() {
       showtime={s}
       index={idx}
       selected={selectedIds.has(s.id)}
+      showTheater={showAllTheaters}
       onToggleSelect={toggleSelect}
       onEdit={openEdit}
     />
@@ -237,13 +206,6 @@ export default function AdminShowtimePage() {
         rooms={rooms}
       />
 
-      {/* Hint banner cho grouped mode — giải thích vì sao mỗi chi nhánh chỉ 5 suất */}
-      {isGroupedMode && (
-        <div className="text-xs text-gray-400 px-4 py-2.5 rounded-xl border border-[#3f382d] bg-[#201b11]">
-          Đang xem tổng quan: hiển thị <strong className="text-amber-50">5 suất chiếu mới nhất</strong> mỗi chi nhánh. Chọn chi nhánh cụ thể ở dropdown trên cùng để xem đầy đủ + phân trang.
-        </div>
-      )}
-
       {/* Table */}
       <div className="rounded-2xl border border-[#3f382d] overflow-hidden">
         <Table>
@@ -255,6 +217,7 @@ export default function AdminShowtimePage() {
               </TableHead>
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Phim / Giờ chiếu</TableHead>
+              {showAllTheaters && <TableHead className="text-gray-400">Chi nhánh</TableHead>}
               <TableHead className="text-gray-400">Phòng</TableHead>
               <TableHead className="text-gray-400">Giá</TableHead>
               <TableHead className="text-gray-400">Trạng thái</TableHead>
@@ -264,30 +227,11 @@ export default function AdminShowtimePage() {
           <TableBody>
             {showtimes.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-gray-500 py-10">Chưa có suất chiếu</TableCell>
+                <TableCell colSpan={showAllTheaters ? 8 : 7} className="text-center text-gray-500 py-10">Chưa có suất chiếu</TableCell>
               </TableRow>
             )}
 
-            {showGrouped && groupedShowtimes && groupedShowtimes.map((group) => {
-              const isCollapsed = collapsedGroups.has(group.theaterId)
-              return (
-                <React.Fragment key={`group-${group.theaterId}`}>
-                  <TheaterGroupHeaderRow
-                    collapsed={isCollapsed}
-                    onToggle={() => toggleGroup(group.theaterId)}
-                    theaterName={group.theaterName}
-                    theaterCity={group.theaterCity}
-                    totalCount={theaterCounts[String(group.theaterId)]}
-                    itemCount={group.items.length}
-                    itemLabel="suất chiếu"
-                    colSpan={7}
-                  />
-                  {!isCollapsed && group.items.map((s, index) => renderShowtimeRow(s, index))}
-                </React.Fragment>
-              )
-            })}
-
-            {!showGrouped && showtimes.map((s, index) => renderShowtimeRow(s, page * pageSize + index))}
+            {showtimes.map((s, index) => renderShowtimeRow(s, page * LIST_PAGE_SIZE + index))}
           </TableBody>
         </Table>
       </div>

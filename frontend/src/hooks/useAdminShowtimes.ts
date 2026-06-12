@@ -10,6 +10,10 @@ export interface AdminShowtime {
   moviePosterUrl: string | null
   roomName: string
   roomType: string
+  /** Chi nhánh — hiển thị cột riêng ở "Tất cả chi nhánh" mode. BE đã expose từ ShowtimeListResponse. */
+  theaterId: number | null
+  theaterName: string | null
+  theaterCity: string | null
   startTime: string
   endTime: string
   basePrice: number
@@ -73,42 +77,6 @@ export function useShowtimeDetail(id: number | undefined) {
     enabled: !!id,
     queryFn: async () => {
       const res = await api.get<ApiResponse<AdminShowtimeDetail>>(`/api/showtimes/${id}`)
-      return res.data.data
-    },
-  })
-}
-
-/**
- * Top-N suất chiếu mới nhất MỖI chi nhánh — phục vụ grouped overview ở admin.
- * Mỗi chi nhánh luôn show đúng N items đều nhau, không phụ thuộc pagination.
- *
- * Chuẩn industry "recent activity by group" pattern (Power BI / Salesforce admin).
- */
-export function useShowtimeRecentByTheater(enabled: boolean, limit = 5) {
-  return useQuery({
-    queryKey: ['admin', 'showtimes', 'recent-by-theater', limit],
-    enabled,
-    staleTime: 30 * 1000,
-    queryFn: async () => {
-      const res = await api.get<ApiResponse<AdminShowtime[]>>('/api/showtimes/recent-by-theater', {
-        params: { limit },
-      })
-      return res.data.data
-    },
-  })
-}
-
-/**
- * Đếm số suất chiếu tổng theo từng chi nhánh — phục vụ grouped header
- * ở "Tất cả chi nhánh" view. Trả Map { theaterId → count }.
- */
-export function useShowtimeCountsByTheater(enabled: boolean) {
-  return useQuery({
-    queryKey: ['admin', 'showtimes', 'counts-by-theater'],
-    enabled,
-    staleTime: 60 * 1000, // 1 phút — tránh hit BE mỗi lần render
-    queryFn: async () => {
-      const res = await api.get<ApiResponse<Record<string, number>>>('/api/showtimes/counts-by-theater')
       return res.data.data
     },
   })

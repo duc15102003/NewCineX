@@ -1,5 +1,5 @@
 import { TableCell, TableRow } from '@/components/ui/table'
-import { DoorOpen } from 'lucide-react'
+import { Building2, DoorOpen } from 'lucide-react'
 import { label, SHOWTIME_STATUS_LABELS, STORAGE_STATE_LABELS, fmtDate, fmtTime, fmtVnd } from '@/utils/labels'
 import { SHOWTIME_STATUS_COLORS as STATUS_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 import type { AdminShowtime } from '@/hooks/useAdminShowtimes'
@@ -8,12 +8,14 @@ export interface ShowtimeRowProps {
   showtime: AdminShowtime
   index: number
   selected: boolean
+  /** Render cột "Chi nhánh" khi đang xem "Tất cả chi nhánh" — phân biệt suất thuộc rạp nào. */
+  showTheater?: boolean
   onToggleSelect: (id: number) => void
   onEdit: (id: number) => void
 }
 
 /** Row trong bảng AdminShowtimePage — hiển thị phim, phòng, giá, trạng thái. */
-export default function ShowtimeRow({ showtime: s, index, selected, onToggleSelect, onEdit }: ShowtimeRowProps) {
+export default function ShowtimeRow({ showtime: s, index, selected, showTheater, onToggleSelect, onEdit }: ShowtimeRowProps) {
   const isArchived = s.storageState === 'ARCHIVED'
   return (
     <TableRow className={`border-[#3f382d] hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
@@ -31,6 +33,19 @@ export default function ShowtimeRow({ showtime: s, index, selected, onToggleSele
           {fmtDate(s.startTime)} · {fmtTime(s.startTime)} - {fmtTime(s.endTime)}
         </span>
       </TableCell>
+      {showTheater && (
+        <TableCell className="whitespace-nowrap">
+          {s.theaterName ? (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-200">
+              <Building2 size={12} className="text-[#ffc107]" />
+              <span>{s.theaterName}</span>
+              {s.theaterCity && <span className="text-gray-500">— {s.theaterCity}</span>}
+            </span>
+          ) : (
+            <span className="text-xs text-gray-500">—</span>
+          )}
+        </TableCell>
+      )}
       <TableCell className="whitespace-nowrap">
         {(s.roomName || s.room?.name) && (
           <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-200">
