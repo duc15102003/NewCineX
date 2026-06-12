@@ -130,7 +130,7 @@ export default function POSPage() {
                 const tooltipLines = [
                   `${c.name}`,
                   '— Mua lẻ —',
-                  ...c.items.map(it => `· ${it.quantity}× ${it.snackName}: ${fmtVnd(it.snackPrice * it.quantity)}`),
+                  ...c.items.map(it => `· ${it.quantity}× ${it.snackName}: ${fmtVnd((it.snackPrice ?? 0) * it.quantity)}`),
                   `Tổng lẻ: ${fmtVnd(c.regularPrice)}`,
                   '— Mua combo —',
                   `Combo: ${fmtVnd(c.price)}`,

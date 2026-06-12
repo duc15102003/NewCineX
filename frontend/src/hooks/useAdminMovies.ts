@@ -2,24 +2,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import api, { getErrorMessage } from '@/api/axios'
 import type { ApiResponse } from '@/types/auth'
-import type { AdminMovieFilter, PageResponse } from '@/types/movie'
+import type { AdminMovieFilter, MovieListItem, PageResponse } from '@/types/movie'
 
-export interface AdminMovie {
-  id: number
-  title: string
-  posterUrl: string | null
-  duration: number
-  rating: number | null
-  /** Đạo diễn — bổ sung từ BE MovieListResponse để hiển thị trên list. */
-  director: string | null
-  /** Phân loại tuổi (P/K/T13/T16/T18). */
-  ageRating: string | null
-  /** Ngôn ngữ phim. */
-  language: string | null
-  status: string
-  genres: string[]
-  storageState: string
-}
+/**
+ * Movie row trên list admin — alias của {@link MovieListItem} (single source of
+ * truth ở types/movie.ts, khớp BE MovieListResponse).
+ *
+ * Trước đây AdminMovie tự khai báo, đã drift khỏi MovieListItem (thiếu
+ * createdAt/updatedAt, genres sai type string[]) → gây type error khi pass
+ * sang MovieRow. Giữ alias để các file cũ import AdminMovie vẫn dùng được.
+ */
+export type AdminMovie = MovieListItem
 
 /**
  * Loại bỏ các field undefined/null/'' khỏi params trước khi gửi BE.

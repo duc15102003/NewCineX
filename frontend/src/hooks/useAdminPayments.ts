@@ -12,6 +12,9 @@ export interface AdminPayment {
   storageState: string | null
   bookingId: number
   bookingCode: string | null
+  /** Chi nhánh — BE expose qua PaymentResponse, dùng cho grouped view ở admin. */
+  theaterId: number | null
+  theaterName: string | null
   amount: number
   method: string
   transactionCode: string
