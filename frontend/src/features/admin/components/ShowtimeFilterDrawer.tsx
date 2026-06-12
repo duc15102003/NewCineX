@@ -2,7 +2,7 @@ import FilterDrawer, { FilterField } from '@/components/common/FilterDrawer'
 import { Input } from '@/components/ui/input'
 import DateRangePicker from '@/components/common/DateRangePicker'
 import NumberRangeInput from '@/components/common/NumberRangeInput'
-import { ROOM_TYPE_LABELS, SHOWTIME_STATUS_LABELS } from '@/utils/labels'
+import { ROOM_TYPE_LABELS, SHOWTIME_STATUS_LABELS, label } from '@/utils/labels'
 import type { AdminMovie } from '@/hooks/useAdminMovies'
 import type { AdminRoom } from '@/hooks/useAdminRooms'
 import type { Theater } from '@/hooks/useAdminTheaters'
@@ -83,7 +83,7 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
         </select>
       </FilterField>
 
-      <FilterField label="Phòng chiếu">
+      <FilterField label="Phòng chiếu" hint="Lọc 1 phòng cụ thể (vd Phòng A1). Tên kèm loại trong ngoặc.">
         <select
           value={draftFilter.roomId}
           onChange={(e) => onSetDraft('roomId', e.target.value)}
@@ -91,12 +91,14 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
         >
           <option value="">Tất cả phòng</option>
           {rooms.map((r) => (
-            <option key={r.id} value={r.id}>{r.name}</option>
+            <option key={r.id} value={r.id}>
+              {r.name} ({label(ROOM_TYPE_LABELS, r.type)})
+            </option>
           ))}
         </select>
       </FilterField>
 
-      <FilterField label="Loại phòng">
+      <FilterField label="Loại phòng" hint="Lọc theo công nghệ (vd tất cả phòng IMAX của tất cả CN).">
         <select
           value={draftFilter.roomType}
           onChange={(e) => onSetDraft('roomType', e.target.value)}

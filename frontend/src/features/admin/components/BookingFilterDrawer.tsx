@@ -2,7 +2,7 @@ import FilterDrawer, { FilterField } from '@/components/common/FilterDrawer'
 import DateRangePicker from '@/components/common/DateRangePicker'
 import { NumberRangeInput } from '@/components/common/NumberRangeInput'
 import { Input } from '@/components/ui/input'
-import { BOOKING_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/utils/labels'
+import { BOOKING_STATUS_LABELS, PAYMENT_METHOD_LABELS, ROOM_TYPE_LABELS, label } from '@/utils/labels'
 import type { AdminBookingFilter } from '@/hooks/useAdminBookings'
 import type { MovieListItem } from '@/types/movie'
 import type { AdminRoom } from '@/hooks/useAdminRooms'
@@ -50,11 +50,15 @@ export default function BookingFilterDrawer(props: BookingFilterDrawerProps) {
         </select>
       </FilterField>
 
-      <FilterField label="Phòng chiếu">
+      <FilterField label="Phòng chiếu" hint="Lọc theo phòng cụ thể. Tên kèm loại trong ngoặc.">
         <select className={SELECT_CLS} value={adv.roomId ?? ''}
           onChange={(e) => onPatch({ roomId: e.target.value ? Number(e.target.value) : undefined })}>
           <option value="">— Tất cả phòng —</option>
-          {rooms.map(r => (<option key={r.id} value={r.id}>{r.name}</option>))}
+          {rooms.map(r => (
+            <option key={r.id} value={r.id}>
+              {r.name} ({label(ROOM_TYPE_LABELS, r.type)})
+            </option>
+          ))}
         </select>
       </FilterField>
 
