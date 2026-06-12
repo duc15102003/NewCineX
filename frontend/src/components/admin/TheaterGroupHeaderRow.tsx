@@ -21,9 +21,11 @@ interface Props {
   itemLabel?: string // "phòng", "suất chiếu", "vé"...
   colSpan: number
   /**
-   * Tổng count THẬT của chi nhánh (từ BE aggregate query) — khi truyền vào
-   * sẽ hiển thị "X / Y mục" để user biết itemCount chỉ là phần hiện trên trang.
-   * Bỏ trống → fallback hiển thị chỉ itemCount.
+   * Tổng count THẬT của chi nhánh — nếu truyền vào sẽ ưu tiên hiển thị thay cho
+   * itemCount (số trên trang hiện tại, dễ gây hiểu nhầm khi paginate "9/378").
+   *
+   * Chuẩn industry (CGV/Lotte admin): group header chỉ show 1 số = TỔNG THẬT.
+   * Items dưới header user tự hiểu là phần hiển thị trên trang hiện tại.
    */
   totalCount?: number
 }
@@ -40,7 +42,7 @@ export default function TheaterGroupHeaderRow({
 }: Props) {
   // sticky top-0 + z-10 → khi user kéo nội dung phía dưới, header chi nhánh
   // dính ở đầu container scroll → biết mình đang xem chi nhánh nào.
-  // bg đậm hơn parent + backdrop-blur để không bị trong suốt khi sticky.
+  const displayCount = totalCount ?? itemCount
   return (
     <TableRow
       className="border-[#3f382d] bg-[#2a2317] hover:bg-[#2a2317]/80 cursor-pointer sticky top-0 z-10 backdrop-blur"
@@ -57,9 +59,7 @@ export default function TheaterGroupHeaderRow({
             <span className="text-xs text-gray-500">— {theaterCity}</span>
           )}
           <span className="ml-auto text-xs text-gray-400">
-            {totalCount != null && totalCount !== itemCount
-              ? `${itemCount} / ${totalCount} ${itemLabel}`
-              : `${itemCount} ${itemLabel}`}
+            {displayCount} {itemLabel}
           </span>
         </div>
       </TableCell>

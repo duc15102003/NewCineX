@@ -268,7 +268,7 @@ export default function AdminShowtimePage() {
                     totalCount={theaterCounts[String(group.theaterId)]}
                     itemCount={group.items.length}
                     itemLabel="suất chiếu"
-                    colSpan={6}
+                    colSpan={7}
                   />
                   {!isCollapsed && group.items.map((s, index) => renderShowtimeRow(s, index))}
                 </React.Fragment>
