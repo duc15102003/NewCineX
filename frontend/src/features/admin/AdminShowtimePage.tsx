@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { Plus, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import TableSkeleton from '@/components/common/TableSkeleton'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
 
 import ShowtimeFormDialog from './components/ShowtimeFormDialog'
+import AutoScheduleDialog from './components/AutoScheduleDialog'
 import ShowtimeFilterDrawer, { type ShowtimeFilterDraft } from './components/ShowtimeFilterDrawer'
 import ShowtimeRow from './components/ShowtimeRow'
 
@@ -44,6 +45,7 @@ export default function AdminShowtimePage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [autoScheduleOpen, setAutoScheduleOpen] = useState(false)
 
   const [appliedFilter, setAppliedFilter] = useState<ShowtimeFilterDraft>(EMPTY_FILTER)
   const [draftFilter, setDraftFilter] = useState<ShowtimeFilterDraft>(EMPTY_FILTER)
@@ -203,6 +205,12 @@ export default function AdminShowtimePage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Button onClick={() => setAutoScheduleOpen(true)}
+            variant="outline"
+            className="border-[#ffc107]/40 text-[#ffc107] hover:bg-[#ffc107]/10 hover:text-[#ffc107] rounded-lg"
+            title="Tạo nhiều suất chiếu 1 click">
+            <Sparkles size={16} className="mr-1" /> Auto-schedule
+          </Button>
           <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
             <Plus size={16} className="mr-1" /> Thêm mới
           </Button>
@@ -285,6 +293,14 @@ export default function AdminShowtimePage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         editingId={editingId}
+        scopedTheaterId={scopedTheaterId}
+        theaterLocked={theaterLocked}
+      />
+
+      {/* Auto-schedule Dialog — tạo nhiều suất 1 click */}
+      <AutoScheduleDialog
+        open={autoScheduleOpen}
+        onOpenChange={setAutoScheduleOpen}
         scopedTheaterId={scopedTheaterId}
         theaterLocked={theaterLocked}
       />

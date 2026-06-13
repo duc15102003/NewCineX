@@ -21,6 +21,8 @@ import com.cinex.module.seat.entity.SeatStatus;
 import com.cinex.module.seat.entity.SeatType;
 import com.cinex.module.seat.repository.SeatRepository;
 import com.cinex.module.showtime.dto.AppliedPricingRule;
+import com.cinex.module.showtime.dto.AutoScheduleRequest;
+import com.cinex.module.showtime.dto.AutoScheduleResult;
 import com.cinex.module.showtime.dto.ShowtimeFilter;
 import com.cinex.module.showtime.dto.ShowtimeListResponse;
 import com.cinex.module.showtime.dto.ShowtimeRequest;
@@ -40,6 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -354,6 +358,162 @@ public class ShowtimeService {
         items.forEach(i -> i.setStorageState(StorageState.ACTIVE));
         showtimeRepository.saveAll(items);
         log.info("Bulk restored {} items", items.size());
+    }
+
+    /**
+     * Auto-schedule — tạo hàng loạt suất chiếu cho 1 phim trên N phòng × M ngày.
+     *
+     * <p><b>Algorithm:</b>
+     * <ol>
+     *   <li>Validate request (date range ≤ 30 ngày, startHour < endHour, RBAC theater).</li>
+     *   <li>Resolve MovieRun applicable cho movie + theater (open-ended OK).</li>
+     *   <li>Với mỗi ngày × mỗi phòng:
+     *     <ul>
+     *       <li>Tính slotDuration = movie.duration + bufferMinutes (fallback config 15)</li>
+     *       <li>Loop slot = startHour → endHour, step slotDuration phút</li>
+     *       <li>Check past time → SKIP "Quá khứ"</li>
+     *       <li>Check conflict với suất hiện có → SKIP "Conflict với #X"</li>
+     *       <li>Check date trong movieRun range → SKIP "Ngoài đợt chiếu"</li>
+     *       <li>Tất cả OK → create showtime với giá theo room seat types</li>
+     *     </ul>
+     *   </li>
+     * </ol>
+     *
+     * <p><b>Tại sao SKIP thay vì throw:</b> Admin chạy auto-schedule cho 7 ngày × 5 phòng → 175 slot.
+     * Nếu 1 slot conflict → throw → KHÔNG TẠO GÌ. UX tệ. SKIP + report giúp admin
+     * thấy được 170 tạo thành công + 5 skip vì sao.
+     *
+     * <p><b>Đặt @Transactional:</b> all-or-nothing trong 1 lần auto-schedule.
+     * Nếu giữa chừng lỗi nặng (DB down) → rollback toàn bộ.
+     */
+    @Transactional
+    public AutoScheduleResult autoSchedule(AutoScheduleRequest req) {
+        // 1. RBAC: branch ADMIN chỉ schedule trong CN của mình
+        securityService.requireAccessToTheater(req.getTheaterId());
+
+        // 2. Validate range
+        if (req.getDateFrom().isAfter(req.getDateTo())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "dateFrom phải <= dateTo");
+        }
+        long daysSpan = ChronoUnit.DAYS.between(req.getDateFrom(), req.getDateTo()) + 1;
+        if (daysSpan > 30) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tối đa 30 ngày/lần auto-schedule. Yêu cầu: " + daysSpan + " ngày.");
+        }
+        if (req.getStartHour() >= req.getEndHour()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "startHour phải < endHour");
+        }
+
+        // 3. Load entities
+        Movie movie = movieRepository.findById(req.getMovieId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.MOVIE_NOT_FOUND));
+        List<Room> rooms = roomRepository.findAllById(req.getRoomIds());
+        if (rooms.size() != req.getRoomIds().size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Một số phòng không tồn tại");
+        }
+        // Verify all rooms belong to theaterId
+        for (Room room : rooms) {
+            if (!room.getTheater().getId().equals(req.getTheaterId())) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Phòng '" + room.getName() + "' không thuộc chi nhánh đã chọn");
+            }
+        }
+
+        // 4. Resolve MovieRun (1 run cover toàn bộ date range — admin tạo run đủ rộng)
+        MovieRun movieRun = resolveMovieRun(movie, null, req.getTheaterId());
+
+        // 5. Buffer + slot duration
+        int bufferMin = req.getBufferMinutes() != null
+                ? req.getBufferMinutes()
+                : systemConfigService.getInt("showtime.buffer_minutes", 15);
+        int slotDurationMin = movie.getDuration() + bufferMin;
+
+        // 6. Loop generate
+        List<AutoScheduleResult.ScheduleEntry> details = new ArrayList<>();
+        int created = 0;
+        int skipped = 0;
+        LocalDateTime now = LocalDateTime.now();
+
+        LocalDate currentDate = req.getDateFrom();
+        while (!currentDate.isAfter(req.getDateTo())) {
+            // Check date trong movieRun range
+            boolean dateInRun = !currentDate.isBefore(movieRun.getStartDate())
+                    && (movieRun.getEndDate() == null || !currentDate.isAfter(movieRun.getEndDate()));
+
+            for (Room room : rooms) {
+                Set<SeatType> seatTypes = fetchRoomSeatTypes(room.getId());
+                BigDecimal basePrice = req.getBasePrice();
+                BigDecimal vipPrice = resolveTierPrice(req.getVipPrice(), room.getType(), "vip", seatTypes, SeatType.VIP);
+                BigDecimal couplePrice = resolveTierPrice(req.getCouplePrice(), room.getType(), "couple", seatTypes, SeatType.COUPLE);
+                BigDecimal sweetboxPrice = resolveTierPrice(req.getSweetboxPrice(), room.getType(), "sweetbox", seatTypes, SeatType.SWEETBOX);
+                BigDecimal deluxePrice = resolveTierPrice(req.getDeluxePrice(), room.getType(), "deluxe", seatTypes, SeatType.DELUXE);
+
+                LocalDateTime slot = currentDate.atTime(req.getStartHour(), 0);
+                LocalDateTime dayEnd = req.getEndHour() == 24
+                        ? currentDate.plusDays(1).atStartOfDay()
+                        : currentDate.atTime(req.getEndHour(), 0);
+
+                while (slot.plusMinutes(slotDurationMin).compareTo(dayEnd) <= 0) {
+                    LocalDateTime slotEnd = slot.plusMinutes(slotDurationMin);
+                    LocalDateTime movieEnd = slot.plusMinutes(movie.getDuration());
+
+                    // Skip past
+                    if (slot.isBefore(now)) {
+                        details.add(AutoScheduleResult.ScheduleEntry.builder()
+                                .roomId(room.getId()).roomName(room.getName())
+                                .startTime(slot).status("SKIPPED").reason("Quá khứ")
+                                .build());
+                        skipped++;
+                    } else if (!dateInRun) {
+                        details.add(AutoScheduleResult.ScheduleEntry.builder()
+                                .roomId(room.getId()).roomName(room.getName())
+                                .startTime(slot).status("SKIPPED")
+                                .reason("Ngoài đợt chiếu (" + movieRun.getStartDate() + " → "
+                                        + (movieRun.getEndDate() != null ? movieRun.getEndDate() : "?") + ")")
+                                .build());
+                        skipped++;
+                    } else {
+                        // Check conflict
+                        List<Showtime> conflicts = showtimeRepository.findConflictingShowtimes(
+                                room.getId(), slot, slotEnd);
+                        if (!conflicts.isEmpty()) {
+                            details.add(AutoScheduleResult.ScheduleEntry.builder()
+                                    .roomId(room.getId()).roomName(room.getName())
+                                    .startTime(slot).status("SKIPPED")
+                                    .reason("Trùng suất chiếu #" + conflicts.get(0).getId())
+                                    .build());
+                            skipped++;
+                        } else {
+                            Showtime st = Showtime.builder()
+                                    .movie(movie).movieRun(movieRun).room(room)
+                                    .startTime(slot).endTime(movieEnd).slotEndTime(slotEnd)
+                                    .basePrice(basePrice).vipPrice(vipPrice).couplePrice(couplePrice)
+                                    .sweetboxPrice(sweetboxPrice).deluxePrice(deluxePrice)
+                                    .status(ShowtimeStatus.SCHEDULED)
+                                    .build();
+                            showtimeRepository.save(st);
+                            details.add(AutoScheduleResult.ScheduleEntry.builder()
+                                    .roomId(room.getId()).roomName(room.getName())
+                                    .startTime(slot).status("CREATED").showtimeId(st.getId())
+                                    .build());
+                            created++;
+                        }
+                    }
+                    slot = slot.plusMinutes(slotDurationMin);
+                }
+            }
+            currentDate = currentDate.plusDays(1);
+        }
+
+        log.info("Auto-schedule: movie={} theater={} dates=[{}→{}] hours=[{}→{}] created={} skipped={}",
+                movie.getTitle(), req.getTheaterId(), req.getDateFrom(), req.getDateTo(),
+                req.getStartHour(), req.getEndHour(), created, skipped);
+
+        return AutoScheduleResult.builder()
+                .created(created).skipped(skipped).details(details)
+                .build();
     }
 
     /**

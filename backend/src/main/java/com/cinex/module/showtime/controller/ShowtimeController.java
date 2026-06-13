@@ -3,6 +3,8 @@ package com.cinex.module.showtime.controller;
 import com.cinex.common.dto.BulkDeleteRequest;
 import com.cinex.common.response.ApiResponse;
 import com.cinex.common.response.PageResponse;
+import com.cinex.module.showtime.dto.AutoScheduleRequest;
+import com.cinex.module.showtime.dto.AutoScheduleResult;
 import com.cinex.module.showtime.dto.ShowtimeFilter;
 import com.cinex.module.showtime.dto.ShowtimeListResponse;
 import com.cinex.module.showtime.dto.ShowtimeRequest;
@@ -61,6 +63,15 @@ public class ShowtimeController {
             @PathVariable Long id,
             @Valid @RequestBody ShowtimeRequest request) {
         return ApiResponse.ok("Showtime updated", showtimeService.updateShowtime(id, request));
+    }
+
+    @PostMapping("/auto-schedule")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Auto-schedule bulk showtimes for movie × rooms × days")
+    public ApiResponse<AutoScheduleResult> autoSchedule(@Valid @RequestBody AutoScheduleRequest request) {
+        AutoScheduleResult result = showtimeService.autoSchedule(request);
+        String msg = String.format("Tạo %d suất, skip %d", result.getCreated(), result.getSkipped());
+        return ApiResponse.ok(msg, result);
     }
 
     @DeleteMapping("/{id}")

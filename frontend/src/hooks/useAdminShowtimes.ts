@@ -132,3 +132,56 @@ export function useBulkRestoreShowtimes() {
     onError: (e) => toast.error(getErrorMessage(e, 'Lỗi')),
   })
 }
+
+/**
+ * Auto-schedule request matching BE AutoScheduleRequest DTO.
+ * Tạo hàng loạt suất chiếu cho 1 phim trên N phòng × M ngày.
+ */
+export interface AutoScheduleRequest {
+  movieId: number
+  theaterId: number
+  roomIds: number[]
+  dateFrom: string        // YYYY-MM-DD
+  dateTo: string          // YYYY-MM-DD
+  startHour: number       // 0-23
+  endHour: number         // 1-24
+  bufferMinutes?: number  // default từ BE config
+  basePrice: number
+  vipPrice?: number
+  couplePrice?: number
+  sweetboxPrice?: number
+  deluxePrice?: number
+}
+
+export interface AutoScheduleResult {
+  created: number
+  skipped: number
+  details: Array<{
+    roomId: number
+    roomName: string
+    startTime: string
+    status: 'CREATED' | 'SKIPPED'
+    reason?: string
+    showtimeId?: number
+  }>
+}
+
+export function useAutoScheduleShowtimes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (req: AutoScheduleRequest) => {
+      const res = await api.post<ApiResponse<AutoScheduleResult>>('/api/showtimes/auto-schedule', req)
+      return res.data
+    },
+    onSuccess: (resp) => {
+      const data = resp.data
+      if (data.created > 0) {
+        toast.success(`Đã tạo ${data.created} suất chiếu` + (data.skipped > 0 ? `, skip ${data.skipped}` : ''))
+      } else {
+        toast.warning(`Không tạo được suất nào (skip ${data.skipped})`)
+      }
+      qc.invalidateQueries({ queryKey: ['admin', 'showtimes'] })
+    },
+    onError: (e) => toast.error(getErrorMessage(e, 'Auto-schedule thất bại')),
+  })
+}
