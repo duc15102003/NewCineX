@@ -175,78 +175,9 @@ export default function MovieFilterDrawer({
             />
           </div>
 
-          {/* Thời lượng */}
-          <div>
-            <label className="text-sm text-gray-400 mb-1.5 block">Thời lượng (phút)</label>
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                type="number"
-                placeholder="Từ"
-                value={draft.minDuration ?? ''}
-                onChange={(e) =>
-                  setField('minDuration', e.target.value ? Number(e.target.value) : undefined)
-                }
-                className={ADMIN_INPUT_CLS}
-              />
-              <Input
-                type="number"
-                placeholder="Đến"
-                value={draft.maxDuration ?? ''}
-                onChange={(e) =>
-                  setField('maxDuration', e.target.value ? Number(e.target.value) : undefined)
-                }
-                className={ADMIN_INPUT_CLS}
-              />
-            </div>
-          </div>
-
-          {/* Rating */}
-          <div>
-            <label className="text-sm text-gray-400 mb-1.5 block">
-              Số sao (0 - 10)
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="Từ"
-                value={draft.minRating ?? ''}
-                onChange={(e) =>
-                  setField('minRating', e.target.value ? Number(e.target.value) : undefined)
-                }
-                className={ADMIN_INPUT_CLS}
-              />
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="Đến"
-                value={draft.maxRating ?? ''}
-                onChange={(e) =>
-                  setField('maxRating', e.target.value ? Number(e.target.value) : undefined)
-                }
-                className={ADMIN_INPUT_CLS}
-              />
-            </div>
-          </div>
-
-          {/* Ngày phát hành */}
-          <div>
-            <label className="text-sm text-gray-400 mb-1.5 block">Ngày khởi chiếu</label>
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                type="date"
-                value={draft.releaseDateFrom ?? ''}
-                onChange={(e) => setField('releaseDateFrom', e.target.value || undefined)}
-                className={ADMIN_INPUT_CLS}
-              />
-              <Input
-                type="date"
-                value={draft.releaseDateTo ?? ''}
-                onChange={(e) => setField('releaseDateTo', e.target.value || undefined)}
-                className={ADMIN_INPUT_CLS}
-              />
-            </div>
-          </div>
+          {/* Bỏ filter Thời lượng / Số sao / Ngày khởi chiếu — user feedback
+              admin thực tế không cần lọc theo 3 chiều này (đã có search keyword
+              + status + genre đủ). Field BE vẫn giữ để khi cần thì mở lại. */}
 
           {/* Checkboxes */}
           <div className="space-y-2 pt-2">

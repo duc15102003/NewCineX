@@ -55,7 +55,7 @@ function ColumnLabels({ maxCols }: { maxCols: number }) {
     <div className="flex items-center justify-center gap-1.5 mb-2">
       <span className="w-6 shrink-0" />
       {Array.from({ length: maxCols }, (_, i) => (
-        <div key={i} className="w-9 text-center text-xs text-gray-500 font-mono">{i + 1}</div>
+        <div key={i} className="w-7 text-center text-xs text-gray-500 font-mono">{i + 1}</div>
       ))}
       <span className="w-6 shrink-0" />
     </div>
@@ -96,11 +96,11 @@ function RowSeats({ seats, previewMode, pendingChanges, activeTool, getDisplayTy
             onMouseDown={() => onMouseDown(seat, seats)}
             onMouseEnter={() => onMouseEnter(seat, seats)}
             title={`${seat.seatNumber}-${partner.seatNumber} — ${meta?.label}`}
-            className={`h-9 rounded-t-lg text-[10px] font-bold transition-all duration-100
+            className={`h-7 rounded-t-lg text-[10px] font-bold transition-all duration-100
               ${SEAT_BG[displayType]}
               ${isChanged || partnerChanged ? 'ring-2 ring-[#ffc107] scale-105' : ''}
               ${previewMode ? 'cursor-default' : 'cursor-pointer'}`}
-            style={{ width: 'calc(2 * 2.25rem + 0.375rem)' }}
+            style={{ width: 'calc(2 * 1.75rem + 0.25rem)' }}
           >
             {seat.colNumber}-{partner.colNumber}
           </button>
@@ -123,7 +123,7 @@ function RowSeats({ seats, previewMode, pendingChanges, activeTool, getDisplayTy
         title={isBlockedForTool
           ? `${seat.seatNumber} — không thể đặt ghế đôi (chặn bởi lối đi / ghế hỏng)`
           : `${seat.seatNumber} — ${SEAT_TYPES.find(t => t.key === displayType)?.label}`}
-        className={`w-9 h-9 rounded-t-lg text-[10px] font-bold transition-all duration-100
+        className={`w-7 h-7 rounded-t-lg text-[10px] font-bold transition-all duration-100
           ${SEAT_BG[displayType]}
           ${isChanged ? 'ring-2 ring-[#ffc107] scale-105' : ''}
           ${blockedHint}
@@ -163,7 +163,7 @@ function Legend() {
 function LegendItem({ colorClass, label, wide }: { colorClass: string; label: string; wide?: boolean }) {
   return (
     <div className="flex items-center gap-2 text-xs text-gray-400">
-      <span className={`${wide ? 'w-8' : 'w-4'} h-4 rounded ${colorClass}`} />
+      <span className={`${wide ? 'w-6' : 'w-3.5'} h-3.5 rounded ${colorClass}`} />
       <span>{label}</span>
     </div>
   )
