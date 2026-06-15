@@ -508,7 +508,7 @@ export default function AutoScheduleDialog({ open, onOpenChange, scopedTheaterId
               {skippedItems.length > 0 && (
                 <details className="rounded-xl border border-[#3f382d] bg-[#2a2317] overflow-hidden">
                   <summary className="cursor-pointer text-sm text-gray-300 px-4 py-3 hover:bg-white/[0.03]">
-                    Chi tiết các slot đã skip ({skippedItems.length})
+                    Chi tiết các suất đã bị bỏ qua ({skippedItems.length})
                   </summary>
                   <div className="max-h-60 overflow-y-auto px-4 pb-4 space-y-1 text-xs border-t border-[#3f382d] pt-2">
                     {skippedItems.slice(0, 50).map((d, i) => (
@@ -658,17 +658,17 @@ export default function AutoScheduleDialog({ open, onOpenChange, scopedTheaterId
                   <div>
                     {runCoverage.runs.length === 0 ? (
                       <span>
-                        Phim chưa có đợt chiếu (MovieRun) nào tại chi nhánh này → tất cả{' '}
+                        Phim chưa có đợt chiếu nào tại chi nhánh này — cả{' '}
                         <span className="text-orange-300 font-semibold">{daysCovered} ngày</span>{' '}
-                        sẽ bị BE skip. Tạo đợt chiếu trước qua menu "Đợt chiếu".
+                        sẽ không tạo được suất. Tạo đợt chiếu trước qua menu "Đợt chiếu".
                       </span>
                     ) : (
                       <span>
                         <span className="text-orange-300 font-semibold">{runCoverage.uncoveredDays} ngày</span>{' '}
-                        nằm ngoài đợt chiếu tại CN, BE sẽ skip. Đợt hiện có:{' '}
+                        nằm ngoài đợt chiếu — sẽ không tạo suất cho các ngày này. Phim chỉ được chiếu trong:{' '}
                         {runCoverage.runs.map((r, i) => (
                           <span key={i} className="font-mono text-gray-200">
-                            [{fmtDate(r.startDate)} → {r.endDate ? fmtDate(r.endDate) : 'mở'}]
+                            [{fmtDate(r.startDate)} → {r.endDate ? fmtDate(r.endDate) : 'chưa giới hạn'}]
                             {i < runCoverage.runs.length - 1 ? ', ' : ''}
                           </span>
                         ))}
@@ -721,8 +721,8 @@ export default function AutoScheduleDialog({ open, onOpenChange, scopedTheaterId
               </div>
             </Section>
 
-            {/* SECTION 3c — Chế độ rải slot */}
-            <Section icon={<Repeat size={14} />} title="Chế độ rải slot">
+            {/* SECTION 3c — Chế độ sắp xếp giờ */}
+            <Section icon={<Repeat size={14} />} title="Chế độ sắp xếp giờ chiếu">
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <button type="button"
                   onClick={() => setSlotMode('WINDOW')}
@@ -980,7 +980,7 @@ export default function AutoScheduleDialog({ open, onOpenChange, scopedTheaterId
                     )}
                   </div>
                   <div className="text-xs text-gray-400 mt-1">
-                    Hệ thống skip slot trùng suất hiện có, slot quá khứ, hoặc ngoài đợt chiếu phim.
+                    Hệ thống tự bỏ qua các khung giờ trùng suất đã có, khung giờ đã qua, hoặc ngoài đợt chiếu phim.
                     Giá vé: <span className={SEAT_TYPE_PRICE_TEXT.STANDARD}>{fmtVnd(basePrice)}</span> /thường
                     {vipPrice !== '' && <> · <span className={SEAT_TYPE_PRICE_TEXT.VIP}>{fmtVnd(Number(vipPrice))}</span> /VIP</>}
                     {couplePrice !== '' && <> · <span className={SEAT_TYPE_PRICE_TEXT.COUPLE}>{fmtVnd(Number(couplePrice))}</span> /đôi</>}

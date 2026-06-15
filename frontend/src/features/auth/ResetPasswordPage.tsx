@@ -69,8 +69,8 @@ export default function ResetPasswordPage() {
       <div className="min-h-[60vh] flex items-center justify-center px-4">
         <div className="w-full max-w-md bg-[#201b11] border border-white/5 rounded-2xl p-8 text-center">
           <XCircle size={48} className="text-red-400 mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-white mb-2">Link không hợp lệ</h1>
-          <p className="text-gray-400 text-sm mb-6">Thiếu token trong URL. Vui lòng yêu cầu gửi lại email.</p>
+          <h1 className="text-xl font-bold text-white mb-2">Liên kết không hợp lệ</h1>
+          <p className="text-gray-400 text-sm mb-6">Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu gửi lại email.</p>
           <Link to="/forgot-password">
             <Button className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
               Gửi lại email

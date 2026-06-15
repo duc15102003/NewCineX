@@ -107,11 +107,17 @@ export default function LoyaltyRedeemInput({
     onRedeemPointsChange(num)
   }
 
-  const previewDiscount = Number(draft) > 0
-    ? Math.min(Number(draft) * redeemValue, maxDiscountCap)
+  const draftNum = Number(draft)
+  const previewDiscount = draftNum > 0
+    ? Math.min(draftNum * redeemValue, maxDiscountCap)
     : 0
-  // Cảnh báo khi user nhập > số điểm cần — hệ thống sẽ cap, không trừ thừa.
-  const willClamp = Number(draft) > pointsNeeded
+  // Phân biệt 2 case lỗi/cảnh báo:
+  // - exceedsBalance: nhập VƯỢT số điểm có → đỏ, không apply được
+  // - willClamp: nhập trong khả năng NHƯNG dư so với cần → vàng, hệ thống tự cap
+  const exceedsBalance = draftNum > loyalty.loyaltyPoints
+  const willClamp = !exceedsBalance && draftNum > pointsNeeded
+  // Gợi ý số điểm tối ưu — min(balance, pointsNeeded) — bấm 1 phát nhập sẵn
+  const maxRedeemable = Math.min(loyalty.loyaltyPoints, pointsNeeded)
 
   return (
     <div className="mb-4 space-y-1.5">
@@ -126,7 +132,7 @@ export default function LoyaltyRedeemInput({
         <Input
           type="number"
           min={minRedeem}
-          max={loyalty.loyaltyPoints}
+          max={maxRedeemable}
           placeholder={`Tối thiểu ${minRedeem} điểm`}
           value={draft}
           onChange={(e) => { setDraft(e.target.value); setError('') }}
@@ -137,22 +143,36 @@ export default function LoyaltyRedeemInput({
           variant="outline"
           size="sm"
           onClick={apply}
-          disabled={!draft}
+          disabled={!draft || exceedsBalance}
           className="border-[#ffc107]/40 text-[#ffc107] hover:bg-[#ffc107]/10 hover:text-[#ffc107] h-9"
         >
           Áp dụng
         </Button>
       </div>
       <div className="flex items-center justify-between text-[11px] text-gray-500">
-        <span>Đơn này cần tối đa <span className="text-gray-300">{pointsNeeded} điểm</span> để giảm hết</span>
-        {Number(draft) > 0 && Number(draft) >= minRedeem && Number(draft) <= pointsNeeded && (
+        <span>
+          Đơn này cần tối đa <span className="text-gray-300">{pointsNeeded.toLocaleString('vi-VN')} điểm</span> để giảm hết
+          {maxRedeemable >= minRedeem && (
+            <button type="button"
+              onClick={() => { setDraft(String(maxRedeemable)); setError('') }}
+              className="ml-2 text-[#ffc107] hover:underline">
+              Đổi tối đa ({maxRedeemable.toLocaleString('vi-VN')} điểm)
+            </button>
+          )}
+        </span>
+        {draftNum > 0 && draftNum >= minRedeem && !exceedsBalance && draftNum <= pointsNeeded && (
           <span className="text-green-400">−{fmtVnd(previewDiscount)}</span>
         )}
       </div>
+      {exceedsBalance && (
+        <p className="text-red-400 text-[11px] leading-relaxed">
+          Bạn chỉ có <strong>{loyalty.loyaltyPoints.toLocaleString('vi-VN')} điểm</strong>, không thể đổi {draftNum.toLocaleString('vi-VN')} điểm.
+        </p>
+      )}
       {willClamp && !error && (
         <p className="text-amber-300/90 text-[11px] leading-relaxed">
-          ⓘ Bạn nhập {Number(draft)} điểm — vé chỉ cần {pointsNeeded} điểm để giảm hết.
-          Hệ thống sẽ chỉ trừ {pointsNeeded} điểm, phần dư <strong>{Number(draft) - pointsNeeded} điểm</strong> được giữ lại.
+          ⓘ Bạn nhập {draftNum.toLocaleString('vi-VN')} điểm — vé chỉ cần {pointsNeeded.toLocaleString('vi-VN')} điểm để giảm hết.
+          Hệ thống sẽ chỉ trừ {pointsNeeded.toLocaleString('vi-VN')} điểm, phần dư <strong>{(draftNum - pointsNeeded).toLocaleString('vi-VN')} điểm</strong> giữ lại trong tài khoản.
         </p>
       )}
       {error && <p className="text-red-400 text-xs">{error}</p>}
