@@ -67,7 +67,7 @@ function TopMoviesTable({ items }: TopMoviesTableProps) {
                     <span className="text-[#ffc107] font-semibold">{fmtNumber(m.ticketCount)}</span>
                   </td>
                   <td className="py-3 text-right">
-                    <span className="text-emerald-400 font-semibold">{fmtCurrency(m.revenue ?? 0)}</span>
+                    <span className="text-[#ffc107] font-semibold">{fmtCurrency(m.revenue ?? 0)}</span>
                   </td>
                 </tr>
               ))}
@@ -117,7 +117,7 @@ function TopSnacksTable({ items }: TopSnacksTableProps) {
                     <span className="text-[#ffc107] font-semibold">{fmtNumber(s.totalQuantitySold)}</span>
                   </td>
                   <td className="py-3 text-right">
-                    <span className="text-emerald-400 font-semibold">{fmtCurrency(s.totalRevenue ?? 0)}</span>
+                    <span className="text-[#ffc107] font-semibold">{fmtCurrency(s.totalRevenue ?? 0)}</span>
                   </td>
                 </tr>
               ))}
