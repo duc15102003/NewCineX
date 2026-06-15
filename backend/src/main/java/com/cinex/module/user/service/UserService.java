@@ -43,6 +43,7 @@ public class UserService {
     private final RefreshTokenService refreshTokenService;
     private final JwtBlacklistService jwtBlacklistService;
     private final TheaterRepository theaterRepository;
+    private final com.cinex.common.service.SecurityService securityService;
 
     /**
      * Lấy profile user hiện tại từ SecurityContext.
@@ -156,14 +157,13 @@ public class UserService {
      */
     @Transactional(readOnly = true)
     public Page<UserProfileResponse> listUsers(UserFilter filter, Pageable pageable) {
-        User current = getCurrentUser();
-        if (current.getRole() == Role.ADMIN) {
-            Long adminTheaterId = current.getTheater() != null
-                    ? current.getTheater().getId() : null;
-            // Branch ADMIN chỉ thấy user/staff của chi nhánh mình. USER không có
-            // theater (theaterId=null) → cũng cho thấy để branch ADMIN quản khách
-            // booking ở chi nhánh mình (industry pattern).
-            filter.setScopedTheaterId(adminTheaterId);
+        // Dùng SecurityService thay vì check role tay — khi single-theater mode
+        // bật (cinex-team), SecurityService return id HN cho MỌI role kể cả
+        // SUPER_ADMIN. Branch ADMIN multi-theater vẫn return id của theater
+        // mình. SUPER_ADMIN multi-theater return null (xem tất cả).
+        Long scopedTheaterId = securityService.getCurrentUserTheaterId();
+        if (scopedTheaterId != null) {
+            filter.setScopedTheaterId(scopedTheaterId);
             filter.setExcludeAdminRoles(true);
         }
         var spec = UserSpecification.fromFilter(filter);

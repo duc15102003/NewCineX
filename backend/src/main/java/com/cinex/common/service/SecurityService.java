@@ -5,17 +5,40 @@ import com.cinex.common.exception.ErrorCode;
 import com.cinex.common.util.SecurityUtil;
 import com.cinex.module.auth.entity.User;
 import com.cinex.module.auth.repository.UserRepository;
+import com.cinex.module.theater.repository.TheaterRepository;
 import com.cinex.security.CinexUserPrincipal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class SecurityService {
 
     private final UserRepository userRepository;
+    private final TheaterRepository theaterRepository;
+
+    /**
+     * Single-theater mode: cinex-team giả vờ làm rạp 1 chi nhánh (Hà Nội).
+     * Khi enabled, mọi role (kể cả SUPER_ADMIN + USER chưa login) bị force
+     * scope vào theater có city khớp {@code singleTheaterCity} — không cho
+     * leak data chi nhánh khác qua bất kỳ endpoint nào.
+     *
+     * <p>Bật bằng cách set {@code cinex.single-theater.enabled=true} trong
+     * application.yml. Cinex bản đầy đủ để false (multi-tenant chuẩn).
+     */
+    @Value("${cinex.single-theater.enabled:false}")
+    private boolean singleTheaterEnabled;
+
+    @Value("${cinex.single-theater.city:}")
+    private String singleTheaterCity;
+
+    /** Cache id sau lần lookup đầu — tránh query DB mỗi request. */
+    private volatile Long cachedSingleTheaterId;
 
     /**
      * Lấy userId của user đang đăng nhập.
@@ -72,6 +95,11 @@ public class SecurityService {
      * @return theaterId nếu branch ADMIN; null cho USER + SUPER_ADMIN + guest.
      */
     public Long getCurrentUserTheaterId() {
+        // Single-theater mode: force scope HN cho MỌI role (kể cả SUPER_ADMIN).
+        // Toàn hệ thống hiển thị như rạp 1 chi nhánh — không leak data CN khác.
+        if (singleTheaterEnabled) {
+            return getSingleTheaterIdOrThrow();
+        }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) return null;
         if (isSuperAdmin()) return null;
@@ -79,6 +107,28 @@ public class SecurityService {
             return principal.getTheaterId();
         }
         return null;
+    }
+
+    /**
+     * Lookup theater id của chi nhánh đơn nhất (theo city config). Lazy +
+     * cache vĩnh viễn — id theater seed cố định, không cần refresh.
+     */
+    private Long getSingleTheaterIdOrThrow() {
+        if (cachedSingleTheaterId != null) return cachedSingleTheaterId;
+        synchronized (this) {
+            if (cachedSingleTheaterId != null) return cachedSingleTheaterId;
+            cachedSingleTheaterId = theaterRepository.findAll().stream()
+                    .filter(t -> singleTheaterCity.equals(t.getCity()))
+                    .findFirst()
+                    .map(t -> t.getId())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Single-theater mode enabled nhưng không tìm thấy chi nhánh có city = '"
+                                    + singleTheaterCity + "'. Seed data hoặc đổi config "
+                                    + "cinex.single-theater.city."));
+            log.info("[Single-theater mode] Scope toàn hệ thống về theater id={} (city={})",
+                    cachedSingleTheaterId, singleTheaterCity);
+            return cachedSingleTheaterId;
+        }
     }
 
     /** True nếu user hiện tại có role SUPER_ADMIN. */

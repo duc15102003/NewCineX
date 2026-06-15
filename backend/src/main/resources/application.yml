@@ -49,6 +49,16 @@ momo:
   # [B2] ipnUrl: server-to-server (POST) → BE xử lý xác nhận giao dịch
   ipn-url: ${MOMO_IPN_URL:${app.backend-url}/api/payments/ipn}
 
+# Single-theater mode cho cinex-team — giả vờ rạp 1 chi nhánh (HN).
+# Mọi role (kể cả SUPER_ADMIN + USER chưa login) bị force scope theater HN
+# → không leak data CN khác qua bất kỳ list endpoint nào.
+#
+# Để false (hoặc bỏ block này) → trả về behavior multi-tenant chuẩn của cinex.
+cinex:
+  single-theater:
+    enabled: ${SINGLE_THEATER_ENABLED:true}
+    city: ${SINGLE_THEATER_CITY:Hà Nội}
+
 cloudinary:
   # Mỗi dev/môi trường dùng Cloudinary account RIÊNG — không có default trỏ
   # vào account của ai. Set qua application-local.yml (dev) hoặc env var (prod).
