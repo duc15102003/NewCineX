@@ -4,8 +4,12 @@ import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
 import com.cinex.common.response.ApiResponse;
 import com.cinex.module.config.service.SystemConfigService;
+import com.cinex.module.statistics.dto.BookingHealthStatistics;
+import com.cinex.module.statistics.dto.OccupancyAggregateStatistics;
 import com.cinex.module.statistics.dto.OccupancyStatistics;
 import com.cinex.module.statistics.dto.OverviewStatistics;
+import com.cinex.module.statistics.dto.RevenueByRoomTypeStatistics;
+import com.cinex.module.statistics.dto.RevenueBreakdownStatistics;
 import com.cinex.module.statistics.dto.RevenueStatistics;
 import com.cinex.module.statistics.dto.TopMovieRunStatistics;
 import com.cinex.module.statistics.dto.TopMovieStatistics;
@@ -95,6 +99,46 @@ public class StatisticsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Long theaterId) {
         return ApiResponse.ok(statisticsService.getOccupancy(date, theaterId));
+    }
+
+    @GetMapping("/occupancy-aggregate")
+    @Operation(summary = "Tỉ lệ lấp ghế tổng hợp tuần/tháng — KPI số 1 của rạp")
+    public ApiResponse<OccupancyAggregateStatistics> getOccupancyAggregate(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long theaterId) {
+        LocalDate[] range = normalizeAndValidate(from, to);
+        return ApiResponse.ok(statisticsService.getOccupancyAggregate(range[0], range[1], theaterId));
+    }
+
+    @GetMapping("/booking-health")
+    @Operation(summary = "Tỉ lệ no-show + cancel + hết hạn hold — vận hành booking")
+    public ApiResponse<BookingHealthStatistics> getBookingHealth(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long theaterId) {
+        LocalDate[] range = normalizeAndValidate(from, to);
+        return ApiResponse.ok(statisticsService.getBookingHealth(range[0], range[1], theaterId));
+    }
+
+    @GetMapping("/revenue-breakdown")
+    @Operation(summary = "Cơ cấu doanh thu: vé vs đồ ăn — pie chart")
+    public ApiResponse<RevenueBreakdownStatistics> getRevenueBreakdown(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long theaterId) {
+        LocalDate[] range = normalizeAndValidate(from, to);
+        return ApiResponse.ok(statisticsService.getRevenueBreakdown(range[0], range[1], theaterId));
+    }
+
+    @GetMapping("/revenue-by-room-type")
+    @Operation(summary = "Doanh thu theo loại phòng (2D/3D/IMAX/4DX) — validate pricing")
+    public ApiResponse<List<RevenueByRoomTypeStatistics>> getRevenueByRoomType(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long theaterId) {
+        LocalDate[] range = normalizeAndValidate(from, to);
+        return ApiResponse.ok(statisticsService.getRevenueByRoomType(range[0], range[1], theaterId));
     }
 
     /**

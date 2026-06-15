@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { useOverviewStats, useRevenueStats, useTopMovies, useTopSnacks, useTopMovieRuns, useOccupancy } from '@/hooks/useAdmin'
+import { useOverviewStats, useRevenueStats, useTopMovies, useTopSnacks, useTopMovieRuns, useOccupancy,
+  useOccupancyAggregate, useBookingHealth, useRevenueBreakdown, useRevenueByRoomType } from '@/hooks/useAdmin'
 import type { TopMovie, TopSnack } from '@/hooks/useAdmin'
 import { exportPDF, exportExcel } from '@/utils/export'
 import type { ExportSection } from '@/utils/export'
@@ -9,6 +10,7 @@ import { fmtVnd } from '@/utils/labels'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 
 import DashboardStatsCards from './components/DashboardStatsCards'
+import DashboardKpiCards from './components/DashboardKpiCards'
 import DashboardFilterBar from './components/DashboardFilterBar'
 import DashboardTopTables from './components/DashboardTopTables'
 import DashboardRevenueChart from './components/DashboardRevenueChart'
@@ -48,6 +50,11 @@ export default function DashboardPage() {
   const { data: topMovies } = useTopMovies(range.from, range.to, theaterId)
   const { data: topSnacks } = useTopSnacks(range.from, range.to, theaterId)
   const { data: topMovieRuns } = useTopMovieRuns(range.from, range.to, theaterId)
+  // Phase 1 KPI bổ sung — chuẩn industry
+  const { data: occupancyAgg } = useOccupancyAggregate(range.from, range.to, theaterId)
+  const { data: bookingHealth } = useBookingHealth(range.from, range.to, theaterId)
+  const { data: revenueBreakdown } = useRevenueBreakdown(range.from, range.to, theaterId)
+  const { data: revenueByRoom } = useRevenueByRoomType(range.from, range.to, theaterId)
   // Occupancy luôn cho ngày hôm nay — operations team xem real-time lấp đầy mỗi suất
   const today = toDateStr(new Date())
   const { data: occupancy } = useOccupancy(today, theaterId)
@@ -112,6 +119,13 @@ export default function DashboardPage() {
         onQuickRange={selectQuickRange}
         onExportPdf={() => handleExport('pdf')}
         onExportExcel={() => handleExport('excel')}
+      />
+
+      <DashboardKpiCards
+        occupancyAgg={occupancyAgg}
+        bookingHealth={bookingHealth}
+        revenueBreakdown={revenueBreakdown}
+        revenueByRoom={revenueByRoom}
       />
 
       <DashboardTopTables topMovies={topMovies} topSnacks={topSnacks} />
