@@ -315,10 +315,12 @@ export default function MovieDetailPage() {
         )
         })()}
       </div>
-      {/* Reviews */}
-      <div className="mt-12">
-        <ReviewSection movieId={movieId} />
-      </div>
+      {/* Reviews (ẨN khi flag tắt). */}
+      {FEATURES.reviews && (
+        <div className="mt-12">
+          <ReviewSection movieId={movieId} />
+        </div>
+      )}
 
       <LoginPromptModal open={loginModalOpen} onClose={() => setLoginModalOpen(false)} />
     </div>

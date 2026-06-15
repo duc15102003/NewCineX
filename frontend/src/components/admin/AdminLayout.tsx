@@ -350,11 +350,13 @@ export default function AdminLayout() {
                     onClick={() => setHeaderDropdown(false)}>
                     <Ticket size={16} className="text-gray-400" /> Vé của tôi
                   </Link>
-                  <Link to="/favorites"
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                    onClick={() => setHeaderDropdown(false)}>
-                    <Heart size={16} className="text-gray-400" /> Phim yêu thích
-                  </Link>
+                  {FEATURES.favorites && (
+                    <Link to="/favorites"
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setHeaderDropdown(false)}>
+                      <Heart size={16} className="text-gray-400" /> Phim yêu thích
+                    </Link>
+                  )}
                 </div>
                 <hr className="border-white/5 my-1" />
                 <button

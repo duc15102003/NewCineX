@@ -49,6 +49,9 @@ export const FEATURES = {
   /** Icon chuông thông báo header + page /notifications. */
   notifications: false,
 
+  /** ReviewSection (rating + comment) trên MovieDetail page. */
+  reviews: false,
+
   // ───── Admin sidebar (NAV_ITEMS keys) ─────────────────────────
   /** BRANCH_ADMIN cinex.hn chỉ thấy 5 mục cốt lõi: thể loại, phim, phòng, suất, user.
    *  Bật lại các mục bị ẩn → đổi flag tương ứng = true. */
