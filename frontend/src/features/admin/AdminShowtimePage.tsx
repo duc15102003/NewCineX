@@ -9,6 +9,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
 import TableSkeleton from '@/components/common/TableSkeleton'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
+import { FEATURES } from '@/config/featureFlags'
 
 import ShowtimeFormDialog from './components/ShowtimeFormDialog'
 import AutoScheduleDialog from './components/AutoScheduleDialog'
@@ -269,12 +270,14 @@ export default function AdminShowtimePage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => setAutoScheduleOpen(true)}
-            variant="outline"
-            className="border-[#ffc107]/40 text-[#ffc107] hover:bg-[#ffc107]/10 hover:text-[#ffc107] rounded-lg"
-            title="Tạo nhiều suất chiếu cho 1 phim × N phòng × M ngày — 1 click">
-            <Sparkles size={16} className="mr-1" /> Tạo hàng loạt
-          </Button>
+          {FEATURES.autoSchedule && (
+            <Button onClick={() => setAutoScheduleOpen(true)}
+              variant="outline"
+              className="border-[#ffc107]/40 text-[#ffc107] hover:bg-[#ffc107]/10 hover:text-[#ffc107] rounded-lg"
+              title="Tạo nhiều suất chiếu cho 1 phim × N phòng × M ngày — 1 click">
+              <Sparkles size={16} className="mr-1" /> Tạo hàng loạt
+            </Button>
+          )}
           <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
             <Plus size={16} className="mr-1" /> Thêm mới
           </Button>
@@ -380,13 +383,15 @@ export default function AdminShowtimePage() {
         presetStartTime={presetStartTime}
       />
 
-      {/* Auto-schedule Dialog — tạo nhiều suất 1 click */}
-      <AutoScheduleDialog
-        open={autoScheduleOpen}
-        onOpenChange={setAutoScheduleOpen}
-        scopedTheaterId={scopedTheaterId}
-        theaterLocked={theaterLocked}
-      />
+      {/* Auto-schedule Dialog — chỉ render khi feature flag bật. */}
+      {FEATURES.autoSchedule && (
+        <AutoScheduleDialog
+          open={autoScheduleOpen}
+          onOpenChange={setAutoScheduleOpen}
+          scopedTheaterId={scopedTheaterId}
+          theaterLocked={theaterLocked}
+        />
+      )}
     </div>
   )
 }

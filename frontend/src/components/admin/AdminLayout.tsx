@@ -39,28 +39,44 @@ import AdminTheaterSelector from '@/components/admin/AdminTheaterSelector'
  * <p>STAFF (nhân viên quầy) chỉ vào được POS Đồ ăn, POS Bán vé, Quét vé — không sửa
  * được config/room/showtime/pricing (industry pattern CGV/Lotte).
  */
-const NAV_ITEMS: { to: string; label: string; icon: LucideIcon; exact?: boolean; superAdminOnly?: boolean; staffAllowed?: boolean }[] = [
+import { FEATURES } from '@/config/featureFlags'
+
+type NavItem = {
+  to: string
+  label: string
+  icon: LucideIcon
+  exact?: boolean
+  superAdminOnly?: boolean
+  staffAllowed?: boolean
+  /** Key map sang FEATURES.admin để toggle ẩn/hiện cho cinex-team. */
+  flag: keyof typeof FEATURES.admin
+}
+
+const NAV_ITEMS_ALL: NavItem[] = [
   // Dashboard hiển thị doanh thu + báo cáo — chỉ ADMIN+ thấy. STAFF KHÔNG
   // truy cập data tài chính (rạp thật: cashier không xem revenue).
-  { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard, exact: true },
-  { to: '/admin/genres', label: 'Thể loại', icon: Tags },
-  { to: '/admin/movies', label: 'Phim', icon: Film },
-  { to: '/admin/theaters', label: 'Chi nhánh', icon: Building2, superAdminOnly: true },
-  { to: '/admin/rooms', label: 'Phòng chiếu', icon: DoorOpen },
-  { to: '/admin/showtimes', label: 'Suất chiếu', icon: Clock },
-  { to: '/admin/bookings', label: 'Đặt vé', icon: Ticket },
-  { to: '/admin/payments', label: 'Giao dịch', icon: CreditCard },
-  { to: '/admin/snacks', label: 'Đồ ăn', icon: Coffee },
-  { to: '/admin/combos', label: 'Combo', icon: Package },
-  { to: '/admin/vouchers', label: 'Khuyến mãi', icon: TicketPercent },
-  { to: '/admin/users', label: 'Người dùng', icon: Users, superAdminOnly: true },
-  { to: '/admin/reviews', label: 'Đánh giá', icon: MessageSquare },
-  { to: '/admin/pos', label: 'POS Đồ ăn', icon: Receipt, staffAllowed: true },
-  { to: '/admin/ticket-pos', label: 'POS Bán vé', icon: Clapperboard, staffAllowed: true },
-  { to: '/admin/check-in', label: 'Quét vé', icon: ScanLine, staffAllowed: true },
-  { to: '/admin/pricing', label: 'Quy tắc giá', icon: Percent, superAdminOnly: true },
-  { to: '/admin/configs', label: 'Cấu hình', icon: Settings, superAdminOnly: true },
+  { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard, exact: true, flag: 'dashboard' },
+  { to: '/admin/genres', label: 'Thể loại', icon: Tags, flag: 'genres' },
+  { to: '/admin/movies', label: 'Phim', icon: Film, flag: 'movies' },
+  { to: '/admin/theaters', label: 'Chi nhánh', icon: Building2, superAdminOnly: true, flag: 'theaters' },
+  { to: '/admin/rooms', label: 'Phòng chiếu', icon: DoorOpen, flag: 'rooms' },
+  { to: '/admin/showtimes', label: 'Suất chiếu', icon: Clock, flag: 'showtimes' },
+  { to: '/admin/bookings', label: 'Đặt vé', icon: Ticket, flag: 'bookings' },
+  { to: '/admin/payments', label: 'Giao dịch', icon: CreditCard, flag: 'payments' },
+  { to: '/admin/snacks', label: 'Đồ ăn', icon: Coffee, flag: 'snacks' },
+  { to: '/admin/combos', label: 'Combo', icon: Package, flag: 'combos' },
+  { to: '/admin/vouchers', label: 'Khuyến mãi', icon: TicketPercent, flag: 'vouchers' },
+  { to: '/admin/users', label: 'Người dùng', icon: Users, superAdminOnly: true, flag: 'users' },
+  { to: '/admin/reviews', label: 'Đánh giá', icon: MessageSquare, flag: 'reviews' },
+  { to: '/admin/pos', label: 'POS Đồ ăn', icon: Receipt, staffAllowed: true, flag: 'pos' },
+  { to: '/admin/ticket-pos', label: 'POS Bán vé', icon: Clapperboard, staffAllowed: true, flag: 'ticketPos' },
+  { to: '/admin/check-in', label: 'Quét vé', icon: ScanLine, staffAllowed: true, flag: 'checkIn' },
+  { to: '/admin/pricing', label: 'Quy tắc giá', icon: Percent, superAdminOnly: true, flag: 'pricing' },
+  { to: '/admin/configs', label: 'Cấu hình', icon: Settings, superAdminOnly: true, flag: 'configs' },
 ]
+
+// Filter theo feature flag — cinex-team chỉ hiện 5-6 mục cốt lõi (xem featureFlags.ts).
+const NAV_ITEMS = NAV_ITEMS_ALL.filter((n) => FEATURES.admin[n.flag])
 
 function getBreadcrumbs(pathname: string): { label: string; to?: string }[] {
   const crumbs: { label: string; to?: string }[] = [{ label: 'Bảng điều khiển', to: '/admin' }]
@@ -293,8 +309,8 @@ export default function AdminLayout() {
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Theater context selector — admin filter view theo chi nhánh */}
-          <AdminTheaterSelector />
+          {/* Theater context selector — ẩn khi single-theater mode (cinex-team demo). */}
+          {FEATURES.multiTheater && <AdminTheaterSelector />}
 
           {/* User avatar + dropdown */}
           <div className="relative" ref={headerDropdownRef}>

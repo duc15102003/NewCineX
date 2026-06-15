@@ -9,7 +9,13 @@ spring:
     import: "optional:classpath:application-local.yml"
 
   datasource:
-    url: jdbc:sqlserver://${DB_HOST:localhost}:${DB_PORT:1433};databaseName=${DB_NAME:cinex};encrypt=false;trustServerCertificate=true
+    # Default port 1433 (SQL Server Windows native mặc định) + DB name cinex_team
+    # → team Windows không Docker chạy ngay, chỉ cần tạo database `cinex_team`.
+    #
+    # Khi dùng Docker hybrid (BE native + DB qua container expose 1434:1433) trên
+    # Mac: override DB_PORT=1434 qua env var hoặc application-local.yml.
+    # Docker compose full đã set DB_PORT=1433 (internal container network) bên dưới.
+    url: jdbc:sqlserver://${DB_HOST:localhost}:${DB_PORT:1433};databaseName=${DB_NAME:cinex_team};encrypt=false;trustServerCertificate=true
     username: ${DB_USERNAME:sa}
     password: ${DB_PASSWORD:CineX@2026}
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
@@ -39,7 +45,8 @@ spring:
   data:
     redis:
       host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      # cinex-team Redis port 6380 (cinex: 6379)
+      port: ${REDIS_PORT:6380}
       # Lettuce pool — reuse connection thay vì mở mới mỗi op
       # timeout: command timeout (3s là an toàn cho local dev)
       timeout: 3000ms

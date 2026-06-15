@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Clock, ShieldCheck, Lock } from 'lucide-react'
 import { useBookingDetail, useCreatePayment } from '@/hooks/useBooking'
+import { FEATURES } from '@/config/featureFlags'
 import { usePublicConfigNumber } from '@/hooks/useConfig'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
@@ -169,25 +170,25 @@ export default function PaymentPage() {
             </div>
 
             <div className="border-t border-white/10 pt-3 space-y-1.5">
-              {booking.tierDiscountAmount != null && booking.tierDiscountAmount > 0 && (
+              {FEATURES.loyaltyTier && booking.tierDiscountAmount != null && booking.tierDiscountAmount > 0 && (
                 <div className="flex justify-between text-sm text-green-400">
                   <span>Ưu đãi hạng {booking.tierAtBooking ? label(LOYALTY_TIER_LABELS, booking.tierAtBooking) : ''}</span>
                   <span>−{fmtVnd(booking.tierDiscountAmount)}</span>
                 </div>
               )}
-              {booking.groupDiscountAmount != null && booking.groupDiscountAmount > 0 && (
+              {FEATURES.groupDiscount && booking.groupDiscountAmount != null && booking.groupDiscountAmount > 0 && (
                 <div className="flex justify-between text-sm text-green-400">
                   <span>Giảm giá nhóm ({booking.seats.length} vé)</span>
                   <span>−{fmtVnd(booking.groupDiscountAmount)}</span>
                 </div>
               )}
-              {booking.loyaltyDiscountAmount != null && booking.loyaltyDiscountAmount > 0 && (
+              {FEATURES.loyaltyRedeem && booking.loyaltyDiscountAmount != null && booking.loyaltyDiscountAmount > 0 && (
                 <div className="flex justify-between text-sm text-green-400">
                   <span>Đổi {booking.pointsRedeemed?.toLocaleString('vi-VN')} điểm</span>
                   <span>−{fmtVnd(booking.loyaltyDiscountAmount)}</span>
                 </div>
               )}
-              {booking.subtotalAmount != null && booking.vatAmount != null && (
+              {FEATURES.vatDisplay && booking.subtotalAmount != null && booking.vatAmount != null && (
                 <>
                   <div className="flex justify-between text-sm text-gray-400">
                     <span>Tạm tính</span>

@@ -58,4 +58,7 @@
     <include file="db/changelog/changes/038-config-arrive-early.xml"/>
     <include file="db/changelog/changes/039-users-role-add-staff.xml"/>
 
+    <!-- cinex-team Phase 1: xoá data của module ẨN ở UI (voucher / pricing / loyalty / VAT / config) -->
+    <include file="db/changelog/changes/040-cinex-team-minimal-seed.xml"/>
+
 </databaseChangeLog>

@@ -14,6 +14,7 @@ export default defineConfig({
     global: 'globalThis',  // sockjs-client cần biến global (Node.js) → polyfill cho browser
   },
   server: {
-    port: 5173,
+    // cinex-team port 5174 để chạy song song với cinex (5173)
+    port: 5174,
   },
 })

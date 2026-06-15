@@ -9,6 +9,7 @@ import { SEAT_TYPE_COLORS } from '@/utils/colors'
 import { getSeatPrice, type ShowtimePrices } from '@/utils/pricing'
 
 import LoyaltyRedeemInput from './LoyaltyRedeemInput'
+import { FEATURES } from '@/config/featureFlags'
 
 interface AvailableVoucher {
   code: string
@@ -77,29 +78,31 @@ export default function BookingSummary(props: BookingSummaryProps) {
 
       <SelectedSeatsList seats={selectedSeats} showtime={showtime} />
 
-      <div className="mb-4">
-        {voucherResult?.valid ? (
-          <AppliedVoucher voucherResult={voucherResult} onClear={onClearVoucher} />
-        ) : (
-          <VoucherPicker
-            availableVouchers={availableVouchers}
-            showList={showVoucherList}
-            onToggleList={onToggleVoucherList}
-            onSelectVoucher={onSelectVoucher}
-            voucherCode={voucherCode}
-            onCodeChange={onVoucherCodeChange}
-            onApply={onApplyVoucher}
-            loading={voucherLoading}
-            hasSeats={selectedSeats.length > 0}
-          />
-        )}
-        {voucherResult && !voucherResult.valid && (
-          <p className="text-red-400 text-xs mt-1">{voucherResult.message}</p>
-        )}
-      </div>
+      {FEATURES.voucher && (
+        <div className="mb-4">
+          {voucherResult?.valid ? (
+            <AppliedVoucher voucherResult={voucherResult} onClear={onClearVoucher} />
+          ) : (
+            <VoucherPicker
+              availableVouchers={availableVouchers}
+              showList={showVoucherList}
+              onToggleList={onToggleVoucherList}
+              onSelectVoucher={onSelectVoucher}
+              voucherCode={voucherCode}
+              onCodeChange={onVoucherCodeChange}
+              onApply={onApplyVoucher}
+              loading={voucherLoading}
+              hasSeats={selectedSeats.length > 0}
+            />
+          )}
+          {voucherResult && !voucherResult.valid && (
+            <p className="text-red-400 text-xs mt-1">{voucherResult.message}</p>
+          )}
+        </div>
+      )}
 
-      {/* Loyalty redeem — chỉ hiện khi cha truyền callback (login + đủ điểm) */}
-      {onRedeemPointsChange && selectedSeats.length > 0 && (
+      {/* Loyalty redeem — chỉ hiện khi cha truyền callback (login + đủ điểm) + flag bật */}
+      {FEATURES.loyaltyRedeem && onRedeemPointsChange && selectedSeats.length > 0 && (
         <LoyaltyRedeemInput
           redeemPoints={redeemPoints ?? 0}
           onRedeemPointsChange={onRedeemPointsChange}

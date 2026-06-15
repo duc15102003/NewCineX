@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        cinex-team minimal seed — XOÁ data của các module ẨN ở UI (Phase 1).
+
+        Cinex-team là phiên bản RÚT GỌN của cinex để team demo. UI đã ẩn các
+        page: Khuyến mãi / Quy tắc giá / Cấu hình / Loyalty / VAT... thông qua
+        feature flag (xem frontend/src/config/featureFlags.ts).
+
+        Changeset này xoá data tương ứng trong DB cinex_team để khớp UI — admin
+        không thấy menu kia thì data tương ứng cũng không tồn tại, tránh trường
+        hợp data còn nhưng UI ẩn → confused khi debug.
+
+        XOÁ:
+          - Voucher data (vouchers + voucher_usages)
+          - Pricing rule data (pricing_rules)
+          - Loyalty data (loyalty_transactions + loyalty_point_batches + reset
+            users.loyalty_points = 0 + lifetime_points = 0 + tier = STANDARD)
+          - System config keys liên quan: VAT, loyalty.*, group_discount,
+            voucher.*, pricing.*
+
+        GIỮ NGUYÊN:
+          - System config keys core: booking.hold_minutes, booking.max_seats,
+            booking.cutoff_after_start_minutes, showtime.gap_minutes,
+            showtime.buffer_minutes, security.*, statistics.*
+
+        Để re-enable các module này: bật feature flag tương ứng + chạy lại seed
+        gốc (revert hoặc tạo migration restore data).
+    -->
+
+    <changeSet id="040-cinex-team-clean-voucher" author="cinex-team">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="voucher_usages"/>
+        </preConditions>
+        <sql>DELETE FROM voucher_usages;</sql>
+        <sql>DELETE FROM vouchers;</sql>
+    </changeSet>
+
+    <changeSet id="040-cinex-team-clean-pricing" author="cinex-team">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="pricing_rules"/>
+        </preConditions>
+        <sql>DELETE FROM pricing_rules;</sql>
+    </changeSet>
+
+    <changeSet id="040-cinex-team-clean-loyalty-transactions" author="cinex-team">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="loyalty_transactions"/>
+        </preConditions>
+        <sql>DELETE FROM loyalty_transactions;</sql>
+    </changeSet>
+
+    <changeSet id="040-cinex-team-clean-loyalty-batches" author="cinex-team">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="loyalty_point_batches"/>
+        </preConditions>
+        <sql>DELETE FROM loyalty_point_batches;</sql>
+    </changeSet>
+
+    <changeSet id="040-cinex-team-reset-user-loyalty" author="cinex-team">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="users"/>
+                <columnExists tableName="users" columnName="loyalty_points"/>
+            </and>
+        </preConditions>
+        <sql>
+            UPDATE users
+            SET loyalty_points = 0,
+                lifetime_points = 0,
+                tier = 'STANDARD';
+        </sql>
+    </changeSet>
+
+    <changeSet id="040-cinex-team-clean-system-config" author="cinex-team">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="system_config"/>
+        </preConditions>
+        <!--
+            Xoá keys của module bị ẩn. Dùng LIKE pattern để bắt cả prefix
+            loyalty.tier.silver_threshold, loyalty.points_per_thousand_vnd, ...
+            mà không cần liệt kê từng key một.
+        -->
+        <sql>
+            DELETE FROM system_config
+            WHERE config_key LIKE 'loyalty.%'
+               OR config_key LIKE 'voucher.%'
+               OR config_key LIKE 'pricing.%'
+               OR config_key LIKE 'group_discount%'
+               OR config_key = 'vat_percent'
+               OR config_key = 'booking.group_discount_threshold'
+               OR config_key = 'booking.group_discount_percent';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

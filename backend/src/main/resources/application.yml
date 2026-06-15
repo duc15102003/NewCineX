@@ -13,7 +13,8 @@ spring:
       fail-on-unknown-properties: true
 
 server:
-  port: 8088
+  # cinex-team dùng port 8089 để chạy song song với dự án cinex (port 8088)
+  port: ${SERVER_PORT:8089}
   # Gzip compression — giảm ~60-80% payload JSON cho response > 1KB.
   # FE bandwidth giảm rõ rệt với list showtime / booking (mỗi item ~5KB,
   # 20 items = 100KB → ~30KB sau gzip). CPU cost không đáng kể với JSON.
@@ -24,8 +25,8 @@ server:
     min-response-size: 1024
 
 app:
-  frontend-url: ${FRONTEND_URL:http://localhost:5173}
-  backend-url: ${BACKEND_URL:http://localhost:8088}
+  frontend-url: ${FRONTEND_URL:http://localhost:5174}
+  backend-url: ${BACKEND_URL:http://localhost:8089}
   jwt:
     # Bắt buộc set env JWT_SECRET — không có default để tránh leak secret trong source code
     secret: ${JWT_SECRET}

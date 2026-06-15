@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useLogout } from '@/hooks/useAuth'
 import NotificationBell from '@/components/common/NotificationBell'
 import TheaterSelector from '@/components/theater/TheaterSelector'
+import { FEATURES } from '@/config/featureFlags'
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -44,8 +45,8 @@ export default function Header() {
               Phim
             </Link>
 
-            {/* Theater selector — badge "📍 CineX Hà Nội" luôn hiện, click để đổi chi nhánh */}
-            <TheaterSelector />
+            {/* Theater selector — ẩn khi single-theater mode. */}
+            {FEATURES.multiTheater && <TheaterSelector />}
 
             {isLoggedIn() ? (
               <>

@@ -8,6 +8,7 @@ import PriceWithRules from '@/components/common/PriceWithRules'
 import { cdnImage } from '@/utils/image'
 import { AGE_RATING_COLORS, SEAT_TYPE_PRICE_TEXT, ROOM_TYPE_TEXT } from '@/utils/colors'
 import { useIsFavorite, useAddFavorite, useRemoveFavorite } from '@/hooks/useFavorites'
+import { FEATURES } from '@/config/featureFlags'
 import { useTheaterStore } from '@/store/theaterStore'
 
 function getYouTubeEmbedUrl(url: string): string {
@@ -262,7 +263,7 @@ export default function MovieDetailPage() {
                     )}
                   </div>
                   {/* Chỉ hiện chip giảm giá — surge ẩn để giữ tâm lý mua hàng */}
-                  {st.appliedRules && st.appliedRules.some(r => r.discountPercent < 0) && (
+                  {FEATURES.pricingRules && st.appliedRules && st.appliedRules.some(r => r.discountPercent < 0) && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {st.appliedRules.filter(r => r.discountPercent < 0).map(r => (
                         <span
