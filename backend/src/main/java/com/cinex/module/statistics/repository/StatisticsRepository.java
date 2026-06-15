@@ -157,13 +157,19 @@ public class StatisticsRepository {
 
     @SuppressWarnings("unchecked")
     public List<TopMovieStatistics> findTopMovies(int limit, LocalDate from, LocalDate to, Long theaterId) {
-        String jpql = "SELECT m.id, m.title, m.posterUrl, COUNT(bs), SUM(bs.price) " +
+        // Doanh thu = proportional allocation: mỗi ghế gánh phần discount+VAT của booking
+        // theo tỉ lệ giá ghế gốc / tổng giá ghế gốc. SUM bằng tổng totalAmount thực thu
+        // → match cột "Doanh thu hôm nay" (sumTodayRevenue lấy từ Payment.amount).
+        // Trước đây SUM(bs.price) = giá GỐC trước discount → cộng top phim > overview.
+        String jpql = "SELECT m.id, m.title, m.posterUrl, COUNT(bs), " +
+                "       SUM(bs.price * b.totalAmount / b.seatTotalAmount) " +
                 "FROM BookingSeat bs " +
                 "JOIN bs.booking b " +
                 "JOIN b.showtime s " +
                 "JOIN s.movie m " +
                 "WHERE b.status IN ('CONFIRMED', 'CHECKED_IN') " +
-                "AND bs.status = 'BOOKED' ";
+                "AND bs.status = 'BOOKED' " +
+                "AND b.seatTotalAmount > 0 ";
         if (from != null && to != null) {
             jpql += "AND b.confirmedAt >= :start AND b.confirmedAt < :end ";
         }
@@ -196,15 +202,18 @@ public class StatisticsRepository {
 
     @SuppressWarnings("unchecked")
     public List<TopMovieRunStatistics> findTopMovieRuns(int limit, LocalDate from, LocalDate to, Long theaterId) {
+        // Cùng formula proportional với findTopMovies — doanh thu thực thu, match
+        // overview. Trước đây dùng SUM(bs.price) gây mâu thuẫn với "Doanh thu hôm nay".
         String jpql = "SELECT mr.id, m.id, m.title, m.posterUrl, mr.runType, mr.startDate, mr.endDate, " +
-                "       COUNT(bs), SUM(bs.price) " +
+                "       COUNT(bs), SUM(bs.price * b.totalAmount / b.seatTotalAmount) " +
                 "FROM BookingSeat bs " +
                 "JOIN bs.booking b " +
                 "JOIN b.showtime s " +
                 "JOIN s.movieRun mr " +
                 "JOIN mr.movie m " +
                 "WHERE b.status IN ('CONFIRMED', 'CHECKED_IN') " +
-                "AND bs.status = 'BOOKED' ";
+                "AND bs.status = 'BOOKED' " +
+                "AND b.seatTotalAmount > 0 ";
         if (from != null && to != null) {
             jpql += "AND b.confirmedAt >= :start AND b.confirmedAt < :end ";
         }
