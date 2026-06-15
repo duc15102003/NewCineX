@@ -61,4 +61,7 @@
     <!-- cinex-team Phase 1: xoá data của module ẨN ở UI (voucher / pricing / loyalty / VAT / config) -->
     <include file="db/changelog/changes/040-cinex-team-minimal-seed.xml"/>
 
+    <!-- Fix seed showtime cũ: auto-fill sweetbox/deluxe price cho phòng có loại ghế đó -->
+    <include file="db/changelog/changes/041-fix-showtime-tier-prices.xml"/>
+
 </databaseChangeLog>

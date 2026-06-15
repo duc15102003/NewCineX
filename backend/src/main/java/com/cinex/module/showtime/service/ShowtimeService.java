@@ -988,6 +988,8 @@ public class ShowtimeService {
                 case "base" -> 150000;
                 case "vip" -> 200000;
                 case "couple" -> 350000;
+                case "sweetbox" -> 600000;  // couple × 1.75 (luxury cao cấp)
+                case "deluxe" -> 300000;    // vip × 1.5 (recliner)
                 default -> 0;
             };
         }
@@ -995,6 +997,8 @@ public class ShowtimeService {
             case "base" -> 80000;
             case "vip" -> 120000;
             case "couple" -> 200000;
+            case "sweetbox" -> 350000;  // couple × 1.75
+            case "deluxe" -> 180000;    // vip × 1.5
             default -> 0;
         };
     }
