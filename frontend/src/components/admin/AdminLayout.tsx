@@ -66,7 +66,7 @@ const NAV_ITEMS_ALL: NavItem[] = [
   { to: '/admin/snacks', label: 'Đồ ăn', icon: Coffee, flag: 'snacks' },
   { to: '/admin/combos', label: 'Combo', icon: Package, flag: 'combos' },
   { to: '/admin/vouchers', label: 'Khuyến mãi', icon: TicketPercent, flag: 'vouchers' },
-  { to: '/admin/users', label: 'Người dùng', icon: Users, superAdminOnly: true, flag: 'users' },
+  { to: '/admin/users', label: 'Người dùng', icon: Users, flag: 'users' },
   { to: '/admin/reviews', label: 'Đánh giá', icon: MessageSquare, flag: 'reviews' },
   { to: '/admin/pos', label: 'POS Đồ ăn', icon: Receipt, staffAllowed: true, flag: 'pos' },
   { to: '/admin/ticket-pos', label: 'POS Bán vé', icon: Clapperboard, staffAllowed: true, flag: 'ticketPos' },

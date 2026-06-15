@@ -75,7 +75,7 @@ public class UserController {
      * GET /api/users?keyword=vanan&role=ADMIN&enabled=true&includeDeleted=false&page=0&size=20
      */
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     @Operation(summary = "(Admin) List users with filter")
     public ApiResponse<PageResponse<UserProfileResponse>> listUsers(
             UserFilter filter,

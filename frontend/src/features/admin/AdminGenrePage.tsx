@@ -53,7 +53,7 @@ export default function AdminGenrePage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   // RBAC: Genre CRUD chỉ SUPER_ADMIN — BRANCH_ADMIN xem read-only.
-  const isSuperAdmin = useAuthStore(s => s.isSuperAdmin())
+  const isAdmin = useAuthStore(s => s.isAdmin())
 
   // Auto-load detail khi mở Edit — React Query cache theo id, đỡ phải tự catch error
   const { data: editingDetail } = useGenreDetail(editingId)
@@ -166,7 +166,7 @@ export default function AdminGenrePage() {
           )}
         </div>
         {/* RIGHT: Add + Bulk actions — chỉ SUPER_ADMIN (Genre là content chung) */}
-        {isSuperAdmin && (
+        {isAdmin && (
           <div className="flex items-center gap-2">
             <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
               <Plus size={16} className="mr-1" /> Thêm mới
@@ -203,7 +203,7 @@ export default function AdminGenrePage() {
                   <div className="flex flex-col items-center gap-2 text-gray-500">
                     <Tags size={32} className="text-gray-600" />
                     <p className="text-sm">{keywordInput ? `Không tìm thấy thể loại nào khớp "${keywordInput}"` : 'Chưa có thể loại nào'}</p>
-                    {isSuperAdmin && !keywordInput && (
+                    {isAdmin && !keywordInput && (
                       <button onClick={openCreate}
                         className="text-xs text-[#ffc107] hover:underline">
                         Thêm thể loại đầu tiên

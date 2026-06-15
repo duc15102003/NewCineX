@@ -89,11 +89,11 @@ export default function AppRouter() {
           <Route element={<AdminRoute />}>
             <Route element={<StaffAllowedPathGuard />}>
               <Route element={<AdminLayout />}>
-                {/* Khi dashboard ẨN: /admin redirect sang /admin/users (default landing
-                    cho cinex-team — admin đăng nhập luôn vào trang quản lý người dùng). */}
+                {/* Khi dashboard ẨN: /admin redirect sang /admin/genres (default landing
+                    cho cinex-team — admin đăng nhập vào trang Thể loại). */}
                 {FEATURES.admin.dashboard
                   ? <Route path="/admin" element={<DashboardPage />} />
-                  : <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
+                  : <Route path="/admin" element={<Navigate to="/admin/genres" replace />} />
                 }
                 {FEATURES.admin.genres && <Route path="/admin/genres" element={<AdminGenrePage />} />}
                 {FEATURES.admin.movies && <Route path="/admin/movies" element={<AdminMoviePage />} />}

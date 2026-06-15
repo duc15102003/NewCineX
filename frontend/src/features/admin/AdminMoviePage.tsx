@@ -51,7 +51,7 @@ export default function AdminMoviePage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploadId, setUploadId] = useState<number | null>(null)
   // RBAC: Movie CRUD chỉ SUPER_ADMIN — BRANCH_ADMIN xem read-only.
-  const isSuperAdmin = useAuthStore(s => s.isSuperAdmin())
+  const isAdmin = useAuthStore(s => s.isAdmin())
   // Dialog quản lý đợt chiếu (MovieRun)
   const [runsDialogOpen, setRunsDialogOpen] = useState(false)
   const [runsMovie, setRunsMovie] = useState<{ id: number; title: string } | null>(null)
@@ -158,7 +158,7 @@ export default function AdminMoviePage() {
           </div>
         </div>
         {/* Movie CRUD chỉ SUPER_ADMIN — BRANCH_ADMIN xem read-only, ẩn nút Create + Bulk */}
-        {isSuperAdmin && (
+        {isAdmin && (
           <div className="flex items-center gap-2">
             <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
               <Plus size={16} className="mr-1" /> Thêm mới
@@ -203,7 +203,7 @@ export default function AdminMoviePage() {
                   <div className="flex flex-col items-center gap-2 text-gray-500">
                     <Film size={32} className="text-gray-600" />
                     <p className="text-sm">{keywordInput ? `Không tìm thấy phim khớp "${keywordInput}"` : 'Chưa có phim nào'}</p>
-                    {isSuperAdmin && !keywordInput && activeFilterCount === 0 && (
+                    {isAdmin && !keywordInput && activeFilterCount === 0 && (
                       <button onClick={openCreate}
                         className="text-xs text-[#ffc107] hover:underline">
                         Thêm phim đầu tiên
