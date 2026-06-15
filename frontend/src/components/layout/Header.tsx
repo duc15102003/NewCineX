@@ -50,7 +50,7 @@ export default function Header() {
 
             {isLoggedIn() ? (
               <>
-              <NotificationBell />
+              {FEATURES.notifications && <NotificationBell />}
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -89,13 +89,15 @@ export default function Header() {
                       >
                         <Ticket size={16} className="text-gray-400" /> Vé của tôi
                       </Link>
-                      <Link
-                        to="/favorites"
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                        onClick={() => setDropdownOpen(false)}
-                      >
-                        <Heart size={16} className="text-gray-400" /> Phim yêu thích
-                      </Link>
+                      {FEATURES.favorites && (
+                        <Link
+                          to="/favorites"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          <Heart size={16} className="text-gray-400" /> Phim yêu thích
+                        </Link>
+                      )}
                     </div>
 
                     {/* STAFF: quick links vào ca làm việc — POS Bán vé là cái
@@ -207,9 +209,11 @@ export default function Header() {
               <Link to="/my-tickets" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
                 <Ticket size={16} className="text-gray-400" /> Vé của tôi
               </Link>
-              <Link to="/favorites" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
-                <Heart size={16} className="text-gray-400" /> Phim yêu thích
-              </Link>
+              {FEATURES.favorites && (
+                <Link to="/favorites" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
+                  <Heart size={16} className="text-gray-400" /> Phim yêu thích
+                </Link>
+              )}
               {isStaff() && (
                 <>
                   <hr className="border-[#3f382d] my-1" />

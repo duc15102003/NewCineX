@@ -43,16 +43,22 @@ export const FEATURES = {
   /** Nút "Tạo hàng loạt suất chiếu" (AutoSchedule) trong /admin/showtimes. */
   autoSchedule: false,
 
+  /** Phim yêu thích — Heart button trên movie detail + page /favorites + link header. */
+  favorites: false,
+
+  /** Icon chuông thông báo header + page /notifications. */
+  notifications: false,
+
   // ───── Admin sidebar (NAV_ITEMS keys) ─────────────────────────
   /** BRANCH_ADMIN cinex.hn chỉ thấy 5 mục cốt lõi: thể loại, phim, phòng, suất, user.
    *  Bật lại các mục bị ẩn → đổi flag tương ứng = true. */
   admin: {
-    dashboard: true,     // Tổng quan
+    dashboard: false,    // Tổng quan — ẨN. Khi /admin truy cập → redirect /admin/users
     genres: true,        // Thể loại
     movies: true,        // Phim
     rooms: true,         // Phòng chiếu
     showtimes: true,     // Suất chiếu
-    users: true,         // Người dùng
+    users: true,         // Người dùng (default landing page khi không có dashboard)
 
     // Các page ẩn cho cinex-team
     theaters: false,     // Chi nhánh (SUPER_ADMIN — đơn rạp không cần)

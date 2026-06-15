@@ -122,7 +122,7 @@ export default function MovieDetailPage() {
                   {AGE_RATING_SHORT[movie.ageRating] ?? movie.ageRating} · {AGE_RATING_DESC[movie.ageRating] ?? ''}
                 </span>
               )}
-              {isLoggedIn() && (
+              {FEATURES.favorites && isLoggedIn() && (
                 <button
                   onClick={() => isFavorite ? removeFavorite.mutate(movieId) : addFavorite.mutate(movieId)}
                   className={`shrink-0 p-2 rounded-full transition-all ${

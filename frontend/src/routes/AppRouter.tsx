@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom'
 import MainLayout from '@/components/layout/MainLayout'
 import ProtectedRoute from './ProtectedRoute'
 import AdminRoute from './AdminRoute'
@@ -76,8 +76,8 @@ export default function AppRouter() {
               <Route path="/my-tickets" element={<MyTicketsPage />} />
               <Route path="/my-tickets/:id" element={<TicketDetailPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/favorites" element={<FavoritesPage />} />
-              <Route path="/notifications" element={<NotificationListPage />} />
+              {FEATURES.favorites && <Route path="/favorites" element={<FavoritesPage />} />}
+              {FEATURES.notifications && <Route path="/notifications" element={<NotificationListPage />} />}
               {FEATURES.loyaltyTier && <Route path="/loyalty" element={<LoyaltyPage />} />}
             </Route>
 
@@ -89,7 +89,12 @@ export default function AppRouter() {
           <Route element={<AdminRoute />}>
             <Route element={<StaffAllowedPathGuard />}>
               <Route element={<AdminLayout />}>
-                {FEATURES.admin.dashboard && <Route path="/admin" element={<DashboardPage />} />}
+                {/* Khi dashboard ẨN: /admin redirect sang /admin/users (default landing
+                    cho cinex-team — admin đăng nhập luôn vào trang quản lý người dùng). */}
+                {FEATURES.admin.dashboard
+                  ? <Route path="/admin" element={<DashboardPage />} />
+                  : <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
+                }
                 {FEATURES.admin.genres && <Route path="/admin/genres" element={<AdminGenrePage />} />}
                 {FEATURES.admin.movies && <Route path="/admin/movies" element={<AdminMoviePage />} />}
                 {FEATURES.admin.theaters && <Route path="/admin/theaters" element={<AdminTheaterPage />} />}
