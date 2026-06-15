@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Sparkles, X } from 'lucide-react'
+import { Plus, Sparkles, X, List as ListIcon, Calendar as CalendarIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -14,10 +14,12 @@ import ShowtimeFormDialog from './components/ShowtimeFormDialog'
 import AutoScheduleDialog from './components/AutoScheduleDialog'
 import ShowtimeFilterDrawer, { type ShowtimeFilterDraft } from './components/ShowtimeFilterDrawer'
 import ShowtimeRow from './components/ShowtimeRow'
+import ShowtimeCalendarView from './components/ShowtimeCalendarView'
 
 import {
   useAdminShowtimes, useAdminMovies, useAdminRooms,
   useBulkDeleteShowtimes, useBulkRestoreShowtimes,
+  useBulkPublishShowtimes,
   useTheaterOptions,
 } from '@/hooks/useAdmin'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
@@ -46,6 +48,10 @@ export default function AdminShowtimePage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [autoScheduleOpen, setAutoScheduleOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
+  // Preset cho click-to-create từ calendar view
+  const [presetRoomId, setPresetRoomId] = useState<number | null>(null)
+  const [presetStartTime, setPresetStartTime] = useState<string | null>(null)
 
   const [appliedFilter, setAppliedFilter] = useState<ShowtimeFilterDraft>(EMPTY_FILTER)
   const [draftFilter, setDraftFilter] = useState<ShowtimeFilterDraft>(EMPTY_FILTER)
@@ -84,13 +90,38 @@ export default function AdminShowtimePage() {
     [appliedFilter],
   )
 
-  // "Tất cả chi nhánh" → thêm cột Chi nhánh trong row để user phân biệt suất
-  // thuộc rạp nào. Filter theo chi nhánh cụ thể → ẩn cột vì trùng lặp.
-  const showAllTheaters = !adminTheater
+  // Filter áp dụng cho calendar — KHÔNG bao gồm field date (calendar có
+  // navigator ngày riêng, sẽ override). Giữ keyword + movieId/roomId/status/
+  // roomType/price/includeDeleted để filter áp dụng nhất quán cả 2 view.
+  const calendarExtraQuery = useMemo<AdminShowtimeParams>(() => {
+    const p: AdminShowtimeParams = {}
+    if (keyword) p.keyword = keyword
+    if (!adminTheater?.id && appliedFilter.theaterId) p.theaterId = Number(appliedFilter.theaterId)
+    if (appliedFilter.movieId) p.movieId = Number(appliedFilter.movieId)
+    if (appliedFilter.roomId) p.roomId = Number(appliedFilter.roomId)
+    if (appliedFilter.status) p.status = appliedFilter.status
+    if (appliedFilter.roomType) p.roomType = appliedFilter.roomType
+    if (appliedFilter.minPrice) p.minPrice = Number(appliedFilter.minPrice)
+    if (appliedFilter.maxPrice) p.maxPrice = Number(appliedFilter.maxPrice)
+    if (appliedFilter.includeDeleted === 'true') p.includeDeleted = true
+    return p
+  }, [keyword, appliedFilter, adminTheater])
+
+  // Số filter "thực sự" áp dụng cho calendar — bỏ qua startTimeFrom/To vì
+  // calendar luôn hiển thị full ngày. startDate VẪN được tính vì nó act as
+  // "go to date" cho calendar.
+  const calendarActiveFilterCount = useMemo(() => {
+    const { startTimeFrom, startTimeTo, ...rest } = appliedFilter
+    void startTimeFrom; void startTimeTo
+    return Object.values(rest).filter((v) => v !== '').length
+  }, [appliedFilter])
+
+  // Force theater pick (industry standard): admin LUÔN xem 1 CN cụ thể qua
+  // selector ở topbar. Không cần render cột "Chi nhánh" trong table nữa.
   const { data: pageData, isLoading } = useAdminShowtimes(queryParams)
   const showtimes = pageData?.content ?? []
   const totalPages = pageData?.totalPages ?? 0
-  const tableCols = showAllTheaters ? 8 : 7
+  const tableCols = 7
 
   // Movies + rooms cho filter dropdown. PHẢI scope theo chi nhánh đang chọn —
   // nếu admin đứng ở Hà Nội mà dropdown show phòng/phim của các CN khác → user
@@ -116,6 +147,7 @@ export default function AdminShowtimePage() {
 
   const bulkDeleteMut = useBulkDeleteShowtimes()
   const bulkRestoreMut = useBulkRestoreShowtimes()
+  const bulkPublishMut = useBulkPublishShowtimes()
 
   function openFilter() {
     setDraftFilter(appliedFilter)
@@ -143,16 +175,30 @@ export default function AdminShowtimePage() {
     if (selectedIds.size === 0) { toast.error('Hãy chọn ít nhất 1 mục'); return }
     bulkRestoreMut.mutate([...selectedIds], { onSuccess: () => setSelectedIds(new Set()) })
   }
+  function handleBulkPublish() {
+    if (selectedIds.size === 0) { toast.error('Hãy chọn ít nhất 1 mục'); return }
+    bulkPublishMut.mutate([...selectedIds], { onSuccess: () => setSelectedIds(new Set()) })
+  }
   function onConfirmDelete() {
     bulkDeleteMut.mutate([...selectedIds], { onSuccess: () => setConfirmOpen(false) })
   }
 
   function openCreate() {
     setEditingId(null)
+    setPresetRoomId(null)
+    setPresetStartTime(null)
     setDialogOpen(true)
   }
   function openEdit(showtimeId: number) {
     setEditingId(showtimeId)
+    setPresetRoomId(null)
+    setPresetStartTime(null)
+    setDialogOpen(true)
+  }
+  function openCreateFromCalendar(roomId: number, startTime: string) {
+    setEditingId(null)
+    setPresetRoomId(roomId)
+    setPresetStartTime(startTime)
     setDialogOpen(true)
   }
 
@@ -177,7 +223,7 @@ export default function AdminShowtimePage() {
       showtime={s}
       index={idx}
       selected={selectedIds.has(s.id)}
-      showTheater={showAllTheaters}
+      showTheater={false}
       onToggleSelect={toggleSelect}
       onEdit={openEdit}
     />
@@ -185,7 +231,25 @@ export default function AdminShowtimePage() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
+      {/* View switcher — tách riêng khỏi action toolbar để toolbar bớt nhồi */}
+      <div className="flex items-center justify-between border-b border-[#3f382d] pb-3 -mt-2">
+        <div className="inline-flex rounded-lg border border-white/10 bg-[#2a2317] p-0.5">
+          <button type="button" onClick={() => setViewMode('list')}
+            className={`flex items-center gap-1.5 px-3 h-8 text-xs rounded-md transition-colors ${
+              viewMode === 'list' ? 'bg-[#ffc107] text-black font-semibold' : 'text-gray-300 hover:text-white'
+            }`}>
+            <ListIcon size={13} /> Danh sách
+          </button>
+          <button type="button" onClick={() => setViewMode('calendar')}
+            className={`flex items-center gap-1.5 px-3 h-8 text-xs rounded-md transition-colors ${
+              viewMode === 'calendar' ? 'bg-[#ffc107] text-black font-semibold' : 'text-gray-300 hover:text-white'
+            }`}>
+            <CalendarIcon size={13} /> Lịch
+          </button>
+        </div>
+      </div>
+
+      {/* Toolbar: search/filter (trái) + action (phải) */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex flex-wrap items-center gap-2 flex-1">
           <div className="flex-1 max-w-sm">
@@ -208,8 +272,8 @@ export default function AdminShowtimePage() {
           <Button onClick={() => setAutoScheduleOpen(true)}
             variant="outline"
             className="border-[#ffc107]/40 text-[#ffc107] hover:bg-[#ffc107]/10 hover:text-[#ffc107] rounded-lg"
-            title="Tạo nhiều suất chiếu 1 click">
-            <Sparkles size={16} className="mr-1" /> Auto-schedule
+            title="Tạo nhiều suất chiếu cho 1 phim × N phòng × M ngày — 1 click">
+            <Sparkles size={16} className="mr-1" /> Tạo hàng loạt
           </Button>
           <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
             <Plus size={16} className="mr-1" /> Thêm mới
@@ -217,8 +281,10 @@ export default function AdminShowtimePage() {
           <StatusDropdown
             onArchive={handleBulkArchive}
             onRestore={handleBulkRestore}
+            onPublish={handleBulkPublish}
             archiveLoading={bulkDeleteMut.isPending}
             restoreLoading={bulkRestoreMut.isPending}
+            publishLoading={bulkPublishMut.isPending}
           />
         </div>
       </div>
@@ -234,9 +300,23 @@ export default function AdminShowtimePage() {
         rooms={rooms}
         theaters={theaters}
         showTheaterFilter={!theaterLocked}
+        calendarMode={viewMode === 'calendar'}
       />
 
+      {/* Calendar view (alternative to list) */}
+      {viewMode === 'calendar' && (
+        <ShowtimeCalendarView
+          scopedTheaterId={scopedTheaterId}
+          onCreateAt={openCreateFromCalendar}
+          onEdit={openEdit}
+          extraQuery={calendarExtraQuery}
+          activeFilterCount={calendarActiveFilterCount}
+          filterStartDate={appliedFilter.startDate}
+        />
+      )}
+
       {/* Table */}
+      {viewMode === 'list' && (
       <div className="rounded-2xl border border-[#3f382d] overflow-clip">
         <Table>
           <TableHeader>
@@ -247,7 +327,7 @@ export default function AdminShowtimePage() {
               </TableHead>
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Phim / Giờ chiếu</TableHead>
-              {showAllTheaters && <TableHead className="text-gray-400">Chi nhánh</TableHead>}
+              {/* Cột "Chi nhánh" bỏ — admin LUÔN xem 1 CN cụ thể (force pick ở topbar) */}
               <TableHead className="text-gray-400">Phòng</TableHead>
               <TableHead className="text-gray-400">Giá</TableHead>
               <TableHead className="text-gray-400">Trạng thái</TableHead>
@@ -268,8 +348,9 @@ export default function AdminShowtimePage() {
           )}
         </Table>
       </div>
+      )}
 
-      {totalPages > 1 && (
+      {viewMode === 'list' && totalPages > 1 && (
         <div className="flex justify-center gap-2">
           <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}
             className="border-white/10 text-gray-300 hover:bg-white/5">Trước</Button>
@@ -295,6 +376,8 @@ export default function AdminShowtimePage() {
         editingId={editingId}
         scopedTheaterId={scopedTheaterId}
         theaterLocked={theaterLocked}
+        presetRoomId={presetRoomId}
+        presetStartTime={presetStartTime}
       />
 
       {/* Auto-schedule Dialog — tạo nhiều suất 1 click */}

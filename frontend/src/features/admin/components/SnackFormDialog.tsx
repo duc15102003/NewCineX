@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { PriceInput } from '@/components/ui/price-input'
+import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
 
 import { useCreateSnack, useUpdateSnack } from '@/hooks/useAdmin'
@@ -99,7 +100,7 @@ export default function SnackFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="md" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
         <DialogHeader>
-          <DialogTitle>{editingItem ? 'Chỉnh sửa đồ ăn' : 'Thêm đồ ăn mới'}</DialogTitle>
+          <DialogTitle>{editingItem ? 'Chỉnh sửa đồ ăn' : 'Thêm mới đồ ăn'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogBody>
@@ -159,11 +160,14 @@ export default function SnackFormDialog({
                 </select>
               </div>
               <div className="col-span-12">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="available" {...register('available')}
-                    className="accent-[#ffc107] w-4 h-4" defaultChecked />
-                  <label htmlFor="available" className="text-sm text-gray-400">Còn hàng</label>
-                </div>
+                <Controller name="available" control={control}
+                  render={({ field }) => (
+                    <Switch
+                      checked={field.value !== false}
+                      onChange={field.onChange}
+                      label="Còn hàng — đang bán cho khách"
+                      description="Tắt để tạm dừng bán mặt hàng này (vd hết hàng, đang nhập mới)." />
+                  )} />
               </div>
             </div>
           </DialogBody>

@@ -1,10 +1,12 @@
 package com.cinex.module.payment.repository;
 
 import com.cinex.module.payment.entity.Payment;
+import com.cinex.module.payment.entity.PaymentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,4 +32,10 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
      * COMPLETED nhưng booking CANCELLED). Sort theo paidAt mới nhất.
      */
     List<Payment> findByNeedsRefundTrueOrderByPaidAtDesc();
+
+    /**
+     * Tìm payment kẹt PENDING quá lâu — dùng cho PaymentCleanupScheduler
+     * auto-fail. Lý do: callback IPN không đến, MoMo downtime, user tắt app.
+     */
+    List<Payment> findByStatusAndCreatedAtBefore(PaymentStatus status, LocalDateTime before);
 }

@@ -190,7 +190,7 @@ export default function CheckInPage() {
           </div>
           <Button
             onClick={scanning ? stopScanner : startScanner}
-            className={`w-full h-12 font-bold text-base rounded-lg ${
+            className={`w-full h-11 font-semibold text-sm rounded-lg ${
               scanning
                 ? 'bg-red-500 hover:bg-red-600 text-white'
                 : 'bg-[#ffc107] hover:bg-[#e6ac06] text-black'
@@ -215,7 +215,7 @@ export default function CheckInPage() {
           <Button
             onClick={handleManualSubmit}
             disabled={!code.trim() || previewMut.isPending || checkInMut.isPending}
-            className="w-full h-12 bg-[#ffc107] hover:bg-[#e6ac06] text-black font-bold text-base rounded-lg"
+            className="w-full h-11 bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg"
           >
             {previewMut.isPending ? 'Đang tra cứu...' : 'Tra cứu vé'}
           </Button>
@@ -351,8 +351,8 @@ export default function CheckInPage() {
               </button>
             </div>
             <div className="text-xs text-red-200/70 bg-red-500/5 border border-red-500/20 rounded-lg p-3 leading-relaxed">
-              Booking <span className="font-mono">{result.booking.bookingCode}</span> đã chuyển sang trạng thái
-              REJECTED. Theo policy không hoàn tiền.
+              Đơn <span className="font-mono">{result.booking.bookingCode}</span> đã chuyển sang trạng thái
+              "Từ chối tại cổng". Theo quy định không hoàn tiền.
             </div>
           </CardContent>
         </Card>

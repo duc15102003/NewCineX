@@ -85,9 +85,20 @@ public class SnackService {
         Theater theater = theaterRepository.findById(targetTheaterId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.THEATER_NOT_FOUND));
 
+        String normalized = request.getName().trim();
+        if (normalized.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tên đồ ăn không được rỗng (chỉ có khoảng trắng)");
+        }
+        if (snackRepository.existsByNameIgnoreCaseAndTheaterIdAndStorageState(
+                normalized, theater.getId(), StorageState.ACTIVE)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Đồ ăn '" + normalized + "' đã tồn tại trong chi nhánh này");
+        }
+
         Snack snack = Snack.builder()
                 .theater(theater)
-                .name(request.getName())
+                .name(normalized)
                 .description(request.getDescription())
                 .price(request.getPrice())
                 .imageUrl(request.getImageUrl())
@@ -106,8 +117,25 @@ public class SnackService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.SNACK_NOT_FOUND));
         securityService.requireAccessToTheater(snack.getTheater().getId());
 
-        // KHÔNG cho đổi theater khi update — tạo snack mới ở chi nhánh khác nếu cần
-        snack.setName(request.getName());
+        // Enforce theater immutable — fail-fast nếu admin cố đổi
+        if (request.getTheaterId() != null
+                && !snack.getTheater().getId().equals(request.getTheaterId())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Không thể đổi chi nhánh của đồ ăn — tạo mới ở chi nhánh khác nếu cần");
+        }
+
+        String normalized = request.getName().trim();
+        if (normalized.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tên đồ ăn không được rỗng (chỉ có khoảng trắng)");
+        }
+        if (snackRepository.existsByNameIgnoreCaseAndTheaterIdAndIdNotAndStorageState(
+                normalized, snack.getTheater().getId(), id, StorageState.ACTIVE)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Đồ ăn '" + normalized + "' đã tồn tại trong chi nhánh này");
+        }
+
+        snack.setName(normalized);
         snack.setDescription(request.getDescription());
         snack.setPrice(request.getPrice());
         snack.setImageUrl(request.getImageUrl());
@@ -143,9 +171,25 @@ public class SnackService {
         Snack snack = snackRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SNACK_NOT_FOUND));
         securityService.requireAccessToTheater(snack.getTheater().getId());
+        ensureNoActiveComboDependency(id, snack.getName());
         snack.setStorageState(StorageState.ARCHIVED);
         snackRepository.save(snack);
         log.info("Soft deleted snack: {}", snack.getName());
+    }
+
+    /**
+     * Chặn xoá snack nếu vẫn còn Combo ACTIVE reference. Tránh combo bị mất
+     * item sau khi snack archived → POS load combo gặp NPE / số tiền sai.
+     * Industry chuẩn (CGV/Lotte F&B): item parent đang được combo dùng phải
+     * remove khỏi combo trước hoặc archive combo.
+     */
+    private void ensureNoActiveComboDependency(Long snackId, String snackName) {
+        long activeCombos = snackRepository.countActiveCombosUsingSnack(snackId);
+        if (activeCombos > 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Đồ ăn '" + snackName + "' đang được " + activeCombos
+                    + " combo sử dụng. Hãy gỡ khỏi combo hoặc archive combo trước.");
+        }
     }
 
     @Transactional
@@ -162,9 +206,9 @@ public class SnackService {
     @Transactional
     public void bulkDelete(List<Long> ids) {
         List<Snack> items = snackRepository.findAllById(ids);
-        // RBAC: branch ADMIN chỉ thao tác snack thuộc chi nhánh mình — chặn
-        // attacker gửi POST /snacks/bulk-delete với ids của chi nhánh khác.
+        // RBAC + fail-fast dependency check trước khi mutate gì
         items.forEach(i -> securityService.requireAccessToTheater(i.getTheater().getId()));
+        items.forEach(i -> ensureNoActiveComboDependency(i.getId(), i.getName()));
         items.forEach(i -> i.setStorageState(StorageState.ARCHIVED));
         snackRepository.saveAll(items);
         log.info("Bulk soft deleted {} items", items.size());

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Bug hậu 035: thêm enum DRAFT vào ShowtimeStatus nhưng QUÊN update CHECK
+        constraint chk_showtimes_status (vẫn chỉ allow 4 giá trị cũ). Khi admin
+        tạo nháp qua auto-schedule, BE INSERT status='DRAFT' → DB từ chối với
+        "Vi phạm ràng buộc dữ liệu" (DataIntegrityViolationException).
+
+        Migration này:
+          1. Drop CHECK cũ
+          2. Tạo lại CHECK với 5 giá trị: DRAFT, SCHEDULED, ONGOING, FINISHED, CANCELLED
+
+        Đồng thời bổ sung CHECK cho 2 column format + language_mode (035 quên),
+        đảm bảo data integrity tầng DB:
+          - format ∈ {TWO_D, THREE_D, IMAX, IMAX_3D, FOUR_DX, SCREEN_X, NULL}
+          - language_mode ∈ {SUB_VI, DUB_VI, ORIGINAL, NULL}
+        NULL cho phép vì suất legacy trước 035 = NULL (backward-compat).
+    -->
+
+    <changeSet id="036-drop-old-showtime-status-check" author="cinex">
+        <sql>ALTER TABLE showtimes DROP CONSTRAINT chk_showtimes_status</sql>
+    </changeSet>
+
+    <changeSet id="036-add-showtime-status-check-with-draft" author="cinex">
+        <sql>
+            ALTER TABLE showtimes ADD CONSTRAINT chk_showtimes_status
+            CHECK (status IN ('DRAFT', 'SCHEDULED', 'ONGOING', 'FINISHED', 'CANCELLED'))
+        </sql>
+    </changeSet>
+
+    <changeSet id="036-add-showtime-format-check" author="cinex">
+        <sql>
+            ALTER TABLE showtimes ADD CONSTRAINT chk_showtimes_format
+            CHECK (format IS NULL OR format IN
+                ('TWO_D', 'THREE_D', 'IMAX', 'IMAX_3D', 'FOUR_DX', 'SCREEN_X'))
+        </sql>
+    </changeSet>
+
+    <changeSet id="036-add-showtime-language-check" author="cinex">
+        <sql>
+            ALTER TABLE showtimes ADD CONSTRAINT chk_showtimes_language_mode
+            CHECK (language_mode IS NULL OR language_mode IN
+                ('SUB_VI', 'DUB_VI', 'ORIGINAL'))
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

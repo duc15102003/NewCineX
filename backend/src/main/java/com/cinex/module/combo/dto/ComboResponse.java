@@ -13,7 +13,7 @@ public class ComboResponse {
 
     private Long id;
     private String storageState;
-    /** Chi nhánh — phục vụ grouped view + audit. */
+    /** Chi nhánh sở hữu combo — breadcrumb + audit (FE đã force theater pick). */
     private Long theaterId;
     private String theaterName;
     private String theaterCity;
@@ -32,4 +32,21 @@ public class ComboResponse {
     private Integer savingsPercent;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /**
+     * Tính sẵn từ BE: combo có thật sự bán được không (effective availability).
+     *
+     * <p>True ⇔ {@code active && storageState != ARCHIVED && ALL items.snack.available
+     * && ALL items.snack.storageState != ARCHIVED}.
+     *
+     * <p>Khi false → POS auto-hide combo này, admin nhìn thấy badge "Tạm hết"
+     * cùng danh sách {@link #unavailableItems} để biết lý do.
+     */
+    private boolean effectiveAvailable;
+
+    /**
+     * Danh sách tên snack đang hết hàng / archived khiến combo bị block. Empty
+     * khi {@code effectiveAvailable=true}. Dùng cho tooltip "Tạm hết do: A, B".
+     */
+    private List<String> unavailableItems;
 }

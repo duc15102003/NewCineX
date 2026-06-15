@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Mục đích: bảng system_config tự mô tả — admin (không phải dev) xem trang
+        Cấu hình hệ thống chỉ thấy label tiếng Việt thân thiện, không thấy key
+        kỹ thuật như "booking.no_show_buffer_minutes".
+
+        Trước: BE chỉ trả {configKey, configValue, description}. FE hardcode meta
+        (label/hint/unit) → vỡ pattern enterprise (config phải self-describing).
+        Mỗi lần seed key mới phải sửa cả BE + FE.
+
+        Sau: thêm các cột metadata vào bảng → một nguồn sự thật, FE chỉ render.
+    -->
+
+    <changeSet id="027-add-config-metadata-columns" author="cinex">
+        <addColumn tableName="system_config">
+            <column name="label" type="NVARCHAR(200)" remarks="Tên thân thiện tiếng Việt — hiện ở cột Tên cấu hình"/>
+            <column name="hint" type="NVARCHAR(1000)" remarks="Giải thích chi tiết tác động khi đổi giá trị — hiện trong tooltip"/>
+            <column name="unit" type="NVARCHAR(20)" remarks="Đơn vị (phút, lần, ngày, điểm, giây) — hiện cạnh giá trị"/>
+            <column name="category" type="NVARCHAR(50)" remarks="Nhóm chức năng (booking, showtime, loyalty, security, dashboard)"/>
+            <column name="display_order" type="INT" defaultValueNumeric="100" remarks="Thứ tự hiển thị trong nhóm — số nhỏ lên trước"/>
+            <column name="visible" type="BIT" defaultValueBoolean="true" remarks="false = ẩn mặc định (cấu hình kỹ thuật, admin toggle để xem)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="min_value" type="INT" remarks="Giá trị nhỏ nhất cho config kiểu số — null = không giới hạn"/>
+            <column name="max_value" type="INT" remarks="Giá trị lớn nhất cho config kiểu số — null = không giới hạn"/>
+        </addColumn>
+    </changeSet>
+
+    <!--
+        Seed metadata cho 24 keys đã tồn tại. Mỗi UPDATE 1 key cho dễ rà soát
+        và rollback.
+
+        Quy ước:
+        - visible=1: admin/quản lý care hằng ngày (12 keys)
+        - visible=0: kỹ thuật/anti-abuse/cache — admin xem khi cần (12 keys)
+
+        category mapping:
+        - booking      → "Đặt vé"
+        - showtime     → "Suất chiếu"
+        - loyalty      → "Tích điểm thành viên"
+        - security     → "Bảo mật & đăng nhập"
+        - dashboard    → "Báo cáo & dashboard"
+    -->
+
+    <changeSet id="027-seed-config-metadata" author="cinex">
+        <sql splitStatements="false"><![CDATA[
+            -- ===== BOOKING (visible) =====
+            UPDATE system_config SET
+                label = N'Thời gian giữ ghế',
+                hint = N'Khi khách chọn ghế nhưng chưa thanh toán, hệ thống giữ ghế trong khoảng thời gian này. Hết giờ mà chưa thanh toán → ghế tự thả ra cho khách khác. Đặt CÀNG NHỎ ghế quay vòng nhanh nhưng khách dễ bị hụt nếu thao tác chậm.',
+                unit = N'phút', category = N'booking', display_order = 10, visible = 1, min_value = 1, max_value = 60
+            WHERE config_key = 'booking.hold_minutes';
+
+            UPDATE system_config SET
+                label = N'Ghế tối đa mỗi lần đặt',
+                hint = N'Giới hạn số ghế khách chọn cho 1 đơn. Mục đích chống phe vé (1 người ôm hàng chục ghế bán lại). Tiêu chuẩn ngành 8 ghế. Tăng lên cho rạp nhỏ ít khách, giảm xuống nếu phim hot dễ bị scalper.',
+                unit = N'ghế', category = N'booking', display_order = 20, visible = 1, min_value = 1, max_value = 20
+            WHERE config_key = 'booking.max_seats';
+
+            UPDATE system_config SET
+                label = N'Cho hủy vé trước giờ chiếu',
+                hint = N'Khách hủy được vé nếu còn ít nhất X phút tới giờ chiếu. Sát giờ chiếu mà cho hủy thì không kịp bán lại ghế đó. Tiêu chuẩn rạp: 60 phút (CGV), 30 phút (BHD). Hết khung này vé không hủy được, nếu không đi sẽ bị tính vé bùng.',
+                unit = N'phút', category = N'booking', display_order = 30, visible = 1, min_value = 0, max_value = 1440
+            WHERE config_key = 'booking.cancel_before_minutes';
+
+            UPDATE system_config SET
+                label = N'Cho đặt vé muộn sau giờ chiếu',
+                hint = N'Khách đến muộn vẫn mua được vé nếu phim mới chiếu vài phút (chưa lỡ phần đầu). Đặt 0 = đóng bán ngay khi suất bắt đầu. Đặt 15 = vẫn cho mua 15 phút sau giờ chiếu.',
+                unit = N'phút', category = N'booking', display_order = 40, visible = 1, min_value = 0, max_value = 30
+            WHERE config_key = 'booking.cutoff_after_start_minutes';
+
+            UPDATE system_config SET
+                label = N'Ngưỡng "vé bùng" để cảnh báo',
+                hint = N'Khách đặt vé nhưng không đến (vé bùng) lặp lại trong X lần → tạm khóa đặt vé. Chống ghost booking — khách ôm ghế nhưng không bao giờ đến. Tiêu chuẩn ngành: 3 lần.',
+                unit = N'lần', category = N'booking', display_order = 50, visible = 1, min_value = 1, max_value = 10
+            WHERE config_key = 'booking.no_show_block_threshold';
+
+            UPDATE system_config SET
+                label = N'Thời gian khóa khách "bùng vé"',
+                hint = N'Sau số ngày này khách có thể đặt lại bình thường. Khóa quá lâu mất khách thật, khóa quá ngắn không răn đe. Tiêu chuẩn 7-14 ngày.',
+                unit = N'ngày', category = N'booking', display_order = 60, visible = 1, min_value = 1, max_value = 90
+            WHERE config_key = 'booking.no_show_block_days';
+
+            -- ===== BOOKING (hidden — kỹ thuật) =====
+            UPDATE system_config SET
+                label = N'Buffer đánh dấu vé "bùng"',
+                hint = N'Sau X phút từ giờ kết thúc suất chiếu, vé chưa quét QR mới bị đánh dấu là không đến. Tránh đánh dấu nhầm khi khách check-in trễ. Đặt 30 phút là an toàn.',
+                unit = N'phút', category = N'booking', display_order = 70, visible = 0, min_value = 0, max_value = 120
+            WHERE config_key = 'booking.no_show_buffer_minutes';
+
+            UPDATE system_config SET
+                label = N'Số đơn tối đa / khách / ngày',
+                hint = N'Chặn bot tự động spam đặt vé. Người dùng thật hiếm khi đặt quá 5 đơn/ngày — đặt 20 đơn là dấu hiệu bot. Vượt giới hạn → đơn tiếp theo bị từ chối.',
+                unit = N'đơn', category = N'booking', display_order = 80, visible = 0, min_value = 1, max_value = 100
+            WHERE config_key = 'booking.max_per_user_per_day';
+
+            -- ===== SHOWTIME =====
+            UPDATE system_config SET
+                label = N'Khoảng cách giữa 2 suất chiếu',
+                hint = N'Tối thiểu X phút giữa suất trước và suất sau trong cùng phòng. Thời gian dọn rạp + xếp khách suất mới vào. Đặt quá ngắn khách vào lúc rạp chưa dọn. Đặt quá dài mỗi phòng chiếu được ít suất. Tiêu chuẩn rạp: 15-20 phút.',
+                unit = N'phút', category = N'showtime', display_order = 10, visible = 1, min_value = 5, max_value = 60
+            WHERE config_key = 'showtime.buffer_minutes';
+
+            -- ===== LOYALTY =====
+            UPDATE system_config SET
+                label = N'Điểm tích mỗi 1.000đ chi tiêu',
+                hint = N'Tốc độ tích điểm. Ví dụ đặt 1 điểm/1.000đ → vé 100.000đ tích 100 điểm. Tăng lên để khuyến mãi khách thân thiết, giảm xuống nếu muốn siết chương trình tích điểm.',
+                unit = N'điểm', category = N'loyalty', display_order = 10, visible = 1, min_value = 0, max_value = 100
+            WHERE config_key = 'loyalty.points_per_1000_vnd';
+
+            UPDATE system_config SET
+                label = N'Ngưỡng lên hạng Bạc',
+                hint = N'Tổng điểm khách tích từ trước tới giờ (KHÔNG phải điểm hiện có sau khi đổi). Đạt ngưỡng này khách lên hạng Bạc, nhận ưu đãi tương ứng.',
+                unit = N'điểm', category = N'loyalty', display_order = 20, visible = 1, min_value = 0, max_value = NULL
+            WHERE config_key = 'loyalty.silver_threshold';
+
+            UPDATE system_config SET
+                label = N'Ngưỡng lên hạng Vàng',
+                hint = N'Hạng Vàng có ưu đãi cao hơn Bạc (giảm giá, snack tặng kèm, ưu tiên đặt vé sớm). Đặt sao cho khoảng cách Bạc → Vàng đủ tạo động lực mua thêm.',
+                unit = N'điểm', category = N'loyalty', display_order = 30, visible = 1, min_value = 0, max_value = NULL
+            WHERE config_key = 'loyalty.gold_threshold';
+
+            UPDATE system_config SET
+                label = N'Ngưỡng lên hạng Bạch Kim',
+                hint = N'Hạng cao nhất — dành cho khách VIP. Thường dưới 1% khách đạt được. Ưu đãi: phòng chờ riêng, đặt vé sớm, snack miễn phí định kỳ.',
+                unit = N'điểm', category = N'loyalty', display_order = 40, visible = 1, min_value = 0, max_value = NULL
+            WHERE config_key = 'loyalty.platinum_threshold';
+
+            -- ===== SECURITY (hidden — chỉ kỹ thuật cần) =====
+            UPDATE system_config SET
+                label = N'Số lần đăng nhập sai / tài khoản',
+                hint = N'Tài khoản bị khóa tạm sau X lần nhập sai mật khẩu trong "Khoảng đếm" bên dưới. Chống đoán mật khẩu (brute-force). Tiêu chuẩn 5 lần (CGV/Lotte).',
+                unit = N'lần', category = N'security', display_order = 10, visible = 0, min_value = 1, max_value = 20
+            WHERE config_key = 'auth.login_max_attempts_per_user';
+
+            UPDATE system_config SET
+                label = N'Số lần đăng nhập sai / địa chỉ IP',
+                hint = N'Chặn bot tấn công từ 1 nguồn dù đổi nhiều tài khoản. IP nội bộ rạp nên có giá trị cao hơn (nhiều nhân viên dùng chung IP).',
+                unit = N'lần', category = N'security', display_order = 20, visible = 0, min_value = 1, max_value = 100
+            WHERE config_key = 'auth.login_max_attempts_per_ip';
+
+            UPDATE system_config SET
+                label = N'Khoảng đếm lần đăng nhập sai',
+                hint = N'Ví dụ: đặt 15 phút + giới hạn 5 lần = trong 15 phút nhập sai 5 lần → khóa. Sau 15 phút bộ đếm reset. Càng dài càng chặt nhưng dễ phiền khách.',
+                unit = N'phút', category = N'security', display_order = 30, visible = 0, min_value = 1, max_value = 1440
+            WHERE config_key = 'auth.login_window_minutes';
+
+            UPDATE system_config SET
+                label = N'Yêu cầu quên mật khẩu / email',
+                hint = N'Chống spam email reset password. Đặt 3 là an toàn — khách thật hiếm khi cần reset quá 3 lần trong khoảng đếm.',
+                unit = N'lần', category = N'security', display_order = 40, visible = 0, min_value = 1, max_value = 20
+            WHERE config_key = 'auth.forgot_password_max_per_email';
+
+            UPDATE system_config SET
+                label = N'Yêu cầu quên mật khẩu / IP',
+                hint = N'Chặn bot dùng 1 IP để thử reset password hàng loạt email khác nhau.',
+                unit = N'lần', category = N'security', display_order = 50, visible = 0, min_value = 1, max_value = 50
+            WHERE config_key = 'auth.forgot_password_max_per_ip';
+
+            UPDATE system_config SET
+                label = N'Khoảng đếm quên mật khẩu',
+                hint = N'Tương tự khoảng đếm đăng nhập — sau khoảng này bộ đếm reset.',
+                unit = N'phút', category = N'security', display_order = 60, visible = 0, min_value = 1, max_value = 1440
+            WHERE config_key = 'auth.forgot_password_window_minutes';
+
+            UPDATE system_config SET
+                label = N'Số lần xác thực mã / IP',
+                hint = N'Chặn bot thử dò mã xác thực email/OTP. Mã thường 6-8 chữ số → nếu không giới hạn, bot có thể dò xong trong vài phút.',
+                unit = N'lần', category = N'security', display_order = 70, visible = 0, min_value = 1, max_value = 100
+            WHERE config_key = 'auth.token_verify_max_per_ip';
+
+            UPDATE system_config SET
+                label = N'Khoảng đếm xác thực mã',
+                hint = N'Sau khoảng này bộ đếm xác thực mã reset.',
+                unit = N'phút', category = N'security', display_order = 80, visible = 0, min_value = 1, max_value = 1440
+            WHERE config_key = 'auth.token_verify_window_minutes';
+
+            UPDATE system_config SET
+                label = N'Hạn link đặt lại mật khẩu',
+                hint = N'Khách nhấn "Quên mật khẩu" → email kèm link → link chỉ dùng được trong khoảng này. Quá hạn phải xin link mới. Đặt 15 phút là cân bằng giữa an toàn và thân thiện.',
+                unit = N'phút', category = N'security', display_order = 90, visible = 0, min_value = 1, max_value = 60
+            WHERE config_key = 'auth.password_reset_token_ttl_minutes';
+
+            -- ===== DASHBOARD =====
+            UPDATE system_config SET
+                label = N'Khoảng ngày mặc định cho dashboard',
+                hint = N'Dashboard hiển thị top phim/snack trong X ngày gần nhất. Đặt 30 cho rạp ít khách (lấy mẫu lớn hơn). Đặt 7 cho rạp đông (xem trend nhanh).',
+                unit = N'ngày', category = N'dashboard', display_order = 10, visible = 1, min_value = 1, max_value = 365
+            WHERE config_key = 'statistics.dashboard_default_days';
+
+            UPDATE system_config SET
+                label = N'Thời gian cache thống kê',
+                hint = N'Tránh chạy lại query nặng mỗi lần admin refresh dashboard. Đặt cao (300s) cho rạp đông admin. Đặt thấp (30s) nếu muốn số real-time.',
+                unit = N'giây', category = N'dashboard', display_order = 20, visible = 0, min_value = 10, max_value = 3600
+            WHERE config_key = 'statistics.cache_ttl_seconds';
+        ]]></sql>
+    </changeSet>
+
+    <!--
+        Trường label NOT NULL cho keys đã seed. Key mới tương lai BẮT BUỘC có
+        label (BE validate ở Service khi seed).
+    -->
+    <changeSet id="027-label-not-null" author="cinex">
+        <addNotNullConstraint tableName="system_config" columnName="label"
+                              columnDataType="NVARCHAR(200)"/>
+        <addNotNullConstraint tableName="system_config" columnName="category"
+                              columnDataType="NVARCHAR(50)"/>
+    </changeSet>
+
+</databaseChangeLog>

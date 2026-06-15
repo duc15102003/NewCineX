@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>CineX — Nhắc nhở suất chiếu</title>
+</head>
+<body style="margin:0; padding:20px; font-family:'Inter', Arial, sans-serif; background:#051424; color:#e5e7eb;">
+    <div style="max-width:560px; margin:0 auto; background:#0a1929; border-radius:16px; padding:32px; border:1px solid rgba(255,255,255,0.05);">
+        <div style="text-align:center; margin-bottom:24px;">
+            <h1 style="margin:0; color:#eab308; font-size:28px; letter-spacing:2px; font-weight:bold;">CineX</h1>
+            <p style="margin:4px 0 0; color:#6b7280; font-size:12px; letter-spacing:1px;">HỆ THỐNG ĐẶT VÉ XEM PHIM</p>
+        </div>
+
+        <h2 style="color:#eab308; margin-top:0;">🎬 Suất chiếu sắp đến!</h2>
+
+        <p style="line-height:1.6;">Đừng quên suất chiếu của bạn — còn <strong th:text="${hoursBeforeShow}">1 giờ</strong>:</p>
+
+        <div style="background:#1f2937; border-radius:12px; padding:20px; margin:20px 0;">
+            <p style="margin:0 0 12px; color:#eab308; font-size:18px; font-weight:bold;" th:text="${movieTitle}">Tên phim</p>
+            <div style="display:block; margin-bottom:8px;">
+                <span style="color:#6b7280;">🕐 Giờ chiếu:</span>
+                <strong th:text="${startTime}">21:00 - 13/06/2026</strong>
+            </div>
+            <div style="display:block; margin-bottom:8px;">
+                <span style="color:#6b7280;">📍 Rạp:</span>
+                <strong th:text="${theaterName}">CineX Hà Nội</strong>
+            </div>
+            <div style="display:block; margin-bottom:8px;">
+                <span style="color:#6b7280;">🚪 Phòng chiếu:</span>
+                <strong th:text="${roomName}">Phòng 1 - IMAX</strong>
+            </div>
+            <div style="display:block;">
+                <span style="color:#6b7280;">🎫 Mã vé:</span>
+                <strong style="font-family:monospace; color:#fbbf24;" th:text="${bookingCode}">CX-20260613-001</strong>
+            </div>
+        </div>
+
+        <div style="background:rgba(234,179,8,0.1); border:1px solid rgba(234,179,8,0.3); border-radius:8px; padding:14px; margin:20px 0;">
+            <p style="margin:0; color:#fde68a; font-size:14px;">
+                💡 <strong>Lưu ý:</strong> Đến rạp trước giờ chiếu 15 phút để check-in.
+                Xuất QR code trong app/email để quét nhanh tại cổng.
+            </p>
+        </div>
+
+        <p style="font-size:13px; color:#6b7280; margin-top:24px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.05);">
+            Không thể đến? <a href="#" style="color:#eab308;">Huỷ vé trước 60 phút</a> để tránh bị đếm NO_SHOW.
+        </p>
+    </div>
+</body>
+</html>

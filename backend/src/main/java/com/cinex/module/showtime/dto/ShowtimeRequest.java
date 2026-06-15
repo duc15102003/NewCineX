@@ -1,5 +1,7 @@
 package com.cinex.module.showtime.dto;
 
+import com.cinex.module.showtime.entity.ShowtimeFormat;
+import com.cinex.module.showtime.entity.ShowtimeLanguage;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -54,4 +56,15 @@ public class ShowtimeRequest {
 
     @Min(value = 0, message = "Giá vé Deluxe không được âm")
     private BigDecimal deluxePrice;
+
+    /**
+     * Định dạng chiếu — 2D/3D/IMAX/4DX/Screen-X. null → service default TWO_D
+     * cho backward-compat khi FE cũ chưa gửi field.
+     */
+    private ShowtimeFormat format;
+
+    /**
+     * Mode ngôn ngữ — SUB_VI/DUB_VI/ORIGINAL. null → service default SUB_VI.
+     */
+    private ShowtimeLanguage languageMode;
 }

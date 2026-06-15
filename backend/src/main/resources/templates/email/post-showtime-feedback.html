@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>CineX — Cảm ơn bạn đã xem phim</title>
+</head>
+<body style="margin:0; padding:20px; font-family:'Inter', Arial, sans-serif; background:#181309; color:#e5e7eb;">
+    <div style="max-width:560px; margin:0 auto; background:#201b11; border-radius:16px; padding:32px; border:1px solid #3f382d;">
+        <div style="text-align:center; margin-bottom:24px;">
+            <h1 style="margin:0; color:#ffc107; font-size:28px; letter-spacing:2px; font-weight:bold;">CineX</h1>
+            <p style="margin:4px 0 0; color:#6b7280; font-size:12px; letter-spacing:1px;">HỆ THỐNG ĐẶT VÉ XEM PHIM</p>
+        </div>
+
+        <h2 style="color:#ffc107; margin-top:0;">Cảm ơn bạn đã xem phim!</h2>
+
+        <p style="line-height:1.7;">
+            Cảm ơn bạn đã chọn CineX cho buổi xem phim
+            <strong style="color:#fffbe6;" th:text="${movieTitle}">Tên phim</strong> vừa qua.
+            Bạn cảm thấy thế nào về trải nghiệm này?
+        </p>
+
+        <div style="background:#2a2317; border-radius:12px; padding:20px; margin:20px 0; border:1px solid #3f382d;">
+            <p style="margin:0 0 12px; color:#ffc107; font-size:16px; font-weight:bold;">Đánh giá phim trong 30 giây</p>
+            <p style="margin:0 0 16px; color:#9ca3af; font-size:14px; line-height:1.6;">
+                Ý kiến của bạn giúp các khách hàng khác chọn phim tốt hơn —
+                và giúp CineX cải thiện chất lượng dịch vụ.
+            </p>
+            <div style="text-align:center; margin-top:20px;">
+                <a th:href="${reviewUrl}"
+                   style="display:inline-block; background:#ffc107; color:#000; padding:12px 32px;
+                          border-radius:8px; text-decoration:none; font-weight:bold; font-size:15px;">
+                    Đánh giá ngay
+                </a>
+            </div>
+        </div>
+
+        <div style="background:#2a2317; border-radius:8px; padding:14px; margin:20px 0; border:1px solid #3f382d;">
+            <p style="margin:0; color:#fde68a; font-size:13px; line-height:1.6;">
+                <strong>Mã vé:</strong>
+                <span style="font-family:monospace; color:#ffc107;" th:text="${bookingCode}">CX-20260613-001</span>
+            </p>
+        </div>
+
+        <p style="font-size:13px; color:#6b7280; margin-top:24px; padding-top:16px; border-top:1px solid #3f382d;">
+            Hẹn gặp lại bạn ở suất chiếu tiếp theo! Theo dõi CineX để cập nhật phim mới và ưu đãi.
+        </p>
+    </div>
+</body>
+</html>

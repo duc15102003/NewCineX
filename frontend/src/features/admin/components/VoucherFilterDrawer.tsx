@@ -64,12 +64,12 @@ export default function VoucherFilterDrawer(props: VoucherFilterDrawerProps) {
           <CheckboxRow
             checked={!!adv.currentlyValid}
             onChange={(c) => onPatch({ currentlyValid: c || undefined })}
-            label="Chỉ voucher đang trong hạn (now ∈ [start, end])"
+            label="Chỉ voucher đang trong hạn (ngày bắt đầu ≤ hôm nay ≤ ngày kết thúc)"
           />
           <CheckboxRow
             checked={!!adv.hasUsageLeft}
             onChange={(c) => onPatch({ hasUsageLeft: c || undefined })}
-            label="Chỉ voucher còn lượt dùng"
+            label="Chỉ voucher chưa hết lượt sử dụng"
           />
           <CheckboxRow
             checked={includeExpired}

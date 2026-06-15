@@ -33,13 +33,15 @@ function Dialog({ open, onOpenChange, children }: DialogProps) {
   )
 }
 
-type DialogSize = 'sm' | 'md' | 'lg' | 'xl'
+type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl'
 
 const DIALOG_SIZES: Record<DialogSize, string> = {
-  sm: 'max-w-sm',   // 384px — confirm, đổi role
-  md: 'max-w-md',   // 448px — form đơn giản (room, showtime)
-  lg: 'max-w-lg',   // 512px — form vừa
-  xl: 'max-w-2xl',  // 672px — form phức tạp (movie)
+  sm: 'max-w-sm',     // 384px — confirm, đổi role
+  md: 'max-w-md',     // 448px — form đơn giản (room, snack, user, genre)
+  lg: 'max-w-lg',     // 512px — form vừa (theater)
+  xl: 'max-w-2xl',    // 672px — form phức tạp (movie, combo, voucher, showtime, pricing rule)
+  '2xl': 'max-w-4xl', // 896px — form multi-section rộng (auto-schedule)
+  '3xl': 'max-w-5xl', // 1024px — visual editor cần preview lớn (generate-seats layout)
 }
 
 const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { onClose?: () => void; size?: DialogSize }>(

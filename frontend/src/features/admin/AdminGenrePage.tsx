@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, Tags } from 'lucide-react'
 import { toast } from 'sonner'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
@@ -35,6 +35,17 @@ export default function AdminGenrePage() {
   const [appliedFilter, setAppliedFilter] = useState<AdminGenreFilter>(EMPTY_FILTER)
   const [draftFilter, setDraftFilter] = useState<AdminGenreFilter>(EMPTY_FILTER)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  // Keyword input local state — debounce 400ms trước khi gọi API để khỏi
+  // fire request mỗi keystroke. Empty state cho biết user còn gõ vs đã search.
+  const [keywordInput, setKeywordInput] = useState(appliedFilter.keyword ?? '')
+  const debounceRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (debounceRef.current) window.clearTimeout(debounceRef.current)
+    debounceRef.current = window.setTimeout(() => {
+      setAppliedFilter(f => ({ ...f, keyword: keywordInput }))
+    }, 400)
+    return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current) }
+  }, [keywordInput])
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -137,8 +148,8 @@ export default function AdminGenrePage() {
           <div className="flex-1 max-w-sm">
             <Input
               placeholder="Tìm theo tên thể loại..."
-              value={appliedFilter.keyword ?? ''}
-              onChange={(e) => setAppliedFilter(f => ({ ...f, keyword: e.target.value }))}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
             />
           </div>
           <FilterTrigger onClick={() => { setDraftFilter(appliedFilter); setDrawerOpen(true) }} activeCount={activeCount} />
@@ -188,7 +199,18 @@ export default function AdminGenrePage() {
           <TableBody>
             {genres.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
+                <TableCell colSpan={5} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2 text-gray-500">
+                    <Tags size={32} className="text-gray-600" />
+                    <p className="text-sm">{keywordInput ? `Không tìm thấy thể loại nào khớp "${keywordInput}"` : 'Chưa có thể loại nào'}</p>
+                    {isSuperAdmin && !keywordInput && (
+                      <button onClick={openCreate}
+                        className="text-xs text-[#ffc107] hover:underline">
+                        Thêm thể loại đầu tiên
+                      </button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             )}
             {genres.map((g, index) => (
@@ -229,7 +251,7 @@ export default function AdminGenrePage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent size="md" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
           <DialogHeader>
-            <DialogTitle>{editingItem ? 'Chỉnh sửa thể loại' : 'Thêm thể loại mới'}</DialogTitle>
+            <DialogTitle>{editingItem ? 'Chỉnh sửa thể loại' : 'Thêm mới thể loại'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
             <DialogBody>
@@ -279,7 +301,7 @@ export default function AdminGenrePage() {
           </select>
         </FilterField>
 
-        <FilterField label="Bao gồm đã lưu trữ" hint="Hiển thị cả bản ghi đã bị xoá mềm (ARCHIVED).">
+        <FilterField label="Bao gồm bản đã lưu trữ" hint="Lưu trữ = ẩn khỏi danh sách thường, có thể khôi phục lại bất cứ lúc nào.">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"

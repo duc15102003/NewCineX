@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        FIX BUG ẨN: loyalty earn dựa trên total_amount (đã trừ tier + group +
+        voucher) → khách dùng voucher 50% chỉ nhận nửa điểm — phi thực tế.
+
+        Industry chuẩn (CGV/Lotte/BHD): earn dựa trên GIÁ VÉ NIÊM YẾT
+        (seat_total trước mọi giảm giá). Vé 100k niêm yết → tích 100 điểm
+        dù dùng voucher hay không. Vouchersh promotion không bị "phạt" cắt điểm.
+
+        Thêm seat_total_amount để giữ giá niêm yết gốc — vẫn lưu cho mọi
+        breakdown sau (tier_discount, group_discount, voucher tính từ
+        seat_total).
+
+        Vé cũ backfill: seat_total ≈ total + tier_discount + group_discount.
+        Voucher discount KHÔNG track trong booking (chỉ trong voucher_usage)
+        → backfill approximate. Vé mới sẽ chính xác.
+    -->
+
+    <changeSet id="033-add-seat-total-field" author="cinex">
+        <addColumn tableName="bookings">
+            <column name="seat_total_amount" type="DECIMAL(12,0)"
+                    remarks="Giá vé niêm yết gốc (SUM seat prices, trước mọi giảm giá). Dùng cho loyalty earn theo industry chuẩn."/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="033-backfill-seat-total" author="cinex">
+        <sql><![CDATA[
+            -- Backfill approximate: seat_total ≈ total + tier + group
+            -- (voucher cũ không track trong booking, có thể chênh nếu vé có voucher
+            --  nhưng điểm đã earn xong nên không ảnh hưởng).
+            UPDATE bookings
+            SET seat_total_amount = total_amount
+                                   + COALESCE(tier_discount_amount, 0)
+                                   + COALESCE(group_discount_amount, 0)
+            WHERE seat_total_amount IS NULL;
+        ]]></sql>
+    </changeSet>
+
+    <changeSet id="033-seat-total-not-null" author="cinex">
+        <addNotNullConstraint tableName="bookings" columnName="seat_total_amount"
+                              columnDataType="DECIMAL(12,0)"/>
+    </changeSet>
+
+</databaseChangeLog>

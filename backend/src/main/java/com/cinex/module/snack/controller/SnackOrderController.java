@@ -19,8 +19,8 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/snack-orders")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Snack Orders (POS)", description = "POS system — counter snack sales (Admin only)")
+@PreAuthorize("hasRole('STAFF')")
+@Tag(name = "Snack Orders (POS)", description = "POS system — counter snack sales (Staff/Admin)")
 public class SnackOrderController {
 
     private final SnackOrderService snackOrderService;
@@ -30,7 +30,7 @@ public class SnackOrderController {
      * Thu ngân tạo đơn hàng tại quầy: chọn snack + số lượng → tính tiền → lưu.
      */
     @PostMapping
-    @Operation(summary = "(Admin) Create POS snack order at counter")
+    @Operation(summary = "(Staff/Admin) Create POS snack order at counter")
     public ApiResponse<SnackOrderResponse> createOrder(@Valid @RequestBody SnackOrderRequest request) {
         return ApiResponse.ok("Đơn hàng đã được tạo", snackOrderService.createOrder(request));
     }

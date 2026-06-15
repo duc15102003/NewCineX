@@ -1,45 +1,48 @@
 import { useEffect, useRef, useState } from 'react'
-import { Building2, ChevronDown, Globe2, Lock } from 'lucide-react'
+import { Building2, ChevronDown } from 'lucide-react'
 
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useTheaterOptions } from '@/hooks/useAdminTheaters'
 import { useAuthStore } from '@/store/authStore'
 
 /**
- * Theater context indicator/selector ở admin topbar.
+ * Theater context selector ở admin topbar — chỉ render cho SUPER_ADMIN.
  *
- * <p><b>Render conditional theo role:</b>
+ * <p><b>Industry standard (Vista Veezi / Cinetixx / CGV admin):</b>
  * <ul>
- *   <li><b>SUPER_ADMIN</b>: dropdown đầy đủ, có "Tất cả chi nhánh" + chọn từng theater
- *       → xem cross-branch report.</li>
- *   <li><b>Branch ADMIN</b>: badge READ-ONLY hiển thị chi nhánh được assign.
- *       KHÔNG cho đổi (server-side cũng enforce qua JWT claim).</li>
+ *   <li><b>SUPER_ADMIN</b>: dropdown chọn 1 trong các CN; auto-pick CN đầu tiên
+ *       khi login lần đầu. Đây là vai trò duy nhất CẦN switch context.</li>
+ *   <li><b>BRANCH_ADMIN</b>: ẨN selector. Account đã gắn cố định 1 CN, badge
+ *       trên topbar chỉ là noise (BE auto-scope mọi query/mutation theo JWT).</li>
  *   <li><b>USER / guest</b>: null.</li>
  * </ul>
+ *
+ * <p><b>Bảo vệ BE (defense in depth):</b> dù FE có ẩn / hiện / FE cố tình
+ * gửi theaterId khác, {@code SecurityService} ở mọi list endpoint OVERRIDE
+ * filter.theaterId thành theater của user; mọi mutation gọi
+ * {@code requireAccessToTheater()} throw FORBIDDEN nếu khác CN.
  */
 export default function AdminTheaterSelector() {
   const { currentTheater, setCurrentTheater } = useAdminTheaterStore()
   const { data: theaters = [] } = useTheaterOptions()
-  const { user, isSuperAdmin, isBranchAdmin } = useAuthStore()
+  const { isSuperAdmin } = useAuthStore()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  // Branch ADMIN: hiển thị badge read-only chi nhánh được assign
-  if (isBranchAdmin()) {
-    return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#3f382d] bg-[#2a2317] text-gray-200 text-sm"
-           title="Chi nhánh được gán cố định cho tài khoản này">
-        <Building2 size={14} className="text-[#ffc107]" />
-        <span className="max-w-[220px] truncate">{user?.theaterName ?? 'Đang tải...'}</span>
-        <Lock size={12} className="text-gray-500" />
-      </div>
-    )
-  }
-
-  // Không phải SUPER_ADMIN → ẩn (USER không vào admin layout thường, nhưng defensive)
+  // Chỉ SUPER_ADMIN cần theater selector. BRANCH_ADMIN + USER + guest: ẩn.
   if (!isSuperAdmin()) {
     return null
   }
+
+  // Auto-pick chi nhánh đầu tiên khi SUPER_ADMIN chưa có context
+  // (login lần đầu hoặc xoá localStorage). Đảm bảo luôn có 1 CN active —
+  // operational pages không phải xử lý case null.
+  useEffect(() => {
+    if (!currentTheater && theaters.length > 0) {
+      const first = theaters[0]
+      setCurrentTheater({ id: first.id, code: first.code, name: first.name, city: first.city })
+    }
+  }, [currentTheater, theaters, setCurrentTheater])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -51,8 +54,7 @@ export default function AdminTheaterSelector() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const displayLabel = currentTheater ? currentTheater.name : 'Tất cả chi nhánh'
-  const Icon = currentTheater ? Building2 : Globe2
+  const displayLabel = currentTheater?.name ?? 'Đang tải...'
 
   return (
     <div className="relative" ref={ref}>
@@ -63,7 +65,7 @@ export default function AdminTheaterSelector() {
         aria-label={`Đang xem: ${displayLabel}. Bấm để đổi chi nhánh.`}
         aria-expanded={open}
       >
-        <Icon size={14} className="text-[#ffc107]" />
+        <Building2 size={14} className="text-[#ffc107]" />
         <span className="max-w-[200px] truncate">{displayLabel}</span>
         <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -71,29 +73,8 @@ export default function AdminTheaterSelector() {
       {open && (
         <div className="absolute right-0 mt-2 w-72 bg-[#201b11] border border-[#3f382d] rounded-2xl shadow-2xl shadow-black/40 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="px-4 py-2 border-b border-[#3f382d]">
-            <p className="text-xs text-gray-500">Filter view theo chi nhánh</p>
+            <p className="text-xs text-gray-500">Chuyển chi nhánh</p>
           </div>
-
-          {/* Option "Tất cả chi nhánh" — admin tổng */}
-          <button
-            onClick={() => {
-              setCurrentTheater(null)
-              setOpen(false)
-            }}
-            className={`w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${
-              !currentTheater
-                ? 'bg-[#ffc107]/10 text-[#ffc107]'
-                : 'text-gray-300 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <Globe2 size={16} className={!currentTheater ? 'text-[#ffc107]' : 'text-gray-400'} />
-            <div className="flex-1 min-w-0">
-              <div className="font-medium">Tất cả chi nhánh</div>
-              <div className="text-xs text-gray-500 mt-0.5">Hiển thị cross-branch report</div>
-            </div>
-          </button>
-
-          <div className="my-1 border-t border-[#3f382d]" />
 
           <div className="max-h-72 overflow-y-auto py-1">
             {theaters.length === 0 ? (

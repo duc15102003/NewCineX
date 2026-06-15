@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { PriceInput } from '@/components/ui/price-input'
+import { NumberStepper } from '@/components/ui/number-stepper'
+import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
 
 import { useCreateCombo, useUpdateCombo, useSnacksOptions } from '@/hooks/useAdminCombos'
@@ -132,7 +134,7 @@ export default function ComboFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
         <DialogHeader>
-          <DialogTitle>{editingItem ? 'Chỉnh sửa combo' : 'Thêm combo mới'}</DialogTitle>
+          <DialogTitle>{editingItem ? 'Chỉnh sửa combo' : 'Thêm mới combo'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogBody>
@@ -187,6 +189,7 @@ export default function ComboFormDialog({
                 watchedItems={watchedItems}
                 formTheaterId={formTheaterId}
                 register={register}
+                control={control}
                 onAppend={() => append({ snackId: '', quantity: 1 })}
                 onRemove={remove}
               />
@@ -198,10 +201,14 @@ export default function ComboFormDialog({
               />
 
               <div className="col-span-12">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" {...register('active')} className="accent-[#ffc107] w-4 h-4" />
-                  <span className="text-sm text-gray-300">Bật combo (hiển thị cho user)</span>
-                </label>
+                <Controller name="active" control={control}
+                  render={({ field }) => (
+                    <Switch
+                      checked={field.value !== false}
+                      onChange={field.onChange}
+                      label="Đang bán — hiển thị cho khách"
+                      description="Tắt để tạm dừng combo này (POS + website đều ẩn). Suất đã đặt vẫn nguyên." />
+                  )} />
               </div>
             </div>
           </DialogBody>
@@ -259,12 +266,13 @@ interface SnackItemsSectionProps {
   watchedItems: Array<{ snackId: number | ''; quantity: number }>
   formTheaterId: number | null
   register: ReturnType<typeof useForm<FormData>>['register']
+  control: ReturnType<typeof useForm<FormData>>['control']
   onAppend: () => void
   onRemove: (index: number) => void
 }
 
 function SnackItemsSection({
-  fields, snacks, watchedItems, formTheaterId, register, onAppend, onRemove,
+  fields, snacks, watchedItems, formTheaterId, register, control, onAppend, onRemove,
 }: SnackItemsSectionProps) {
   if (formTheaterId == null) {
     return (
@@ -301,10 +309,18 @@ function SnackItemsSection({
                   ))}
                 </select>
               </div>
-              <div className="col-span-3">
-                <Input type="number" min={1}
-                  {...register(`items.${index}.quantity`, { required: true, valueAsNumber: true, min: 1 })}
-                  placeholder="SL" className="h-9" />
+              <div className="col-span-3 flex justify-center">
+                <Controller
+                  name={`items.${index}.quantity`}
+                  control={control}
+                  rules={{ required: true, min: 1 }}
+                  render={({ field }) => (
+                    <NumberStepper
+                      value={Number(field.value ?? 1)}
+                      onChange={field.onChange}
+                      min={1} max={20} step={1}
+                      inputWidth="w-10" />
+                  )} />
               </div>
               <div className="col-span-2 text-xs text-gray-400 text-right">
                 {lineTotal > 0 && fmtVnd(lineTotal)}

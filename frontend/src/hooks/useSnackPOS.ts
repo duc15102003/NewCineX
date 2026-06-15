@@ -16,6 +16,12 @@ interface SnackOrderItem {
 }
 
 interface CreateSnackOrderRequest {
+  /**
+   * Chi nhánh nơi đơn POS được tạo.
+   * - BRANCH_ADMIN: BE override từ JWT (FE có gửi cũng bị bỏ qua).
+   * - SUPER_ADMIN: BẮT BUỘC gửi — không gửi → BE trả VALIDATION_ERROR.
+   */
+  theaterId?: number | null
   items: SnackOrderItem[]
   note: string | null
 }

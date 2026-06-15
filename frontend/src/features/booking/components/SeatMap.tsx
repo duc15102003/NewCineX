@@ -1,7 +1,9 @@
-import React from 'react'
-import { Check } from 'lucide-react'
+import React, { useMemo } from 'react'
+import { Check, Ticket } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 import CinemaScreen from '@/components/common/CinemaScreen'
+import { Button } from '@/components/ui/button'
 import type { SeatItem } from '@/types/booking'
 import { label, SEAT_TYPE_LABELS } from '@/utils/labels'
 
@@ -22,6 +24,49 @@ interface SeatMapProps {
  * - isAisle: render khoảng trống thay vì button
  */
 export default function SeatMap({ rows, selectedSeatIds, occupiedSeatIds, onToggle }: SeatMapProps) {
+  const navigate = useNavigate()
+
+  // Tính sold-out: tất cả ghế (loại trừ aisle + BROKEN + BLOCKED) đều đã
+  // chiếm. Nếu vậy → không cần render sơ đồ tương tác, hiển thị overlay rõ ràng.
+  const { soldOut, sellableTotal } = useMemo(() => {
+    let sellable = 0
+    let occupied = 0
+    rows.forEach(([, seats]) => {
+      seats.forEach(s => {
+        if (s.aisle) return
+        if (s.status === 'BROKEN' || s.status === 'BLOCKED') return
+        sellable += 1
+        if (occupiedSeatIds.includes(s.id)) occupied += 1
+      })
+    })
+    return { soldOut: sellable > 0 && occupied >= sellable, sellableTotal: sellable }
+  }, [rows, occupiedSeatIds])
+
+  if (soldOut) {
+    return (
+      <div className="rounded-2xl border border-red-500/30 bg-red-500/[0.06] p-8 text-center my-6">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 mb-4">
+          <Ticket size={26} className="text-red-400" />
+        </div>
+        <h3 className="text-lg font-semibold text-red-300 mb-1">Suất chiếu đã hết vé</h3>
+        <p className="text-sm text-gray-400 max-w-md mx-auto mb-5">
+          Toàn bộ {sellableTotal} ghế của suất này đã được đặt. Vui lòng chọn một suất chiếu khác —
+          rạp thường có suất tiếp theo trong vòng 30-60 phút.
+        </p>
+        <div className="flex items-center gap-2 justify-center">
+          <Button onClick={() => navigate(-1)} variant="outline"
+            className="border-white/10 text-gray-300 hover:bg-white/5">
+            Quay lại chọn suất
+          </Button>
+          <Button onClick={() => navigate('/movies')}
+            className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold">
+            Xem phim khác
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
       <CinemaScreen size="lg" />
@@ -140,13 +185,22 @@ function DoubleSeatButton({ seat, partner, isSelected, isOccupied, onClick }: Do
 
   return (
     <button
-      title={`${seat.seatNumber}-${partner.seatNumber} — ${typeLabel}`}
+      title={isOccupied
+        ? `${seat.seatNumber}-${partner.seatNumber} (${typeLabel}) — đã có người đặt`
+        : `${seat.seatNumber}-${partner.seatNumber} (${typeLabel}) — bấm để chọn CẢ CẶP, tính là 2 ghế`}
+      aria-label={`${typeLabel} ${seat.seatNumber}-${partner.seatNumber} — bấm chọn cả cặp`}
       onClick={onClick}
       disabled={seat.status !== 'AVAILABLE' || isOccupied}
-      className={`h-8 rounded-t-md text-xs font-medium transition-all duration-150 ${colorClass}`}
+      className={`h-8 rounded-t-md text-xs font-medium transition-all duration-150 relative group ${colorClass}`}
       style={{ width: 'calc(2 * 2rem + 0.375rem)' }}
     >
       {isSelected ? <Check size={16} className="inline" /> : `${seat.colNumber}-${partner.colNumber}`}
+      {/* Indicator nhỏ "cặp" — chỉ hiện trên ghế đôi, distinguish với 2 ghế đơn liền nhau */}
+      {!isOccupied && !isSelected && (
+        <span className="absolute -top-1 left-1/2 -translate-x-1/2 text-[7px] leading-none px-1 rounded-sm bg-white/20 text-white/80 font-bold opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          CẶP
+        </span>
+      )}
     </button>
   )
 }

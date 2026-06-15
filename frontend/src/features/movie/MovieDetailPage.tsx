@@ -6,7 +6,7 @@ import ReviewSection from '@/components/movie/ReviewSection'
 import { fmtRating, label, ROOM_TYPE_LABELS, toLocalDateString, AGE_RATING_SHORT, AGE_RATING_DESC, AGE_RATING_LABELS, fmtTime } from '@/utils/labels'
 import PriceWithRules from '@/components/common/PriceWithRules'
 import { cdnImage } from '@/utils/image'
-import { AGE_RATING_COLORS } from '@/utils/colors'
+import { AGE_RATING_COLORS, SEAT_TYPE_PRICE_TEXT, ROOM_TYPE_TEXT } from '@/utils/colors'
 import { useIsFavorite, useAddFavorite, useRemoveFavorite } from '@/hooks/useFavorites'
 import { useTheaterStore } from '@/store/theaterStore'
 
@@ -220,19 +220,20 @@ export default function MovieDetailPage() {
               <div key={st.id} className="bg-[#201b11] border border-white/5 rounded-2xl p-4 flex items-center justify-between">
                 <div>
                   <p className="font-semibold text-lg">{fmtTime(st.startTime)} - {fmtTime(st.endTime)}</p>
-                  <p className="text-sm text-gray-400">{st.roomName} ({label(ROOM_TYPE_LABELS, st.roomType)})</p>
+                  <p className="text-sm text-gray-400">{st.roomName} (<span className={`font-medium ${ROOM_TYPE_TEXT[st.roomType] ?? ''}`}>{label(ROOM_TYPE_LABELS, st.roomType)}</span>)</p>
                   <div className="text-xs mt-1 space-x-3">
                     <PriceWithRules
                       label="Thường:"
                       basePrice={st.basePrice}
                       effectivePrice={st.effectiveBasePrice ?? st.basePrice}
-                      priceColorClass="text-white"
+                      priceColorClass={SEAT_TYPE_PRICE_TEXT.STANDARD}
                     />
                     {st.vipPrice != null && (
                       <PriceWithRules
                         label="VIP:"
                         basePrice={st.vipPrice}
                         effectivePrice={st.effectiveVipPrice ?? st.vipPrice}
+                        priceColorClass={SEAT_TYPE_PRICE_TEXT.VIP}
                       />
                     )}
                     {st.couplePrice != null && (
@@ -240,7 +241,7 @@ export default function MovieDetailPage() {
                         label="Đôi:"
                         basePrice={st.couplePrice}
                         effectivePrice={st.effectiveCouplePrice ?? st.couplePrice}
-                        priceColorClass="text-purple-400"
+                        priceColorClass={SEAT_TYPE_PRICE_TEXT.COUPLE}
                       />
                     )}
                     {st.sweetboxPrice != null && (
@@ -248,7 +249,7 @@ export default function MovieDetailPage() {
                         label="Sweetbox:"
                         basePrice={st.sweetboxPrice}
                         effectivePrice={st.effectiveSweetboxPrice ?? st.sweetboxPrice}
-                        priceColorClass="text-pink-400"
+                        priceColorClass={SEAT_TYPE_PRICE_TEXT.SWEETBOX}
                       />
                     )}
                     {st.deluxePrice != null && (
@@ -256,11 +257,11 @@ export default function MovieDetailPage() {
                         label="Deluxe:"
                         basePrice={st.deluxePrice}
                         effectivePrice={st.effectiveDeluxePrice ?? st.deluxePrice}
-                        priceColorClass="text-cyan-400"
+                        priceColorClass={SEAT_TYPE_PRICE_TEXT.DELUXE}
                       />
                     )}
                   </div>
-                  {/* Chỉ hiện chip giảm giá (chuẩn rạp VN: ẩn surge để giữ tâm lý mua hàng) */}
+                  {/* Chỉ hiện chip giảm giá — surge ẩn để giữ tâm lý mua hàng */}
                   {st.appliedRules && st.appliedRules.some(r => r.discountPercent < 0) && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {st.appliedRules.filter(r => r.discountPercent < 0).map(r => (
@@ -274,6 +275,26 @@ export default function MovieDetailPage() {
                       ))}
                     </div>
                   )}
+                  {/* Còn N ghế — urgency indicator. Đỏ khi <10%, cam khi <30%,
+                      xám trung tính khi >30%. Hết hẳn → đã filter ở trên. */}
+                  {st.availableSeats != null && st.totalSeats != null && st.totalSeats > 0 && (() => {
+                    const pct = (st.availableSeats / st.totalSeats) * 100
+                    const isUrgent = pct < 10
+                    const isLow = pct >= 10 && pct < 30
+                    const color = isUrgent
+                      ? 'text-red-400 bg-red-500/10 border-red-500/30'
+                      : isLow
+                        ? 'text-orange-400 bg-orange-500/10 border-orange-500/30'
+                        : 'text-gray-400 bg-white/5 border-white/10'
+                    return (
+                      <div className="mt-1.5">
+                        <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border ${color}`}>
+                          {isUrgent && '🔥'}
+                          Còn {st.availableSeats}/{st.totalSeats} ghế
+                        </span>
+                      </div>
+                    )
+                  })()}
                 </div>
                 {isLoggedIn() ? (
                   <Link to={`/booking/seats/${st.id}`}>

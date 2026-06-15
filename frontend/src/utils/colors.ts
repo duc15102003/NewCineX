@@ -50,8 +50,10 @@ export const MOVIE_RUN_TYPE_COLORS: Record<string, string> = {
   SPECIAL: 'bg-orange-500/10 text-orange-400 border-orange-500/30',
 }
 
-// Showtime status
+// Showtime status — DRAFT dùng amber để distinguish vs SCHEDULED (blue),
+// signal "chưa public" cần admin action publish.
 export const SHOWTIME_STATUS_COLORS: Record<string, string> = {
+  DRAFT: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
   SCHEDULED: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
   ONGOING: 'bg-green-500/10 text-green-400 border-green-500/30',
   FINISHED: 'bg-gray-500/10 text-gray-400 border-gray-500/30',
@@ -65,12 +67,45 @@ export const ROOM_STATUS_COLORS: Record<string, string> = {
   INACTIVE: 'bg-gray-500/10 text-gray-400 border-gray-500/30',
 }
 
-// Room type
+/**
+ * Room type colors — canonical industry pattern:
+ * <ul>
+ *   <li>TWO_D = BLUE (basic, neutral)</li>
+ *   <li>THREE_D = PURPLE (dimensional)</li>
+ *   <li>IMAX = GOLD (signature premium — match brand identity)</li>
+ *   <li>FOUR_DX = PINK (motion/dramatic)</li>
+ * </ul>
+ *
+ * <p>Badge variant (bg /10 + text + border /30) — dùng cho table badge, chip.
+ */
 export const ROOM_TYPE_COLORS: Record<string, string> = {
   TWO_D: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
   THREE_D: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
   IMAX: 'bg-[#ffc107]/10 text-[#ffc107] border-[#ffc107]/30',
   FOUR_DX: 'bg-pink-500/10 text-pink-400 border-pink-500/30',
+}
+
+/**
+ * Text-only màu loại phòng — dùng cho text inline trong card/dialog
+ * (vd "Phòng A — 2D"). Sync với {@link ROOM_TYPE_COLORS} badge.
+ */
+export const ROOM_TYPE_TEXT: Record<string, string> = {
+  TWO_D: 'text-blue-400',
+  THREE_D: 'text-purple-400',
+  IMAX: 'text-[#ffc107]',
+  FOUR_DX: 'text-pink-400',
+}
+
+/**
+ * Saturated tone — bg/border đậm hơn cho calendar block, scheduler tile.
+ * Sync màu với {@link ROOM_TYPE_COLORS} (cùng hue, khác opacity).
+ */
+export const ROOM_TYPE_TONE: Record<string, { bg: string; border: string; text: string }> = {
+  TWO_D:   { bg: 'bg-blue-600/35',   border: 'border-blue-500/60',   text: 'text-blue-50' },
+  THREE_D: { bg: 'bg-purple-600/35', border: 'border-purple-500/60', text: 'text-purple-50' },
+  IMAX:    { bg: 'bg-[#ffc107]/25',  border: 'border-[#ffc107]/60',  text: 'text-amber-50' },
+  FOUR_DX: { bg: 'bg-pink-600/35',   border: 'border-pink-500/60',   text: 'text-pink-50' },
+  DEFAULT: { bg: 'bg-[#ffc107]/20',  border: 'border-[#ffc107]/50',  text: 'text-amber-50' },
 }
 
 // Storage state (genres, snacks, vouchers)
@@ -92,6 +127,24 @@ export const SEAT_TYPE_COLORS: Record<string, string> = {
   SWEETBOX: 'bg-purple-500/20 text-purple-300 border-purple-500/50',
   DELUXE: 'bg-blue-500/20 text-blue-300 border-blue-500/50',
   HANDICAP: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50',
+}
+
+/**
+ * Màu text giá tiền theo loại ghế — SYNC với màu ghế trên seat grid để
+ * NV scan nhanh "giá đó của loại ghế nào".
+ *
+ * <p>Quy ước: chỉ dùng khi context là "giá CỦA loại ghế cụ thể" (price tier
+ * trên showtime card, line item POS, breakdown booking). Tổng tiền cuối
+ * (totalAmount, revenue, payment amount) vẫn dùng gold {@code #ffc107}
+ * — gold = "tiền đại diện cho cả đơn".
+ */
+export const SEAT_TYPE_PRICE_TEXT: Record<string, string> = {
+  STANDARD: 'text-green-400',
+  VIP: 'text-[#ffc107]',
+  COUPLE: 'text-pink-400',
+  SWEETBOX: 'text-purple-400',
+  DELUXE: 'text-blue-400',
+  HANDICAP: 'text-cyan-400',
 }
 
 /**

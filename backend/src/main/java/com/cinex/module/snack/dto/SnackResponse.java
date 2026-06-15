@@ -12,7 +12,7 @@ public class SnackResponse {
 
     private Long id;
     private String storageState;
-    /** Chi nhánh — phục vụ admin grouped view + audit. */
+    /** Chi nhánh sở hữu snack — breadcrumb + audit (FE đã force theater pick). */
     private Long theaterId;
     private String theaterName;
     private String theaterCity;

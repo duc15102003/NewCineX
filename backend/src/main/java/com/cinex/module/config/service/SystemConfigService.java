@@ -2,6 +2,7 @@ package com.cinex.module.config.service;
 
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
+import com.cinex.module.config.dto.SystemConfigResponse;
 import com.cinex.module.config.entity.SystemConfig;
 import com.cinex.module.config.repository.SystemConfigRepository;
 import jakarta.annotation.PostConstruct;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -69,30 +71,72 @@ public class SystemConfigService {
     }
 
     /**
-     * Liệt kê toàn bộ config — admin xem ở trang Quản lý cấu hình.
+     * Liệt kê config cho admin Cấu hình hệ thống.
+     *
+     * @param includeHidden true = trả cả config visible=false (kỹ thuật).
+     *                      false = chỉ visible=true (admin care hàng ngày).
+     * @return danh sách sort theo category → display_order → label
      */
     @Transactional(readOnly = true)
-    public List<SystemConfig> listAll() {
-        return systemConfigRepository.findAll();
+    public List<SystemConfigResponse> listForAdmin(boolean includeHidden) {
+        return systemConfigRepository.findAll().stream()
+                .filter(c -> includeHidden || c.isVisible())
+                .sorted(Comparator
+                        .comparing(SystemConfig::getCategory, Comparator.nullsLast(String::compareTo))
+                        .thenComparing(SystemConfig::getDisplayOrder, Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(SystemConfig::getLabel, Comparator.nullsLast(String::compareTo)))
+                .map(SystemConfigResponse::from)
+                .toList();
     }
 
     /**
-     * Admin cập nhật config — lưu DB + refresh cache. Throw nếu key không tồn tại.
+     * Admin cập nhật config — validate min/max + lưu DB + refresh cache. Throw nếu
+     * key không tồn tại.
      *
      * <p><b>Lưu ý policy:</b> KHÔNG auto-create key mới (chính sách trước đây tạo ngầm
      * nếu key chưa có). Mỗi config phải được khai báo trước qua Liquibase seed —
      * tránh admin gõ sai key tạo ra entry ma không được code đọc.
      */
     @Transactional
-    public SystemConfig updateConfig(String key, String value) {
+    public SystemConfigResponse updateConfig(String key, String value) {
         SystemConfig config = systemConfigRepository.findByConfigKey(key)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.NOT_FOUND, "Không tìm thấy cấu hình: " + key));
+
+        validateValueAgainstRange(config, value);
+
         config.setConfigValue(value);
         systemConfigRepository.save(config);
         cache.put(key, value);
         log.info("Config updated: {} = {}", key, value);
-        return config;
+        return SystemConfigResponse.from(config);
+    }
+
+    /**
+     * Validate value theo min/max của config (nếu là số). Config text bỏ qua.
+     * Số nguyên fail parse → ném exception ngay (đỡ lưu giá trị sai vào DB).
+     */
+    private void validateValueAgainstRange(SystemConfig config, String value) {
+        if (config.getMinValue() == null && config.getMaxValue() == null) {
+            return;  // text config hoặc không có range
+        }
+        int num;
+        try {
+            num = Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Giá trị phải là số nguyên cho cấu hình: " + config.getLabel());
+        }
+        if (config.getMinValue() != null && num < config.getMinValue()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    config.getLabel() + " — giá trị tối thiểu là " + config.getMinValue()
+                            + (config.getUnit() != null ? " " + config.getUnit() : ""));
+        }
+        if (config.getMaxValue() != null && num > config.getMaxValue()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    config.getLabel() + " — giá trị tối đa là " + config.getMaxValue()
+                            + (config.getUnit() != null ? " " + config.getUnit() : ""));
+        }
     }
 
     /**

@@ -39,8 +39,43 @@
                 <td style="padding:10px 0; color:#9ca3af;">Ghế</td>
                 <td style="padding:10px 0; color:#fff; text-align:right;" th:text="${seats}">A1, A2</td>
             </tr>
+
+            <!-- Breakdown discounts (chỉ hiện nếu > 0) -->
+            <tr th:if="${tierDiscount != null and !#strings.isEmpty(tierDiscount)}"
+                style="border-top:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:10px 0; color:#9ca3af; font-size:13px;">
+                    <span>Ưu đãi hạng </span><span th:text="${tierLabel}">Vàng</span>
+                </td>
+                <td style="padding:10px 0; color:#4ade80; text-align:right; font-size:13px;">
+                    <span>−</span><span th:text="${tierDiscount}">5.000đ</span>
+                </td>
+            </tr>
+            <tr th:if="${groupDiscount != null and !#strings.isEmpty(groupDiscount)}">
+                <td style="padding:10px 0; color:#9ca3af; font-size:13px;">
+                    <span>Giảm giá nhóm (</span><span th:text="${groupSeatCount}">12</span><span> vé)</span>
+                </td>
+                <td style="padding:10px 0; color:#4ade80; text-align:right; font-size:13px;">
+                    <span>−</span><span th:text="${groupDiscount}">8.000đ</span>
+                </td>
+            </tr>
+
+            <!-- VAT breakdown — chuẩn hóa đơn VN (TT 78/2014/TT-BTC) -->
+            <tr th:if="${subtotal != null and !#strings.isEmpty(subtotal)}"
+                style="border-top:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:8px 0; color:#9ca3af; font-size:13px;">Tạm tính</td>
+                <td style="padding:8px 0; color:#d1d5db; text-align:right; font-size:13px;"
+                    th:text="${subtotal}">185.185đ</td>
+            </tr>
+            <tr th:if="${vatAmount != null and !#strings.isEmpty(vatAmount)}">
+                <td style="padding:8px 0; color:#9ca3af; font-size:13px;">
+                    <span>VAT (</span><span th:text="${vatPercent}">8</span><span>%)</span>
+                </td>
+                <td style="padding:8px 0; color:#d1d5db; text-align:right; font-size:13px;"
+                    th:text="${vatAmount}">14.815đ</td>
+            </tr>
+
             <tr style="border-top:1px solid rgba(255,255,255,0.1);">
-                <td style="padding:14px 0; color:#fff; font-weight:bold;">Tổng tiền</td>
+                <td style="padding:14px 0; color:#fff; font-weight:bold;">Tổng cộng</td>
                 <td style="padding:14px 0; color:#eab308; font-weight:bold; text-align:right; font-size:18px;"
                     th:text="${totalAmount}">200.000đ</td>
             </tr>

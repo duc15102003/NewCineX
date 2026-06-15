@@ -15,7 +15,7 @@ import java.math.BigDecimal;
 @Setter
 public class SnackFilter {
 
-    // Lọc theo chi nhánh — admin grouped view + branch ADMIN auto-scope server-side
+    // Lọc theo chi nhánh — SUPER_ADMIN switch CN qua selector; BRANCH_ADMIN auto-override server-side
     private Long theaterId;
 
     // LIKE trên name OR description (case-insensitive)

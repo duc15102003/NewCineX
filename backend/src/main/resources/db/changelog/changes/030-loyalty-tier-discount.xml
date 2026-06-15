@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Loyalty tier benefits — đợt 1: discount % theo hạng (impactful nhất).
+        Industry pattern (CGV VIP/Lotte Star/BHD Star):
+          - STANDARD: 0% off
+          - SILVER:   3% off vé
+          - GOLD:     5% off vé
+          - PLATINUM: 10% off vé
+
+        Phase 3 (skip lần này): free snack/month, early booking days, birthday
+        bonus — cần thêm entity scheduler.
+
+        Lưu vào booking để history-preserving (luật đổi % không ảnh hưởng vé cũ).
+    -->
+
+    <changeSet id="030-add-tier-discount-fields" author="cinex">
+        <addColumn tableName="bookings">
+            <column name="tier_discount_amount" type="DECIMAL(12,0)" defaultValueNumeric="0"
+                    remarks="Tiền giảm theo hạng thành viên (0 cho counter-sale)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tier_at_booking" type="NVARCHAR(20)"
+                    remarks="Hạng thành viên lúc đặt vé — null cho counter-sale"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="030-seed-tier-discount-configs" author="cinex">
+        <sql><![CDATA[
+            -- STANDARD = 0% (không seed, mặc định 0 trong code) — giảm noise UI.
+
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES
+            ('loyalty.tier.silver_discount_percent', '3',
+             N'Giảm giá vé cho hạng Bạc (%)',
+             N'Ưu đãi giảm giá vé — hạng Bạc',
+             N'Khách hạng Bạc tự động giảm X% giá vé mỗi lần đặt. Industry: Bạc 3-5%. Đặt 0 để tắt ưu đãi hạng Bạc.',
+             N'%', 'loyalty', 70, 1, 0, 50),
+
+            ('loyalty.tier.gold_discount_percent', '5',
+             N'Giảm giá vé cho hạng Vàng (%)',
+             N'Ưu đãi giảm giá vé — hạng Vàng',
+             N'Khách hạng Vàng tự động giảm X% giá vé. Industry: Vàng 5-7%. Đặt cao hơn Bạc để tạo động lực lên hạng.',
+             N'%', 'loyalty', 80, 1, 0, 50),
+
+            ('loyalty.tier.platinum_discount_percent', '10',
+             N'Giảm giá vé cho hạng Bạch Kim (%)',
+             N'Ưu đãi giảm giá vé — hạng Bạch Kim',
+             N'Khách hạng Bạch Kim tự động giảm X% giá vé. Industry: VIP 10-15%. Hạng cao nhất nên ưu đãi đáng kể.',
+             N'%', 'loyalty', 90, 1, 0, 50);
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>

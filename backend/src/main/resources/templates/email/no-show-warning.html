@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>CineX — Cảnh báo không đến xem phim</title>
+</head>
+<body style="margin:0; padding:20px; font-family:'Inter', Arial, sans-serif; background:#051424; color:#e5e7eb;">
+    <div style="max-width:560px; margin:0 auto; background:#0a1929; border-radius:16px; padding:32px; border:1px solid rgba(255,255,255,0.05);">
+        <div style="text-align:center; margin-bottom:24px;">
+            <h1 style="margin:0; color:#eab308; font-size:28px; letter-spacing:2px; font-weight:bold;">CineX</h1>
+            <p style="margin:4px 0 0; color:#6b7280; font-size:12px; letter-spacing:1px;">HỆ THỐNG ĐẶT VÉ XEM PHIM</p>
+        </div>
+
+        <h2 style="color:#f97316; margin-top:0;">⚠ Cảnh báo: bạn không đến xem phim</h2>
+
+        <p style="line-height:1.6;">Xin chào <strong th:text="${username}">khách hàng</strong>,</p>
+
+        <p style="line-height:1.6;">
+            Bạn đã đặt vé <strong style="color:#f97316;"><span th:text="${currentCount}">2</span> lần</strong> nhưng không đến rạp xem phim (NO_SHOW).
+        </p>
+
+        <div style="background:#1f2937; border-left:4px solid #f97316; padding:16px; border-radius:8px; margin:20px 0;">
+            <p style="margin:0; color:#fbbf24;">
+                Còn <strong th:text="${remaining}">1</strong> lần NO_SHOW nữa, tài khoản sẽ bị
+                <strong style="color:#ef4444;">tạm khoá đặt vé <span th:text="${blockDays}">7</span> ngày</strong>.
+            </p>
+        </div>
+
+        <p style="line-height:1.6;">
+            <strong>Cách tránh bị khoá:</strong>
+        </p>
+        <ul style="line-height:1.8; color:#d1d5db;">
+            <li>Hủy vé trước 60 phút khi không thể đi (không bị trừ điểm NO_SHOW)</li>
+            <li>Check-in tại quầy đúng giờ, không cần xem hết phim</li>
+            <li>Đến rạp identity verify để được reset đếm sớm</li>
+        </ul>
+
+        <p style="font-size:13px; color:#6b7280; margin-top:24px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.05);">
+            Chính sách NO_SHOW giúp đảm bảo ghế được phân phối công bằng cho khách hàng có nhu cầu xem phim thực sự.
+        </p>
+    </div>
+</body>
+</html>

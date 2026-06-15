@@ -48,8 +48,8 @@ public class BookingController {
     }
 
     @PostMapping("/counter-sale")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "(Admin) POS bán vé tại quầy — chọn suất + ghế, CONFIRMED luôn")
+    @PreAuthorize("hasRole('STAFF')")
+    @Operation(summary = "(Staff/Admin) POS bán vé tại quầy — chọn suất + ghế, CONFIRMED luôn")
     public ApiResponse<BookingResponse> counterSale(@Valid @RequestBody CounterSaleRequest request) {
         return ApiResponse.ok("Bán vé thành công", bookingService.counterSale(request));
     }
@@ -94,22 +94,22 @@ public class BookingController {
     }
 
     @PostMapping("/check-in")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "(Admin/Staff) Check-in — nhận qrToken (quét QR) hoặc bookingCode (nhập tay)")
+    @PreAuthorize("hasRole('STAFF')")
+    @Operation(summary = "(Staff/Admin) Check-in — nhận qrToken (quét QR) hoặc bookingCode (nhập tay)")
     public ApiResponse<BookingResponse> checkIn(@RequestParam String code, HttpServletRequest httpRequest) {
         return ApiResponse.ok("Checked in", bookingCheckInService.checkIn(code, httpRequest));
     }
 
     @GetMapping("/check-in/preview")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "(Admin/Staff) Preview booking info trước khi admit/reject — read-only")
+    @PreAuthorize("hasRole('STAFF')")
+    @Operation(summary = "(Staff/Admin) Preview booking info trước khi admit/reject — read-only")
     public ApiResponse<BookingResponse> previewCheckIn(@RequestParam String code, HttpServletRequest httpRequest) {
         return ApiResponse.ok(bookingCheckInService.previewCheckIn(code, httpRequest));
     }
 
     @PostMapping("/check-in/reject")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "(Admin/Staff) Từ chối check-in tại cổng — vd không đủ tuổi sau verify CCCD")
+    @PreAuthorize("hasRole('STAFF')")
+    @Operation(summary = "(Staff/Admin) Từ chối check-in tại cổng — vd không đủ tuổi sau verify CCCD")
     public ApiResponse<BookingResponse> rejectCheckIn(
             @RequestParam String code,
             @RequestParam(defaultValue = "UNDER_AGE") String reason,

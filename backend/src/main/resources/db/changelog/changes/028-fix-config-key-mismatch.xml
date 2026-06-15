@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        ╔══════════════════════════════════════════════════════════════╗
+        ║ FIX BUG ẨN: 7 config keys mismatch với code + seed bổ sung 7  ║
+        ║ keys mới + drop 2 dead keys.                                  ║
+        ╚══════════════════════════════════════════════════════════════╝
+
+        Phát hiện: rà grep `systemConfigService.getInt/getString/getLong`
+        trong BE, so với seed Liquibase, thấy 17 vấn đề:
+
+        ▶ MISMATCH (7) — code đọc 1 key, DB seed key khác → admin sửa
+          giá trị UI nhưng code dùng key khác → KHÔNG có tác dụng.
+        ▶ THIẾU (7)    — code đọc key nhưng DB chưa seed → admin không
+          thể đổi (BE dùng fallback hardcode).
+        ▶ DEAD (3)     — DB seed nhưng KHÔNG code nào đọc → admin sửa
+          vô nghĩa, xóa cho gọn.
+
+        Cách fix: UPDATE config_key của entry cũ (giữ history audit log),
+        INSERT key mới còn thiếu, DELETE key dead.
+    -->
+
+    <!-- ╔ PHẦN 1: RENAME 7 KEYS CHO KHỚP CODE ╗ -->
+
+    <changeSet id="028-rename-mismatched-keys" author="cinex">
+        <sql splitStatements="false"><![CDATA[
+            -- (1) auth.login_max_attempts_per_user → auth.login_max_attempts
+            -- Code: LoginRateLimitService.java đọc "auth.login_max_attempts".
+            UPDATE system_config
+            SET config_key = 'auth.login_max_attempts',
+                label = N'Số lần đăng nhập sai tối đa',
+                hint = N'Sau X lần nhập sai mật khẩu trong khoảng đếm, tài khoản hoặc IP bị khóa tạm. Chống đoán mật khẩu (brute-force). Tiêu chuẩn 5 lần (CGV/Lotte).'
+            WHERE config_key = 'auth.login_max_attempts_per_user';
+
+            -- (2) auth.password_reset_token_ttl_minutes → auth.reset_token_expiry_minutes
+            -- Code: AuthService.java đọc "auth.reset_token_expiry_minutes".
+            UPDATE system_config
+            SET config_key = 'auth.reset_token_expiry_minutes'
+            WHERE config_key = 'auth.password_reset_token_ttl_minutes';
+
+            -- (3-5) loyalty.{silver,gold,platinum}_threshold → loyalty.tier.{...}_threshold
+            -- Code: LoyaltyService.java đọc prefix "loyalty.tier.".
+            UPDATE system_config SET config_key = 'loyalty.tier.silver_threshold'
+            WHERE config_key = 'loyalty.silver_threshold';
+            UPDATE system_config SET config_key = 'loyalty.tier.gold_threshold'
+            WHERE config_key = 'loyalty.gold_threshold';
+            UPDATE system_config SET config_key = 'loyalty.tier.platinum_threshold'
+            WHERE config_key = 'loyalty.platinum_threshold';
+
+            -- (6) loyalty.points_per_1000_vnd → loyalty.earn_rate
+            -- Code: LoyaltyService.java line 62 readDecimalConfig("loyalty.earn_rate", "0.001")
+            --       1.000đ = 0.001 (decimal rate) thay vì 1 point.
+            -- Đổi cả VALUE từ "1" → "0.001" để khớp đơn vị code.
+            UPDATE system_config
+            SET config_key = 'loyalty.earn_rate',
+                config_value = '0.001',
+                label = N'Tốc độ tích điểm',
+                hint = N'Hệ số điểm tích trên mỗi đồng chi tiêu. 0.001 nghĩa là 1 điểm / 1.000đ → vé 100.000đ tích 100 điểm. Tăng (0.002) để khuyến mãi khách thân thiết, giảm (0.0005) để siết.',
+                unit = N'điểm/đồng',
+                min_value = NULL,
+                max_value = NULL
+            WHERE config_key = 'loyalty.points_per_1000_vnd';
+
+            -- (7) statistics.dashboard_default_days → statistics.default_range_days
+            -- Code: StatisticsController.java đọc "statistics.default_range_days".
+            UPDATE system_config SET config_key = 'statistics.default_range_days'
+            WHERE config_key = 'statistics.dashboard_default_days';
+        ]]></sql>
+    </changeSet>
+
+    <!-- ╔ PHẦN 2: DROP 3 DEAD CONFIG KEYS ╗ -->
+
+    <changeSet id="028-drop-dead-keys" author="cinex">
+        <sql splitStatements="false"><![CDATA[
+            -- Không code nào đọc — admin sửa cũng vô nghĩa, xóa cho gọn.
+            DELETE FROM system_config WHERE config_key IN (
+                'auth.login_window_minutes',
+                'auth.forgot_password_window_minutes',
+                'statistics.cache_ttl_seconds'
+            );
+        ]]></sql>
+    </changeSet>
+
+    <!--
+        Lưu ý dead key "auth.forgot_password_window_minutes": grep thấy
+        ForgotPasswordRateLimitService.java có đọc. Nhưng xác minh lại — nếu
+        đọc thì KHÔNG drop. Để an toàn, GIỮ lại.
+    -->
+    <changeSet id="028-restore-forgot-window" author="cinex">
+        <sql splitStatements="false"><![CDATA[
+            -- ForgotPasswordRateLimitService.java có gọi → giữ lại.
+            IF NOT EXISTS (SELECT 1 FROM system_config WHERE config_key = N'auth.forgot_password_window_minutes')
+            BEGIN
+                INSERT INTO system_config (
+                    config_key, config_value, description,
+                    label, hint, unit, category, display_order, visible,
+                    min_value, max_value
+                ) VALUES (
+                    'auth.forgot_password_window_minutes', '60',
+                    N'Window rate limit forgot (phút)',
+                    N'Khoảng đếm quên mật khẩu',
+                    N'Tương tự khoảng đếm đăng nhập — sau khoảng này bộ đếm reset.',
+                    N'phút', 'security', 65, 0, 1, 1440
+                );
+            END
+        ]]></sql>
+    </changeSet>
+
+    <!-- ╔ PHẦN 3: SEED 7 KEYS MỚI CODE ĐANG DÙNG NHƯNG CHƯA CÓ TRONG DB ╗ -->
+
+    <changeSet id="028-seed-missing-keys" author="cinex">
+        <sql splitStatements="false"><![CDATA[
+            -- (1) auth.email_verification_expiry_hours — AuthService.java
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES (
+                'auth.email_verification_expiry_hours', '24',
+                N'Hạn link xác thực email (giờ)',
+                N'Hạn link xác thực email',
+                N'Khách đăng ký → email kèm link xác thực → link chỉ dùng được trong X giờ. Quá hạn phải xin link mới. Đặt 24h là tiêu chuẩn (CGV/Lotte).',
+                N'giờ', 'security', 95, 0, 1, 168
+            );
+
+            -- (2) auth.login_block_minutes — LoginRateLimitService.java
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES (
+                'auth.login_block_minutes', '15',
+                N'Thời gian khóa sau khi nhập sai quá ngưỡng (phút)',
+                N'Thời gian khóa khi nhập sai mật khẩu quá ngưỡng',
+                N'Sau khi vượt giới hạn lần đăng nhập sai, tài khoản hoặc IP bị khóa tạm trong X phút. Hết giờ tự mở khóa. Đặt 15-30 phút là cân bằng.',
+                N'phút', 'security', 35, 0, 1, 1440
+            );
+
+            -- (3) checkin.max_fails_per_ip — CheckInRateLimitService.java
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES (
+                'checkin.max_fails_per_ip', '60',
+                N'Số lần check-in fail tối đa / IP',
+                N'Số lần check-in lỗi tối đa / IP',
+                N'Tại cổng rạp, mỗi IP máy quét QR check-in lỗi tối đa X lần trong khoảng đếm. Vượt → khóa tạm. Đặt cao (60) vì IP rạp dùng chung cho nhiều quầy.',
+                N'lần', 'security', 100, 0, 1, 500
+            );
+
+            -- (4) checkin.block_minutes — CheckInRateLimitService.java
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES (
+                'checkin.block_minutes', '15',
+                N'Thời gian khóa máy quét QR sau khi fail (phút)',
+                N'Thời gian khóa máy quét QR khi fail quá ngưỡng',
+                N'Máy quét tại cổng fail quá ngưỡng → khóa quét X phút. Hết giờ tự mở. Đặt 15 phút là an toàn — quá ngắn bị bypass, quá dài ảnh hưởng vận hành cổng.',
+                N'phút', 'security', 105, 0, 1, 60
+            );
+
+            -- (5) loyalty.min_redeem_points — LoyaltyService.java
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES (
+                'loyalty.min_redeem_points', '100',
+                N'Số điểm tối thiểu để đổi quà',
+                N'Điểm tối thiểu để đổi quà',
+                N'Khách phải tích đủ X điểm mới được đổi sang voucher giảm giá. Đặt thấp (100) thân thiện cho khách mới, đặt cao (500+) tạo cảm giác giá trị cho điểm tích.',
+                N'điểm', 'loyalty', 50, 1, 1, 10000
+            );
+
+            -- (6) loyalty.redeem_value — LoyaltyService.java
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES (
+                'loyalty.redeem_value', '1000',
+                N'Giá trị quy đổi 1 điểm sang VNĐ',
+                N'Giá trị 1 điểm khi đổi quà',
+                N'1 điểm đổi được bao nhiêu đồng giảm giá. Đặt 1000 → 100 điểm = 100.000đ giảm. Tỷ lệ này quyết định trực tiếp chi phí chương trình tích điểm.',
+                N'đồng/điểm', 'loyalty', 60, 1, 1, 100000
+            );
+
+            -- (7) payment.pending_cleanup_minutes — PaymentCleanupScheduler (nếu có)
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES (
+                'payment.pending_cleanup_minutes', '30',
+                N'Thời gian dọn payment treo (phút)',
+                N'Dọn giao dịch treo sau X phút',
+                N'Giao dịch ở trạng thái "Chờ thanh toán" lâu hơn X phút sẽ bị scheduler dọn (đánh dấu thất bại + trả ghế). Cần lớn hơn thời gian giữ ghế (10 phút) để khách không bị mất tiền oan.',
+                N'phút', 'booking', 90, 0, 1, 120
+            );
+
+            -- (8) statistics.max_range_days — StatisticsController.java
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES (
+                'statistics.max_range_days', '365',
+                N'Khoảng ngày tối đa cho dashboard (ngày)',
+                N'Khoảng ngày tối đa cho báo cáo',
+                N'Khoảng thời gian xa nhất admin xem được trên dashboard. Đặt 365 (1 năm) là tiêu chuẩn. Tăng lên 730 nếu cần báo cáo 2 năm — query DB nặng hơn.',
+                N'ngày', 'dashboard', 30, 1, 7, 3650
+            );
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>

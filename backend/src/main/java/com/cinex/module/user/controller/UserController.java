@@ -2,6 +2,7 @@ package com.cinex.module.user.controller;
 
 import com.cinex.common.response.ApiResponse;
 import com.cinex.common.response.PageResponse;
+import com.cinex.module.user.dto.AdminCreateUserRequest;
 import com.cinex.module.user.dto.AdminUpdateUserRequest;
 import com.cinex.module.user.dto.ChangePasswordRequest;
 import com.cinex.module.user.dto.UpdateProfileRequest;
@@ -92,11 +93,24 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     @Operation(summary = "(Admin) Update user info, role and enabled status")
     public ApiResponse<UserProfileResponse> adminUpdateUser(
             @PathVariable Long id,
             @Valid @RequestBody AdminUpdateUserRequest request) {
         return ApiResponse.ok("User updated", userService.adminUpdateUser(id, request));
+    }
+
+    /**
+     * Admin tạo user mới — SUPER_ADMIN tạo bất kỳ role, ADMIN chỉ tạo STAFF/USER
+     * trong chi nhánh mình (theaterId force override ở Service).
+     */
+    @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @Operation(summary = "(Admin) Tạo user/nhân viên/quản trị mới")
+    public ApiResponse<UserProfileResponse> adminCreateUser(
+            @Valid @RequestBody AdminCreateUserRequest request) {
+        return ApiResponse.ok("Tạo tài khoản thành công",
+                userService.adminCreateUser(request));
     }
 }

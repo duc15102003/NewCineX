@@ -4,6 +4,8 @@ import com.cinex.common.entity.StorageState;
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
 import com.cinex.common.service.SecurityService;
+import com.cinex.module.booking.entity.BookingStatus;
+import com.cinex.module.booking.repository.BookingRepository;
 import com.cinex.module.room.dto.RoomFilter;
 import com.cinex.module.room.dto.RoomRequest;
 import com.cinex.module.room.dto.RoomResponse;
@@ -32,6 +34,7 @@ public class RoomService {
 
     private final RoomRepository roomRepository;
     private final ShowtimeRepository showtimeRepository;
+    private final BookingRepository bookingRepository;
     private final TheaterRepository theaterRepository;
     private final RoomMapper roomMapper;
     private final SecurityService securityService;
@@ -83,17 +86,23 @@ public class RoomService {
         // RBAC: branch ADMIN chỉ tạo phòng cho chi nhánh mình; SUPER_ADMIN pass
         securityService.requireAccessToTheater(theater.getId());
 
-        // Tên phòng unique trong scope chi nhánh (nhiều chi nhánh có thể cùng "Phòng 1").
-        if (roomRepository.existsByNameAndTheaterId(request.getName(), theater.getId())) {
+        // Trim + case-insensitive unique (industry chuẩn): "Phòng 1" và "  Phòng 1  "
+        // và "phòng 1" cùng coi là duplicate.
+        String normalized = request.getName().trim();
+        if (normalized.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tên phòng không được rỗng (chỉ có khoảng trắng)");
+        }
+        if (roomRepository.existsByNameIgnoreCaseAndTheaterId(normalized, theater.getId())) {
             throw new BusinessException(ErrorCode.ROOM_EXISTED,
-                    "Phòng '" + request.getName() + "' đã tồn tại trong chi nhánh này");
+                    "Phòng '" + normalized + "' đã tồn tại trong chi nhánh này");
         }
 
         Room room = Room.builder()
                 .theater(theater)
-                .name(request.getName())
+                .name(normalized)
                 .type(request.getType())
-                .totalSeats(request.getTotalSeats())
+                .totalSeats(0)  // Total seats compute từ Seats sau khi gen — không cho admin set tay
                 .status(request.getStatus() != null ? request.getStatus() : RoomStatus.ACTIVE)
                 .build();
 
@@ -116,16 +125,21 @@ public class RoomService {
                     "Không thể đổi chi nhánh của phòng — vui lòng tạo phòng mới");
         }
 
-        // Check trùng tên trong scope theater, loại trừ chính room đang sửa
-        if (roomRepository.existsByNameAndTheaterIdAndIdNot(
-                request.getName(), room.getTheater().getId(), id)) {
+        // Trim + case-insensitive unique check (loại trừ chính room đang sửa)
+        String normalized = request.getName().trim();
+        if (normalized.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tên phòng không được rỗng (chỉ có khoảng trắng)");
+        }
+        if (roomRepository.existsByNameIgnoreCaseAndTheaterIdAndIdNot(
+                normalized, room.getTheater().getId(), id)) {
             throw new BusinessException(ErrorCode.ROOM_EXISTED,
-                    "Phòng '" + request.getName() + "' đã tồn tại trong chi nhánh này");
+                    "Phòng '" + normalized + "' đã tồn tại trong chi nhánh này");
         }
 
-        room.setName(request.getName());
+        room.setName(normalized);
         room.setType(request.getType());
-        room.setTotalSeats(request.getTotalSeats());
+        // totalSeats KHÔNG cho admin sửa — auto-compute từ Seats khi gen/resize.
         if (request.getStatus() != null) {
             room.setStatus(request.getStatus());
         }
@@ -143,10 +157,7 @@ public class RoomService {
         // RBAC: branch ADMIN chỉ xoá phòng của chi nhánh mình
         securityService.requireAccessToTheater(room.getTheater().getId());
 
-        // Business rule: Không cho xóa Room nếu vẫn còn suất chiếu SCHEDULED/ONGOING
-        // → Tránh data inconsistency: showtime trỏ tới room đã bị xóa mềm
-        ensureNoActiveShowtimes(id);
-
+        ensureNoActiveDependencies(id);
         room.setStorageState(StorageState.ARCHIVED);
         roomRepository.save(room);
         log.info("Soft deleted room: {}", room.getName());
@@ -157,13 +168,28 @@ public class RoomService {
         List<Room> rooms = roomRepository.findAllById(ids);
         // RBAC: branch ADMIN chỉ archive phòng của chi nhánh mình
         rooms.forEach(r -> securityService.requireAccessToTheater(r.getTheater().getId()));
-        // Kiểm tra từng phòng — fail-fast nếu bất kỳ phòng nào còn suất chiếu active
+        // Fail-fast nếu bất kỳ phòng nào còn dependency active
         for (Long id : ids) {
-            ensureNoActiveShowtimes(id);
+            ensureNoActiveDependencies(id);
         }
         rooms.forEach(r -> r.setStorageState(StorageState.ARCHIVED));
         roomRepository.saveAll(rooms);
         log.info("Bulk soft deleted {} rooms", rooms.size());
+    }
+
+    /**
+     * Industry chuẩn (Vista Veezi / Cinetixx): chặn xoá Room nếu còn:
+     * 1. Suất chiếu SCHEDULED/ONGOING — tránh orphan showtime
+     * 2. Booking HOLDING/CONFIRMED — tránh khách pay rồi phòng biến mất
+     */
+    private void ensureNoActiveDependencies(Long roomId) {
+        ensureNoActiveShowtimes(roomId);
+        boolean hasActiveBookings = bookingRepository.existsByShowtime_Room_IdAndStatusIn(
+                roomId, List.of(BookingStatus.HOLDING, BookingStatus.CONFIRMED));
+        if (hasActiveBookings) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Không thể xoá phòng đang có vé khách giữ hoặc đã thanh toán");
+        }
     }
 
     /**

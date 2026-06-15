@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { TableCell, TableRow } from '@/components/ui/table'
-import { Settings, LayoutGrid } from 'lucide-react'
+import { LayoutGrid } from 'lucide-react'
 import { label, ROOM_TYPE_LABELS, ROOM_STATUS_LABELS, STORAGE_STATE_LABELS } from '@/utils/labels'
 import { ROOM_STATUS_COLORS as STATUS_COLORS, ROOM_TYPE_COLORS as TYPE_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 import type { AdminRoom } from '@/hooks/useAdminRooms'
@@ -13,12 +13,11 @@ export interface RoomRowProps {
   selected: boolean
   onToggleSelect: (id: number) => void
   onEdit: (room: AdminRoom) => void
-  onGenerateSeats: (id: number) => void
 }
 
 /** Row trong bảng AdminRoomPage. indent=true khi nằm trong grouped view. */
 export default function RoomRow({
-  room: r, index, indent, selected, onToggleSelect, onEdit, onGenerateSeats,
+  room: r, index, indent, selected, onToggleSelect, onEdit,
 }: RoomRowProps) {
   const isArchived = r.storageState === 'ARCHIVED'
   return (
@@ -51,18 +50,12 @@ export default function RoomRow({
         </span>
       </TableCell>
       <TableCell className="text-right whitespace-nowrap">
-        <div className="flex items-center justify-end gap-1">
-          <Link to={`/admin/rooms/${r.id}/seats`}>
-            <Button size="sm" variant="ghost"
-              className="text-gray-400 hover:text-[#ffc107] h-8 w-8 p-0" title="Sơ đồ ghế">
-              <LayoutGrid size={14} />
-            </Button>
-          </Link>
-          <Button size="sm" variant="ghost" onClick={() => onGenerateSeats(r.id)}
-            className="text-gray-400 hover:text-[#ffc107] h-8 w-8 p-0" title="Tạo ghế">
-            <Settings size={14} />
+        <Link to={`/admin/rooms/${r.id}/seats`}>
+          <Button size="sm" variant="ghost"
+            className="text-gray-400 hover:text-[#ffc107] h-8 w-8 p-0" title="Sơ đồ ghế">
+            <LayoutGrid size={14} />
           </Button>
-        </div>
+        </Link>
       </TableCell>
     </TableRow>
   )

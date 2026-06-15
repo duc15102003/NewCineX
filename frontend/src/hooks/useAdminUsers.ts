@@ -15,9 +15,10 @@ export interface AdminUser {
   enabled: boolean
   storageState?: string
   createdAt?: string
-  /** Chi nhánh gán cho branch ADMIN — null cho USER/SUPER_ADMIN. */
+  /** Chi nhánh gán cho ADMIN/STAFF — null cho USER/SUPER_ADMIN. */
   theaterId?: number | null
   theaterName?: string | null
+  theaterCity?: string | null
 }
 
 /**
@@ -77,5 +78,24 @@ export function useAdminUpdateUser() {
     },
     onSuccess: () => { toast.success('Cập nhật user thành công'); qc.invalidateQueries({ queryKey: ['admin', 'users'] }) },
     onError: (e) => toast.error(getErrorMessage(e, 'Lỗi')),
+  })
+}
+
+/**
+ * Admin tạo user mới — SUPER_ADMIN tạo bất kỳ role, ADMIN chỉ tạo STAFF/USER.
+ * BE force override theaterId cho branch ADMIN.
+ */
+export function useAdminCreateUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await api.post<ApiResponse<unknown>>('/api/users', data)
+      return res.data.data
+    },
+    onSuccess: () => {
+      toast.success('Tạo tài khoản thành công')
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
+    onError: (e) => toast.error(getErrorMessage(e, 'Lỗi tạo tài khoản')),
   })
 }

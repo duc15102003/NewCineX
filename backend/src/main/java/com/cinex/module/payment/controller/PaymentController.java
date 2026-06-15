@@ -149,4 +149,22 @@ public class PaymentController {
         return ApiResponse.ok(ticketService.generateTicket(userId, bookingId));
     }
 
+    /**
+     * Manual refund cho payment race-condition (needs_refund=true) hoặc admin
+     * cần intervene. Trước đây không có endpoint → admin chỉ có thể flag
+     * needs_refund qua callback handler, không trigger được refund.
+     */
+    @PostMapping("/admin/payments/{paymentId}/refund")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Manual refund payment — dùng cho race condition needs_refund=true")
+    public ApiResponse<PaymentResponse> manualRefund(
+            @PathVariable Long paymentId,
+            @RequestBody(required = false) java.util.Map<String, String> body) {
+        String reason = body != null
+                ? body.getOrDefault("reason", "Manual refund by admin")
+                : "Manual refund by admin";
+        PaymentResponse result = paymentService.manualRefund(paymentId, reason);
+        return ApiResponse.ok("Refund triggered", result);
+    }
+
 }

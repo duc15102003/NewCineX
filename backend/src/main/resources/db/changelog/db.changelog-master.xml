@@ -41,5 +41,21 @@
     <include file="db/changelog/changes/021-reseed-seats-industry-standard.xml"/>
     <include file="db/changelog/changes/022-showtime-price-nullable.xml"/>
     <include file="db/changelog/changes/023-payment-needs-refund.xml"/>
+    <include file="db/changelog/changes/024-cleanup-duplicate-showtimes.xml"/>
+    <include file="db/changelog/changes/025-seed-showtime-buffer-config.xml"/>
+    <include file="db/changelog/changes/026-user-no-show-tracking.xml"/>
+    <include file="db/changelog/changes/027-system-config-self-describing.xml"/>
+    <include file="db/changelog/changes/028-fix-config-key-mismatch.xml"/>
+    <include file="db/changelog/changes/029-booking-vat-fields.xml"/>
+    <include file="db/changelog/changes/030-loyalty-tier-discount.xml"/>
+    <include file="db/changelog/changes/031-loyalty-points-expiry.xml"/>
+    <include file="db/changelog/changes/032-group-booking-discount.xml"/>
+    <include file="db/changelog/changes/033-booking-seat-total.xml"/>
+    <include file="db/changelog/changes/034-booking-loyalty-redeem.xml"/>
+    <include file="db/changelog/changes/035-showtime-format-language.xml"/>
+    <include file="db/changelog/changes/036-showtime-status-add-draft.xml"/>
+    <include file="db/changelog/changes/037-cleanup-orphan-tier-prices.xml"/>
+    <include file="db/changelog/changes/038-config-arrive-early.xml"/>
+    <include file="db/changelog/changes/039-users-role-add-staff.xml"/>
 
 </databaseChangeLog>

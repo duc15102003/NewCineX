@@ -1,4 +1,4 @@
-import type { useForm } from 'react-hook-form'
+import { Controller, type Control, type useForm } from 'react-hook-form'
 import { Input } from '@/components/ui/input'
 import { DAY_OPTIONS, type FormData } from './types'
 
@@ -39,16 +39,44 @@ export function DayOfWeekPicker({ selectedDays, onToggle, register }: DayOfWeekP
   )
 }
 
-export function HourRangeInputs({ register }: { register: Register }) {
+/**
+ * Hour range — UI là time picker (HH:mm) nhưng value lưu là số (0-23).
+ * BE chỉ care về giờ nguyên, phút bỏ qua. Time picker UX rõ hơn cho admin.
+ */
+export function HourRangeInputs({ control }: { control: Control<FormData> }) {
   return (
     <>
       <div className="col-span-6">
-        <label className="text-sm text-gray-400 mb-1.5 block">Giờ bắt đầu</label>
-        <Input type="number" min={0} max={23} {...register('hourStart')} placeholder="18" />
+        <label className="text-sm text-gray-400 mb-1.5 block">Giờ bắt đầu áp dụng</label>
+        <Controller name="hourStart" control={control}
+          render={({ field }) => (
+            <Input type="time" step={3600}
+              value={typeof field.value === 'number' ? `${String(field.value).padStart(2, '0')}:00` : ''}
+              onChange={(e) => {
+                const v = e.target.value
+                if (!v) { field.onChange(null); return }
+                const h = Number(v.split(':')[0])
+                if (h >= 0 && h <= 23) field.onChange(h)
+              }}
+              className="[color-scheme:dark]"
+              style={{ colorScheme: 'dark' }} />
+          )} />
       </div>
       <div className="col-span-6">
-        <label className="text-sm text-gray-400 mb-1.5 block">Giờ kết thúc</label>
-        <Input type="number" min={0} max={24} {...register('hourEnd')} placeholder="22" />
+        <label className="text-sm text-gray-400 mb-1.5 block">Giờ kết thúc áp dụng</label>
+        <Controller name="hourEnd" control={control}
+          render={({ field }) => (
+            <Input type="time" step={3600}
+              value={typeof field.value === 'number' ? `${String(Math.min(field.value, 23)).padStart(2, '0')}:00` : ''}
+              onChange={(e) => {
+                const v = e.target.value
+                if (!v) { field.onChange(null); return }
+                const h = Number(v.split(':')[0])
+                if (h >= 0 && h <= 23) field.onChange(h)
+              }}
+              className="[color-scheme:dark]"
+              style={{ colorScheme: 'dark' }} />
+          )} />
       </div>
     </>
   )

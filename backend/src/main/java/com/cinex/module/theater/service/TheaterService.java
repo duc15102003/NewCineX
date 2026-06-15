@@ -5,7 +5,11 @@ import com.cinex.common.entity.StorageState;
 import com.cinex.common.exception.BusinessException;
 import com.cinex.common.exception.ErrorCode;
 import com.cinex.common.response.PageResponse;
+import com.cinex.module.booking.entity.BookingStatus;
+import com.cinex.module.booking.repository.BookingRepository;
 import com.cinex.module.room.repository.RoomRepository;
+import com.cinex.module.showtime.entity.ShowtimeStatus;
+import com.cinex.module.showtime.repository.ShowtimeRepository;
 import com.cinex.module.theater.dto.TheaterFilter;
 import com.cinex.module.theater.dto.TheaterRequest;
 import com.cinex.module.theater.dto.TheaterResponse;
@@ -40,6 +44,8 @@ public class TheaterService {
 
     private final TheaterRepository theaterRepository;
     private final RoomRepository roomRepository;
+    private final ShowtimeRepository showtimeRepository;
+    private final BookingRepository bookingRepository;
     private final TheaterMapper theaterMapper;
 
     @Transactional(readOnly = true)
@@ -107,27 +113,43 @@ public class TheaterService {
     @Auditable(action = "ARCHIVE_THEATER", entityType = "Theater")
     public void archive(Long id) {
         Theater theater = findOrThrow(id);
-
-        // Chặn xoá khi chi nhánh còn room ACTIVE — tránh "mồ côi" room.
-        long activeRooms = roomRepository.countByTheaterIdAndStorageStateNot(id, StorageState.ARCHIVED);
-        if (activeRooms > 0) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                    "Không thể xoá chi nhánh đang có " + activeRooms + " phòng hoạt động");
-        }
-
+        ensureNoActiveDependencies(id);
         theater.setStorageState(StorageState.ARCHIVED);
         theaterRepository.save(theater);
         log.info("Archived theater id={}", id);
     }
 
+    /**
+     * Industry chuẩn (Vista Veezi / Cinetixx): chi nhánh chỉ archive khi sạch
+     * mọi resource đang chạy. Check 3 lớp:
+     * 1. Room ACTIVE — tránh orphan room với theater archived
+     * 2. Showtime SCHEDULED/ONGOING — tránh khách vẫn thấy suất ở rạp đã đóng
+     * 3. Booking HOLDING/CONFIRMED — tránh customer pay rồi rạp biến mất
+     */
+    private void ensureNoActiveDependencies(Long theaterId) {
+        long activeRooms = roomRepository.countByTheaterIdAndStorageStateNot(theaterId, StorageState.ARCHIVED);
+        if (activeRooms > 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Không thể xoá chi nhánh đang có " + activeRooms + " phòng hoạt động");
+        }
+        long activeShowtimes = showtimeRepository.countByRoom_Theater_IdAndStatusInAndStorageStateNot(
+                theaterId, List.of(ShowtimeStatus.SCHEDULED, ShowtimeStatus.ONGOING), StorageState.ARCHIVED);
+        if (activeShowtimes > 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Không thể xoá chi nhánh đang có " + activeShowtimes + " suất chiếu lên lịch hoặc đang chiếu");
+        }
+        long activeBookings = bookingRepository.countByShowtime_Room_Theater_IdAndStatusIn(
+                theaterId, List.of(BookingStatus.HOLDING, BookingStatus.CONFIRMED));
+        if (activeBookings > 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Không thể xoá chi nhánh đang có " + activeBookings + " vé giữ hoặc đã thanh toán");
+        }
+    }
+
     @Transactional
     public void bulkArchive(List<Long> ids) {
         for (Long id : ids) {
-            long activeRooms = roomRepository.countByTheaterIdAndStorageStateNot(id, StorageState.ARCHIVED);
-            if (activeRooms > 0) {
-                throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                        "Không thể xoá chi nhánh #" + id + " — vẫn còn " + activeRooms + " phòng");
-            }
+            ensureNoActiveDependencies(id);
         }
         List<Theater> items = theaterRepository.findAllById(ids);
         items.forEach(t -> t.setStorageState(StorageState.ARCHIVED));

@@ -59,6 +59,81 @@ public class Booking extends BaseEntity {
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 0)
     private BigDecimal totalAmount;
 
+    /**
+     * Giá vé niêm yết gốc (SUM seat prices, trước mọi giảm giá).
+     *
+     * <p>Industry chuẩn (CGV/Lotte/BHD): loyalty earn dựa trên giá niêm yết —
+     * khách dùng voucher 50% vẫn nhận full điểm. Tránh voucher trở thành
+     * "phạt cắt điểm" làm khách không dùng.
+     *
+     * <p>Cũng phục vụ audit/finance: tính được revenue niêm yết vs revenue
+     * thực thu sau mọi giảm giá.
+     */
+    @Column(name = "seat_total_amount", nullable = false, precision = 12, scale = 0)
+    private BigDecimal seatTotalAmount;
+
+    /**
+     * Tạm tính (chưa VAT) — tính ngược từ totalAmount theo công thức
+     * {@code subtotal = total * 100 / (100 + vat_percent)}.
+     * Industry pattern (CGV/Lotte/BHD): giá niêm yết đã bao gồm VAT, hóa đơn
+     * tách ngược để khách thấy rõ phần thuế.
+     */
+    @Column(name = "subtotal_amount", nullable = false, precision = 12, scale = 0)
+    private BigDecimal subtotalAmount;
+
+    /** Tiền VAT — {@code vat = total - subtotal}. */
+    @Column(name = "vat_amount", nullable = false, precision = 12, scale = 0)
+    private BigDecimal vatAmount;
+
+    /**
+     * VAT% áp dụng lúc tạo booking — lưu history. Nếu luật thay đổi (8% → 10%),
+     * vé cũ vẫn show đúng % lúc bán; chỉ vé mới dùng giá trị system_config.
+     */
+    @Column(name = "vat_percent", nullable = false, precision = 5, scale = 2)
+    private BigDecimal vatPercent;
+
+    /**
+     * Tiền giảm theo hạng thành viên (loyalty tier benefit). 0 cho counter-sale
+     * (booking.user == null) hoặc STANDARD tier. History-preserving: % giảm theo
+     * tier có thể đổi nhưng vé cũ giữ amount đã áp.
+     */
+    @Column(name = "tier_discount_amount", nullable = false, precision = 12, scale = 0)
+    @Builder.Default
+    private BigDecimal tierDiscountAmount = BigDecimal.ZERO;
+
+    /**
+     * Hạng thành viên lúc đặt vé — null cho counter-sale. Lưu enum name
+     * (STANDARD/SILVER/GOLD/PLATINUM) để hiển thị trên hóa đơn.
+     */
+    @Column(name = "tier_at_booking", length = 20)
+    private String tierAtBooking;
+
+    /**
+     * Tiền giảm cho group booking — đặt từ N vé trở lên (config
+     * booking.group_discount_threshold). 0 nếu booking dưới ngưỡng.
+     * History-preserving giống tier discount.
+     */
+    @Column(name = "group_discount_amount", nullable = false, precision = 12, scale = 0)
+    @Builder.Default
+    private BigDecimal groupDiscountAmount = BigDecimal.ZERO;
+
+    /**
+     * Số điểm khách dùng để đổi giảm giá khi đặt vé. 0 nếu không dùng. Lưu để
+     * hoàn lại khi cancel/expire booking.
+     */
+    @Column(name = "points_redeemed", nullable = false)
+    @Builder.Default
+    private Integer pointsRedeemed = 0;
+
+    /**
+     * Tiền giảm tương ứng số điểm đã đổi = pointsRedeemed × loyalty.redeem_value.
+     * Lưu trị giá lúc đặt — luật quy đổi đổi sau (1000đ → 2000đ/điểm) không
+     * ảnh hưởng vé cũ.
+     */
+    @Column(name = "loyalty_discount_amount", nullable = false, precision = 12, scale = 0)
+    @Builder.Default
+    private BigDecimal loyaltyDiscountAmount = BigDecimal.ZERO;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private BookingStatus status;

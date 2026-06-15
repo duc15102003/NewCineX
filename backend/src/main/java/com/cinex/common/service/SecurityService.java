@@ -91,6 +91,19 @@ public class SecurityService {
         return SecurityUtil.hasRole("ADMIN") && !isSuperAdmin() && getCurrentUserTheaterId() != null;
     }
 
+    /** True nếu nhân viên quầy STAFF (gắn 1 chi nhánh cụ thể). */
+    public boolean isStaff() {
+        return SecurityUtil.hasRole("STAFF") && getCurrentUserTheaterId() != null;
+    }
+
+    /**
+     * Theater-scoped role: ADMIN hoặc STAFF — cả 2 đều gắn cứng theater_id.
+     * Dùng trong {@code getCurrentUserTheaterId()} để override filter request.
+     */
+    public boolean isTheaterScopedRole() {
+        return isBranchAdmin() || isStaff();
+    }
+
     /**
      * Enforce: ADMIN chỉ truy cập resource của chi nhánh mình.
      *

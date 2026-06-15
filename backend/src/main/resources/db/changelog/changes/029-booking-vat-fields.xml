@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Mục đích: tách VAT 8% trên hóa đơn vé (theo luật VN — phim rạp chịu VAT
+        ưu đãi 8%). Industry pattern (CGV/Lotte/BHD): giá vé niêm yết là GIÁ
+        ĐÃ BAO GỒM VAT (gross); hóa đơn tách ngược:
+          - subtotal = gross * 100 / (100 + vat%)
+          - vat = gross - subtotal
+        → business logic tính giá KHÔNG đổi, chỉ thêm fields cho hóa đơn.
+
+        Lưu vat_percent vào booking để giữ history — nếu thuế thay đổi tương lai,
+        vé cũ vẫn show đúng % lúc bán.
+    -->
+
+    <changeSet id="029-add-booking-vat-fields" author="cinex">
+        <addColumn tableName="bookings">
+            <column name="subtotal_amount" type="DECIMAL(12,0)" remarks="Tạm tính (chưa VAT) — tính ngược từ total"/>
+            <column name="vat_amount" type="DECIMAL(12,0)" remarks="Tiền VAT — total - subtotal"/>
+            <column name="vat_percent" type="DECIMAL(5,2)" remarks="VAT% áp dụng lúc tạo booking (giữ history khi luật thay đổi)"/>
+        </addColumn>
+    </changeSet>
+
+    <!--
+        Backfill booking cũ: tính subtotal + vat từ total với vat_percent = 8.
+        Booking trước migration mặc định coi như đã 8% VAT (luật VN từ 7/2024).
+    -->
+    <changeSet id="029-backfill-vat-from-total" author="cinex">
+        <sql><![CDATA[
+            UPDATE bookings SET
+                vat_percent = 8.00,
+                subtotal_amount = ROUND(total_amount * 100.0 / 108.0, 0),
+                vat_amount = total_amount - ROUND(total_amount * 100.0 / 108.0, 0)
+            WHERE vat_percent IS NULL;
+        ]]></sql>
+    </changeSet>
+
+    <changeSet id="029-vat-fields-not-null" author="cinex">
+        <addNotNullConstraint tableName="bookings" columnName="subtotal_amount"
+                              columnDataType="DECIMAL(12,0)"/>
+        <addNotNullConstraint tableName="bookings" columnName="vat_amount"
+                              columnDataType="DECIMAL(12,0)"/>
+        <addNotNullConstraint tableName="bookings" columnName="vat_percent"
+                              columnDataType="DECIMAL(5,2)"/>
+    </changeSet>
+
+    <!-- Config pricing.vat_percent + display category mới "pricing" -->
+    <changeSet id="029-seed-vat-config" author="cinex">
+        <sql><![CDATA[
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES (
+                'pricing.vat_percent', '8',
+                N'VAT% áp dụng cho giá vé (8% theo luật VN 7/2024)',
+                N'Thuế VAT trên vé',
+                N'Phần trăm VAT tách trên hóa đơn vé. Luật VN hiện hành: rạp phim chịu VAT 8% (thuế ưu đãi). Đổi nếu chính sách thuế thay đổi — vé bán trước khi đổi vẫn giữ % cũ (lưu vào booking.vat_percent).',
+                N'%', 'pricing', 10, 1, 0, 30
+            );
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>

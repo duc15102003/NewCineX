@@ -1,14 +1,14 @@
-import React, { useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, TicketPercent } from 'lucide-react'
 import { toast } from 'sonner'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
-import TheaterGroupHeaderRow from '@/components/admin/TheaterGroupHeaderRow'
 import VoucherFormDialog from './components/VoucherFormDialog'
 import VoucherFilterDrawer from './components/VoucherFilterDrawer'
 import VoucherRow from './components/VoucherRow'
@@ -17,7 +17,6 @@ import { useAdminVouchers, useBulkDeleteVouchers, useBulkRestoreVouchers } from 
 import type { AdminVoucher, AdminVoucherFilter } from '@/hooks/useAdminVouchers'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
-import { groupByTheater } from '@/utils/groupByTheater'
 import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
 import { usePageTitle } from '@/hooks/usePageTitle'
 
@@ -25,7 +24,8 @@ const EMPTY_FILTER: AdminVoucherFilter = {}
 
 export default function AdminVoucherPage() {
   usePageTitle('Quản lý voucher')
-  const [keyword, setKeyword] = useState('')
+  const [keywordInput, setKeywordInput] = useState('')
+  const keyword = useDebouncedValue(keywordInput, 400)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<AdminVoucher | null>(null)
@@ -53,26 +53,6 @@ export default function AdminVoucherPage() {
   const { data: pageData } = useAdminVouchers(queryFilter)
   const vouchers = pageData?.content ?? []
 
-  // Grouped view khi SUPER_ADMIN xem "Tất cả chi nhánh"
-  const showGrouped = !adminTheater && !branchLocked
-  const globalVouchers = useMemo(
-    () => (showGrouped ? vouchers.filter(v => v.theaterId == null) : []),
-    [vouchers, showGrouped],
-  )
-  const groupedVouchers = useMemo(
-    () => (showGrouped ? groupByTheater(vouchers.filter(v => v.theaterId != null)) : null),
-    [vouchers, showGrouped],
-  )
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
-  const [globalCollapsed, setGlobalCollapsed] = useState(false)
-  const toggleGroup = (theaterId: number) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      next.has(theaterId) ? next.delete(theaterId) : next.add(theaterId)
-      return next
-    })
-  }
-
   const activeCount = useMemo(() => {
     return Object.entries(adv).filter(([, v]) => v !== undefined && v !== '' && v !== null).length
       + (includeExpired ? 0 : 1)
@@ -94,6 +74,12 @@ export default function AdminVoucherPage() {
     setDialogOpen(true)
   }
   function openEdit(voucher: AdminVoucher) {
+    // BRANCH_ADMIN không sửa được voucher GLOBAL (SUPER_ADMIN tạo toàn hệ thống).
+    // Industry pattern: lock ngay UX, không đợi BE 403.
+    if (branchLocked && voucher.theaterId == null) {
+      toast.error('Khuyến mãi áp dụng toàn hệ thống — chỉ Quản trị tổng được sửa')
+      return
+    }
     setEditingItem(voucher)
     setDialogOpen(true)
   }
@@ -138,6 +124,7 @@ export default function AdminVoucherPage() {
       voucher={v}
       index={index}
       selected={selectedIds.has(v.id)}
+      showScope={!branchLocked}
       onToggleSelect={toggleSelect}
       onEdit={openEdit}
     />
@@ -151,8 +138,8 @@ export default function AdminVoucherPage() {
           <div className="flex-1 max-w-sm">
             <Input
               placeholder="Tìm kiếm voucher..."
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
             />
           </div>
           <FilterTrigger onClick={() => setDrawerOpen(true)} activeCount={activeCount} />
@@ -204,7 +191,7 @@ export default function AdminVoucherPage() {
               </TableHead>
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Mã</TableHead>
-              <TableHead className="text-gray-400">Phạm vi</TableHead>
+              {!branchLocked && <TableHead className="text-gray-400">Phạm vi</TableHead>}
               <TableHead className="text-gray-400">Mô tả</TableHead>
               <TableHead className="text-gray-400">Loại giảm</TableHead>
               <TableHead className="text-gray-400">Giá trị</TableHead>
@@ -216,46 +203,21 @@ export default function AdminVoucherPage() {
           <TableBody>
             {vouchers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
+                <TableCell colSpan={branchLocked ? 9 : 10} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2 text-gray-500">
+                    <TicketPercent size={32} className="text-gray-600" />
+                    <p className="text-sm">{keywordInput ? `Không tìm thấy voucher khớp "${keywordInput}"` : 'Chưa có voucher nào'}</p>
+                    {!keywordInput && (
+                      <button onClick={openCreate}
+                        className="text-xs text-[#ffc107] hover:underline">
+                        Thêm voucher đầu tiên
+                      </button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             )}
-            {showGrouped ? (
-              <>
-                {globalVouchers.length > 0 && (
-                  <React.Fragment key="group-global">
-                    <TheaterGroupHeaderRow
-                      collapsed={globalCollapsed}
-                      onToggle={() => setGlobalCollapsed(c => !c)}
-                      theaterName="Voucher toàn hệ thống"
-                      theaterCity="Áp dụng mọi chi nhánh"
-                      itemCount={globalVouchers.length}
-                      itemLabel="voucher"
-                      colSpan={10}
-                    />
-                    {!globalCollapsed && globalVouchers.map((v, idx) => renderVoucherRow(v, idx))}
-                  </React.Fragment>
-                )}
-                {groupedVouchers && groupedVouchers.map((group) => {
-                  const isCollapsed = collapsedGroups.has(group.theaterId)
-                  return (
-                    <React.Fragment key={`group-${group.theaterId}`}>
-                      <TheaterGroupHeaderRow
-                        collapsed={isCollapsed}
-                        onToggle={() => toggleGroup(group.theaterId)}
-                        theaterName={group.theaterName}
-                        theaterCity={group.theaterCity}
-                        itemCount={group.items.length}
-                        itemLabel="voucher"
-                        colSpan={10}
-                      />
-                      {!isCollapsed && group.items.map((v, idx) => renderVoucherRow(v, idx))}
-                    </React.Fragment>
-                  )
-                })}
-              </>
-            ) : (
-              vouchers.map((v, index) => renderVoucherRow(v, index))
-            )}
+            {vouchers.map((v, index) => renderVoucherRow(v, index))}
           </TableBody>
         </Table>
       </div>

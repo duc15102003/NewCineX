@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import Loading from '@/components/common/Loading'
+import BookingSteps from './components/BookingSteps'
 import { fmtDateTime, label, ROOM_TYPE_LABELS, fmtVnd } from '@/utils/labels'
+import { ROOM_TYPE_TEXT } from '@/utils/colors'
 import { usePageTitle } from '@/hooks/usePageTitle'
 
 export default function PaymentResultPage() {
@@ -40,7 +42,8 @@ export default function PaymentResultPage() {
   if (isLoading) return <Loading />
 
   return (
-    <div className="min-h-screen bg-[#181309] text-white py-10 px-4">
+    <div className="min-h-screen bg-[#181309] text-white pb-10 px-4">
+      <BookingSteps current={3} />
       <div className="max-w-lg mx-auto">
 
         {/* Header thành công */}
@@ -81,7 +84,7 @@ export default function PaymentResultPage() {
                 <p className="text-sm text-gray-400">
                   Phòng: <span className="text-white">{ticket.roomName}</span>
                   {ticket.roomType && (
-                    <span className="ml-2 text-xs text-gray-500">({label(ROOM_TYPE_LABELS, ticket.roomType)})</span>
+                    <span className={`ml-2 text-xs font-medium ${ROOM_TYPE_TEXT[ticket.roomType] ?? 'text-gray-500'}`}>({label(ROOM_TYPE_LABELS, ticket.roomType)})</span>
                   )}
                 </p>
                 <p className="text-sm text-gray-400">

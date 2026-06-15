@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { PriceInput } from '@/components/ui/price-input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
@@ -16,6 +17,21 @@ import LockedTheaterBadge from './LockedTheaterBadge'
 
 const SELECT_CLS =
   'w-full h-10 rounded-lg border border-white/10 bg-[#2a2317] text-white text-sm px-3 focus:outline-none focus:ring-1 focus:ring-[#ffc107]'
+
+/** Preset khoảng thời gian voucher — admin set "hôm nay → N ngày" nhanh. */
+const VOUCHER_RANGE_PRESETS = [
+  { label: '7 ngày', days: 7 },
+  { label: '14 ngày', days: 14 },
+  { label: '30 ngày', days: 30 },
+  { label: '60 ngày', days: 60 },
+  { label: '90 ngày', days: 90 },
+] as const
+
+/** Format Date → "YYYY-MM-DDTHH:mm" cho input datetime-local (local TZ, không UTC). */
+function toLocalDateTime(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 type ScopeChoice = 'GLOBAL' | 'THEATER'
 
@@ -117,9 +133,9 @@ export default function VoucherFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
+      <DialogContent size="xl" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
         <DialogHeader>
-          <DialogTitle>{editingItem ? 'Chỉnh sửa voucher' : 'Thêm voucher mới'}</DialogTitle>
+          <DialogTitle>{editingItem ? 'Chỉnh sửa voucher' : 'Thêm mới voucher'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogBody>
@@ -224,28 +240,55 @@ export default function VoucherFormDialog({
                   )}
                 />
               </div>
-              <div className="col-span-6">
-                <label className="text-sm text-gray-400 mb-1.5 block">Giảm tối đa</label>
-                <Controller
-                  name="maxDiscount"
-                  control={control}
-                  rules={{ min: 0 }}
-                  render={({ field }) => (
-                    <PriceInput value={field.value} onChange={field.onChange} placeholder="VD: 200.000" />
-                  )}
-                />
-              </div>
+              {/* "Giảm tối đa" chỉ có nghĩa khi loại = Phần trăm (cap số tiền giảm
+                  để tránh đơn lớn được giảm quá nhiều). Loại Số tiền cố định
+                  thì giá trị giảm CHÍNH LÀ giá trị giảm — không có max. */}
+              {discountType === 'PERCENTAGE' && (
+                <div className="col-span-6">
+                  <label className="text-sm text-gray-400 mb-1.5 block">
+                    Giảm tối đa <span className="text-gray-600 text-xs font-normal">(cap số tiền)</span>
+                  </label>
+                  <Controller
+                    name="maxDiscount"
+                    control={control}
+                    rules={{ min: 0 }}
+                    render={({ field }) => (
+                      <PriceInput value={field.value} onChange={field.onChange} placeholder="VD: 200.000" />
+                    )}
+                  />
+                  <p className="text-[11px] text-gray-600 mt-1">VD: giảm 20% nhưng tối đa 200k → đơn 2 triệu vẫn chỉ giảm 200k.</p>
+                </div>
+              )}
               <div className="col-span-12">
                 <label className="text-sm text-gray-400 mb-1.5 block">Giới hạn lượt dùng (0 = không giới hạn)</label>
                 <Input type="number" {...register('usageLimit', { min: 0 })} />
               </div>
+              {/* Preset khoảng thời gian — admin thường set "hôm nay → 30/60/90 ngày",
+                  cung cấp chip thay vì gõ tay từng datetime-local. */}
+              <div className="col-span-12">
+                <Label className="text-xs text-gray-400 mb-1.5 block">Chọn nhanh khoảng thời gian</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {VOUCHER_RANGE_PRESETS.map(p => (
+                    <button key={p.label} type="button"
+                      onClick={() => {
+                        const now = new Date()
+                        const end = new Date(now); end.setDate(end.getDate() + p.days)
+                        setValue('startDate', toLocalDateTime(now))
+                        setValue('endDate', toLocalDateTime(end))
+                      }}
+                      className="px-2.5 py-1 rounded-md text-xs font-medium border bg-[#2a2317] text-gray-300 border-white/10 hover:bg-[#ffc107]/10 hover:text-[#ffc107] hover:border-[#ffc107]/40 transition-colors">
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="col-span-6">
                 <label className="text-sm text-gray-400 mb-1.5 block">Ngày bắt đầu <span className="text-red-400">*</span></label>
-                <Input type="datetime-local" {...register('startDate', { required: 'Ngày bắt đầu là bắt buộc' })} />
+                <Input type="datetime-local" {...register('startDate', { required: 'Ngày bắt đầu là bắt buộc' })} className="[color-scheme:dark]" style={{ colorScheme: 'dark' }} />
               </div>
               <div className="col-span-6">
                 <label className="text-sm text-gray-400 mb-1.5 block">Ngày kết thúc <span className="text-red-400">*</span></label>
-                <Input type="datetime-local" {...register('endDate', { required: 'Ngày kết thúc là bắt buộc' })} />
+                <Input type="datetime-local" {...register('endDate', { required: 'Ngày kết thúc là bắt buộc' })} className="[color-scheme:dark]" style={{ colorScheme: 'dark' }} />
               </div>
             </div>
           </DialogBody>

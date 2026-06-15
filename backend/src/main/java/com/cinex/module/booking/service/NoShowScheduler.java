@@ -1,5 +1,8 @@
 package com.cinex.module.booking.service;
 
+import com.cinex.common.service.EmailService;
+import com.cinex.module.auth.entity.User;
+import com.cinex.module.auth.repository.UserRepository;
 import com.cinex.module.booking.entity.Booking;
 import com.cinex.module.booking.entity.BookingStatus;
 import com.cinex.module.booking.repository.BookingRepository;
@@ -33,7 +36,9 @@ import java.util.List;
 public class NoShowScheduler {
 
     private final BookingRepository bookingRepository;
+    private final UserRepository userRepository;
     private final SystemConfigService systemConfigService;
+    private final EmailService emailService;
 
     /**
      * Buffer mặc định (phút) sau khi phim kết thúc — cho user check-in muộn.
@@ -61,14 +66,42 @@ public class NoShowScheduler {
             return;
         }
 
+        // Industry chuẩn (CGV/Lotte): NO_SHOW phải có consequence để chống
+        // ghost booking. Tăng user.noShowCount, nếu vượt threshold → block N
+        // ngày. Reset count xử lý ngay trong BookingCheckInService khi check-in
+        // thành công — đỡ tốn cron, feedback ngay cho khách.
+        int threshold = systemConfigService.getInt("booking.no_show_block_threshold", 3);
+        int blockDays = systemConfigService.getInt("booking.no_show_block_days", 7);
+
+        int blockedUsers = 0;
         for (Booking booking : candidates) {
             booking.setStatus(BookingStatus.NO_SHOW);
             bookingRepository.save(booking);
-            log.info("[NoShowScheduler] Marked booking {} as NO_SHOW (showtime ended at {})",
-                    booking.getBookingCode(), booking.getShowtime().getEndTime());
+
+            User user = booking.getUser();
+            if (user == null) continue; // counter-sale (POS) không có user account
+            user.setNoShowCount(user.getNoShowCount() + 1);
+            if (user.getNoShowCount() >= threshold) {
+                LocalDateTime blockedUntil = LocalDateTime.now().plusDays(blockDays);
+                user.setBlockedUntil(blockedUntil);
+                blockedUsers++;
+                log.warn("[NoShowScheduler] BLOCK user {} ({} NO_SHOW lần) đến {}",
+                        user.getUsername(), user.getNoShowCount(), blockedUntil);
+            } else if (user.getNoShowCount() == threshold - 1) {
+                // Cảnh báo strike kế cuối — industry chuẩn (CGV/Lotte): warn user
+                // còn 1 lần nữa sẽ bị block, cho cơ hội điều chỉnh hành vi.
+                if (user.getEmail() != null) {
+                    emailService.sendNoShowWarningEmail(
+                            user.getEmail(), user.getUsername(),
+                            user.getNoShowCount(), threshold, blockDays);
+                }
+            }
+            userRepository.save(user);
+            log.info("[NoShowScheduler] Marked booking {} as NO_SHOW (user {} count={})",
+                    booking.getBookingCode(), user.getUsername(), user.getNoShowCount());
         }
 
-        log.info("[NoShowScheduler] Đã đánh dấu {} booking thành NO_SHOW (cutoff = {})",
-                candidates.size(), cutoff);
+        log.info("[NoShowScheduler] Marked {} booking NO_SHOW, blocked {} users (cutoff={})",
+                candidates.size(), blockedUsers, cutoff);
     }
 }

@@ -89,6 +89,37 @@ public class ShowtimeController {
         return ApiResponse.ok("Showtime restored", showtimeService.restoreShowtime(id));
     }
 
+    /**
+     * Huỷ suất chiếu — cascade refund tất cả vé CONFIRMED + thông báo khách.
+     * Dùng cho case phim bị cut, sự cố kỹ thuật, force majeure (industry pattern
+     * Vista Veezi / Cinetixx).
+     */
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Cancel showtime + cascade refund bookings + notify customers")
+    public ApiResponse<ShowtimeService.CancelShowtimeResult> cancelShowtime(
+            @PathVariable Long id,
+            @RequestBody(required = false) java.util.Map<String, String> body) {
+        String reason = body != null ? body.getOrDefault("reason", "Suất chiếu bị huỷ") : "Suất chiếu bị huỷ";
+        ShowtimeService.CancelShowtimeResult result = showtimeService.cancelShowtime(id, reason);
+        return ApiResponse.ok("Showtime cancelled. Auto-cancelled " + result.cancelledBookings() + " bookings", result);
+    }
+
+    @PostMapping("/{id}/publish")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Publish suất DRAFT → SCHEDULED (visible cho user)")
+    public ApiResponse<ShowtimeResponse> publishShowtime(@PathVariable Long id) {
+        return ApiResponse.ok("Showtime published", showtimeService.publishShowtime(id));
+    }
+
+    @PostMapping("/bulk-publish")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Bulk publish DRAFT → SCHEDULED")
+    public ApiResponse<Integer> bulkPublish(@Valid @RequestBody BulkDeleteRequest request) {
+        int published = showtimeService.bulkPublish(request.getIds());
+        return ApiResponse.ok("Published " + published + " showtimes", published);
+    }
+
     @PostMapping("/bulk-delete")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "(Admin) Bulk soft delete showtimes")

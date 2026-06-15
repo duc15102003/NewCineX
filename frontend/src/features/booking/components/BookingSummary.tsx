@@ -5,7 +5,10 @@ import { Tag, X } from 'lucide-react'
 
 import type { SeatItem } from '@/types/booking'
 import { label, SEAT_TYPE_LABELS, fmtVnd } from '@/utils/labels'
+import { SEAT_TYPE_COLORS } from '@/utils/colors'
 import { getSeatPrice, type ShowtimePrices } from '@/utils/pricing'
+
+import LoyaltyRedeemInput from './LoyaltyRedeemInput'
 
 interface AvailableVoucher {
   code: string
@@ -41,6 +44,10 @@ export interface BookingSummaryProps {
   onToggleVoucherList: () => void
   onSelectVoucher: (v: AvailableVoucher) => void
 
+  /** Loyalty redeem — null nếu chưa wire (page cũ vẫn dùng được). */
+  redeemPoints?: number
+  onRedeemPointsChange?: (points: number) => void
+
   onHoldSeats: () => void
   holdSeatsPending: boolean
 }
@@ -52,11 +59,18 @@ export default function BookingSummary(props: BookingSummaryProps) {
     voucherCode, onVoucherCodeChange, voucherResult, voucherLoading,
     onApplyVoucher, onClearVoucher,
     availableVouchers, showVoucherList, onToggleVoucherList, onSelectVoucher,
+    redeemPoints, onRedeemPointsChange,
     onHoldSeats, holdSeatsPending,
   } = props
 
   return (
-    <div className="bg-[#201b11] border border-white/5 rounded-2xl p-5 sticky bottom-4">
+    // Layout responsive:
+    //  - Desktop (lg+): sticky top (sidebar phải), scroll cùng SeatMap
+    //  - Mobile (<lg): hiển thị bình thường dưới SeatMap. CTA "Giữ ghế" sticky
+    //    đáy được render riêng qua <MobileBookingCTA /> để KHÔNG che ghế.
+    // pb-20 lg:pb-5: chừa chỗ cho mobile sticky CTA bar (~64px) khi cuộn đáy.
+    <div id="booking-summary"
+      className="bg-[#201b11] border border-white/5 rounded-2xl p-5 lg:sticky lg:top-4">
       <h2 className="font-semibold text-gray-200 mb-3">
         Ghế đã chọn {selectedSeats.length > 0 && `(${selectedSeats.length})`}
       </h2>
@@ -83,6 +97,15 @@ export default function BookingSummary(props: BookingSummaryProps) {
           <p className="text-red-400 text-xs mt-1">{voucherResult.message}</p>
         )}
       </div>
+
+      {/* Loyalty redeem — chỉ hiện khi cha truyền callback (login + đủ điểm) */}
+      {onRedeemPointsChange && selectedSeats.length > 0 && (
+        <LoyaltyRedeemInput
+          redeemPoints={redeemPoints ?? 0}
+          onRedeemPointsChange={onRedeemPointsChange}
+          maxDiscountCap={total}
+        />
+      )}
 
       <PriceBreakdown
         total={total}
@@ -112,7 +135,11 @@ function SelectedSeatsList({ seats, showtime }: SelectedSeatsListProps) {
   return (
     <div className="flex flex-wrap gap-2 mb-4">
       {seats.map(s => (
-        <Badge key={s.id} variant="warning" className="text-xs">
+        <Badge
+          key={s.id}
+          variant="outline"
+          className={`text-xs ${SEAT_TYPE_COLORS[s.seatType] ?? ''}`}
+        >
           {s.seatNumber} ({label(SEAT_TYPE_LABELS, s.seatType)}) — {fmtVnd(getSeatPrice(s.seatType, showtime))}
         </Badge>
       ))}

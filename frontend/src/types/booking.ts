@@ -54,10 +54,13 @@ export interface AppliedPricingRule {
   discountPercent: number
 }
 
+/** Request giữ ghế khi đặt vé — voucher + redeem điểm tích đều optional. */
 export interface HoldSeatsRequest {
   showtimeId: number
   seatIds: number[]
   voucherCode?: string
+  /** Số điểm khách dùng đổi giảm giá — 0 hoặc bỏ qua = không dùng. */
+  redeemPoints?: number
 }
 
 export interface HoldSeatsResponse {
@@ -105,6 +108,22 @@ export interface BookingDetail {
   roomName: string
   roomType: string
   seats: BookingSeatInfo[]
+  /** Giá vé niêm yết gốc (SUM seat prices) trước mọi giảm giá — dùng cho audit. */
+  seatTotalAmount?: number
+  /** Breakdown VAT (industry: subtotal + vat + total). VAT-inclusive — giá vé đã bao gồm VAT. */
+  subtotalAmount?: number
+  vatAmount?: number
+  vatPercent?: number
+  /** Tiền giảm theo hạng thành viên — null/0 cho counter-sale + STANDARD. */
+  tierDiscountAmount?: number
+  /** Hạng lúc đặt vé: STANDARD/SILVER/GOLD/PLATINUM — null cho counter-sale. */
+  tierAtBooking?: string | null
+  /** Tiền giảm group booking — 0/undefined nếu booking dưới ngưỡng. */
+  groupDiscountAmount?: number
+  /** Số điểm khách đã dùng đổi giảm giá — 0 nếu không dùng. */
+  pointsRedeemed?: number
+  /** Tiền giảm tương ứng số điểm đã đổi. */
+  loyaltyDiscountAmount?: number
   totalAmount: number
   confirmedAt: string | null
   cancelledAt: string | null

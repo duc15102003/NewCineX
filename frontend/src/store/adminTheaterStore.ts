@@ -1,16 +1,18 @@
 import { create } from 'zustand'
 
 /**
- * Admin theater context — chi nhánh admin đang FILTER VIEW.
+ * Admin theater context — chi nhánh admin đang xem.
  *
- * <p>Khác với {@code useTheaterStore} (user-facing): admin có thể chọn
- * "Tất cả chi nhánh" (null) → list room/showtime/booking toàn hệ thống.
- * User-facing bắt buộc chọn 1 chi nhánh cụ thể (modal block UI).
+ * <p>Industry standard (Vista Veezi / Cinetixx): admin LUÔN có 1 chi nhánh
+ * active. KHÔNG có mode "tất cả chi nhánh" vì showtime/room/booking/payment
+ * đều theater-scoped — cross-branch view chỉ tạo confusion. SUPER_ADMIN
+ * switch giữa các CN qua dropdown ở topbar; BRANCH_ADMIN lock vào CN được gán.
  *
- * <p>Mục đích: admin tổng (super admin) cần xem cross-branch report; branch
- * manager filter nhanh data theo chi nhánh phụ trách → CHỌN 1 ID.
+ * <p>{@code null} chỉ xuất hiện trong khoảnh khắc đầu tiên trước khi
+ * {@code AdminTheaterSelector} auto-pick chi nhánh đầu tiên. Operational
+ * pages có thể dùng nullish-coalescing để xử lý ngắn gọn.
  *
- * <p>Persist localStorage để giữ state qua page reload.
+ * <p>Persist localStorage để giữ context qua page reload.
  */
 
 export interface CurrentAdminTheater {
@@ -21,7 +23,7 @@ export interface CurrentAdminTheater {
 }
 
 interface AdminTheaterState {
-  /** null = "Tất cả chi nhánh"; có giá trị = filter theo theater đó. */
+  /** null = chưa chọn (auto-pick first ngay sau khi theaters load). */
   currentTheater: CurrentAdminTheater | null
   setCurrentTheater: (t: CurrentAdminTheater | null) => void
 }

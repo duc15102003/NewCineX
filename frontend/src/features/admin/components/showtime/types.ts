@@ -15,6 +15,10 @@ export interface ShowtimeFormData {
   couplePrice: number
   sweetboxPrice: number
   deluxePrice: number
+  /** Định dạng chiếu (chuẩn industry CGV/Lotte/BHD). */
+  format: string
+  /** Mode ngôn ngữ (SUB_VI/DUB_VI/ORIGINAL). */
+  languageMode: string
 }
 
 /** ClassName chuẩn cho select trong form Showtime — đồng bộ với input. */

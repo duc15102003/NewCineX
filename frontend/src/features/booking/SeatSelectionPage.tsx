@@ -15,6 +15,8 @@ import Loading from '@/components/common/Loading'
 import SeatMap from './components/SeatMap'
 import BookingSummary from './components/BookingSummary'
 import AgeConfirmDialog from './components/AgeConfirmDialog'
+import BookingSteps from './components/BookingSteps'
+import MobileBookingCTA from './components/MobileBookingCTA'
 import type { SeatItem } from '@/types/booking'
 import { needsAgeConfirm } from '@/utils/labels'
 import type { AgeRating } from '@/types/movie'
@@ -31,6 +33,9 @@ export default function SeatSelectionPage() {
   const validateVoucherMut = useValidateVoucher()
   // Hold minutes từ system_config (admin có thể chỉnh) — KHÔNG hardcode "10 phút"
   const { data: holdMinutes = 10 } = usePublicConfigNumber('booking.hold_minutes', 10)
+  // Max ghế/lần đặt từ config — chuẩn chống chiếm ghế. FE check trước khi BE
+  // reject để UX rõ (toast cụ thể thay vì "Giữ ghế thất bại" generic).
+  const { data: maxSeatsPerBooking = 8 } = usePublicConfigNumber('booking.max_seats', 8)
 
   // Restore selection từ localStorage khi mount — tránh mất ghế đang chọn khi
   // user lỡ F5 / đóng tab nhầm. Key scope theo showtimeId để không lẫn lộn
@@ -45,6 +50,9 @@ export default function SeatSelectionPage() {
   const [voucherResult, setVoucherResult] = useState<VoucherValidateResult | null>(null)
   const [showVoucherList, setShowVoucherList] = useState(true)
   const [ageConfirmOpen, setAgeConfirmOpen] = useState(false)
+  /** Số điểm khách dùng đổi giảm giá — 0 = không dùng. KHÔNG persist sang
+   *  lần sau (sensitive + có thể balance đã đổi giữa session). */
+  const [redeemPoints, setRedeemPoints] = useState(0)
 
   // Persist mỗi khi selection / voucher code thay đổi. Bỏ qua initial render
   // (đã restore xong) để tránh ghi đè state bằng chính nó.
@@ -115,11 +123,26 @@ export default function SeatSelectionPage() {
       const ids = partner ? [seat.id, partner.id] : [seat.id]
       const allSelected = ids.every(sid => selectedSeatIds.includes(sid))
 
+      // Limit check khi ADD pair — bỏ qua khi remove (allSelected=true)
+      if (!allSelected) {
+        const futureCount = new Set([...selectedSeatIds, ...ids]).size
+        if (futureCount > maxSeatsPerBooking) {
+          toast.error(`Tối đa ${maxSeatsPerBooking} ghế mỗi lần đặt — ghế đôi tính là 2 ghế`)
+          return
+        }
+      }
+
       setSelectedSeatIds(prev =>
         allSelected
           ? prev.filter(sid => !ids.includes(sid))
           : [...new Set([...prev, ...ids])]
       )
+      return
+    }
+
+    // Limit check khi ADD ghế đơn — bỏ qua khi remove (already included)
+    if (!selectedSeatIds.includes(seat.id) && selectedSeatIds.length >= maxSeatsPerBooking) {
+      toast.error(`Tối đa ${maxSeatsPerBooking} ghế mỗi lần đặt — bỏ chọn ghế khác trước nếu muốn đổi`)
       return
     }
 
@@ -185,6 +208,7 @@ export default function SeatSelectionPage() {
         showtimeId: id,
         seatIds: selectedSeatIds,
         voucherCode: voucherCode.trim() || undefined,
+        redeemPoints: redeemPoints > 0 ? redeemPoints : undefined,
       })
       // Hold thành công → BE đã lock ghế dưới bookingId, không cần state ở
       // page này nữa. Clear để lần sau quay lại trang chọn ghế bắt đầu lại từ
@@ -232,8 +256,9 @@ export default function SeatSelectionPage() {
   const selectedSeats = getSelectedSeats()
 
   return (
-    <div className="min-h-screen bg-[#181309] text-white py-8 px-4">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-[#181309] text-white px-4 pb-24 lg:pb-8">
+      <BookingSteps current={1} />
+      <div className="max-w-6xl mx-auto">
         <ShowtimeInfoCard
           movieTitle={showtime.movieTitle}
           roomName={seatMap.roomName}
@@ -249,37 +274,54 @@ export default function SeatSelectionPage() {
             <p className="text-orange-200/90 leading-relaxed">
               Ghế bạn chọn <span className="font-semibold">chưa được giữ riêng</span>. Hãy bấm
               <span className="text-[#ffc107] font-semibold"> "Giữ ghế" </span>
-              ở dưới để khóa ghế trong {holdMinutes} phút và tiến hành thanh toán.
+              để khóa ghế trong {holdMinutes} phút và tiến hành thanh toán.
             </p>
           </div>
         )}
 
-        <SeatMap
-          rows={rows}
-          selectedSeatIds={selectedSeatIds}
-          occupiedSeatIds={occupiedSeatIds}
-          onToggle={toggleSeat}
-        />
+        {/* Grid 2-col trên desktop (lg+): SeatMap trái, BookingSummary phải sticky.
+            Mobile: 1-col stacked, summary scroll bình thường, có MobileBookingCTA
+            sticky đáy để vẫn thấy CTA mà không che ghế. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+          <div className="min-w-0">
+            <SeatMap
+              rows={rows}
+              selectedSeatIds={selectedSeatIds}
+              occupiedSeatIds={occupiedSeatIds}
+              onToggle={toggleSeat}
+            />
+          </div>
 
-        <BookingSummary
-          selectedSeats={selectedSeats}
-          showtime={showtime}
-          total={total}
-          finalTotal={getFinalTotal()}
-          voucherCode={voucherCode}
-          onVoucherCodeChange={(code) => { setVoucherCode(code); setVoucherResult(null) }}
-          voucherResult={voucherResult}
-          voucherLoading={validateVoucherMut.isPending}
-          onApplyVoucher={handleApplyVoucher}
-          onClearVoucher={clearVoucher}
-          availableVouchers={availableVouchers}
-          showVoucherList={showVoucherList}
-          onToggleVoucherList={() => setShowVoucherList(s => !s)}
-          onSelectVoucher={selectVoucher}
-          onHoldSeats={handleHoldSeats}
-          holdSeatsPending={holdSeats.isPending}
-        />
+          <BookingSummary
+            selectedSeats={selectedSeats}
+            showtime={showtime}
+            total={total}
+            finalTotal={getFinalTotal()}
+            voucherCode={voucherCode}
+            onVoucherCodeChange={(code) => { setVoucherCode(code); setVoucherResult(null) }}
+            voucherResult={voucherResult}
+            voucherLoading={validateVoucherMut.isPending}
+            onApplyVoucher={handleApplyVoucher}
+            onClearVoucher={clearVoucher}
+            availableVouchers={availableVouchers}
+            showVoucherList={showVoucherList}
+            onToggleVoucherList={() => setShowVoucherList(s => !s)}
+            onSelectVoucher={selectVoucher}
+            redeemPoints={redeemPoints}
+            onRedeemPointsChange={setRedeemPoints}
+            onHoldSeats={handleHoldSeats}
+            holdSeatsPending={holdSeats.isPending}
+          />
+        </div>
       </div>
+
+      <MobileBookingCTA
+        seatCount={selectedSeatIds.length}
+        total={total}
+        finalTotal={getFinalTotal()}
+        onHoldSeats={handleHoldSeats}
+        holdSeatsPending={holdSeats.isPending}
+      />
 
       {data?.showtime?.movieAgeRating && (
         <AgeConfirmDialog

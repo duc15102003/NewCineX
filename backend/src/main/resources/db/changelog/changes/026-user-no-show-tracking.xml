@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Industry chuẩn (CGV/Lotte/Vista Veezi): khách NO_SHOW nhiều lần →
+        block đặt vé tạm thời để chống ghost booking (book không xem).
+
+        Bug fix: trước NoShowScheduler chỉ mark booking.status = NO_SHOW,
+        không có consequence. Khách abuse: book → no-show → loyalty vẫn
+        earn → farm promo.
+
+        Sau: NoShowScheduler tăng user.no_show_count. Nếu >= threshold
+        (config booking.no_show_block_threshold, default 3) → set
+        user.blocked_until = now + N ngày (booking.no_show_block_days).
+        BookingService.holdSeats check user.blocked_until trước khi cho
+        đặt vé.
+    -->
+
+    <changeSet id="026-user-no-show-tracking" author="cinex">
+        <addColumn tableName="users">
+            <column name="no_show_count" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="blocked_until" type="datetime2"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="026-seed-no-show-config" author="cinex">
+        <sql>
+            IF NOT EXISTS (SELECT 1 FROM system_config WHERE config_key = N'booking.no_show_block_threshold')
+            BEGIN
+                INSERT INTO system_config (config_key, config_value, description)
+                VALUES (N'booking.no_show_block_threshold', N'3',
+                        N'Số lần NO_SHOW liên tiếp để block khách (chống ghost booking)');
+            END
+
+            IF NOT EXISTS (SELECT 1 FROM system_config WHERE config_key = N'booking.no_show_block_days')
+            BEGIN
+                INSERT INTO system_config (config_key, config_value, description)
+                VALUES (N'booking.no_show_block_days', N'7',
+                        N'Số ngày block khách sau khi vượt threshold NO_SHOW');
+            END
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

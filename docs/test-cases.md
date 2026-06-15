@@ -67,20 +67,36 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 2.1.4 | Thời lượng = 0 | duration=0 | "Thời lượng phải > 0" / "Thời lượng phải ít nhất 1 phút" | Cả hai |
 | 2.1.5 | Thời lượng âm | duration=-1 | Chặn bởi Input (không nhập được "-") | FE |
 | 2.1.6 | Nhập chữ "e" vào thời lượng | duration="1e5" | Chặn bởi Input (không nhập được "e") | FE |
-| 2.1.7 | endDate < releaseDate | release=2026-06-01, end=2026-05-01 | "Ngày kết thúc phải sau ngày phát hành" | Cả hai |
-| 2.1.8 | Trạng thái trống | status=null | "Trạng thái là bắt buộc" | Cả hai |
-| 2.1.9 | Không chọn thể loại | genreIds=[] | OK (optional) | Cả hai |
+| 2.1.7 | ~~endDate < releaseDate~~ (DEPRECATED) | — | Lifecycle moved sang MovieRun.startDate/endDate; xem case 25.x | — |
+| 2.1.8 | ~~Trạng thái trống~~ (DEPRECATED) | — | Status computed on-the-fly bởi MovieStatusComputer | — |
+| 2.1.9 | Không chọn thể loại (UPDATED) | genreIds=[] hoặc null | "Phim phải có ít nhất 1 thể loại" | Cả hai |
 | 2.1.10 | Đạo diễn > 100 ký tự | director="a"x101 | "Tối đa 100 ký tự" | Cả hai |
 | 2.1.11 | Diễn viên > 500 ký tự | cast="a"x501 | "Tối đa 500 ký tự" | Cả hai |
+| 2.1.12 | Thời lượng > 500 phút | duration=501 | "Thời lượng tối đa 500 phút (~8h)" | BE |
+| 2.1.13 | Thời lượng = 500 (boundary) | duration=500 | OK (director's cut) | Cả hai |
+| 2.1.14 | Trailer URL hợp lệ (YouTube) | trailer="https://youtu.be/abc" | OK | Cả hai |
+| 2.1.15 | Trailer URL hợp lệ (Vimeo) | trailer="https://vimeo.com/123" | OK | Cả hai |
+| 2.1.16 | Trailer URL trống (optional) | trailer="" | OK | Cả hai |
+| 2.1.17 | Trailer URL random text | trailer="hello" | "Trailer URL phải là link YouTube hoặc Vimeo" | Cả hai |
+| 2.1.18 | Trailer URL Dailymotion (không support) | trailer="https://dailymotion.com/x" | "Trailer URL phải là link YouTube hoặc Vimeo" | Cả hai |
+| 2.1.19 | Trailer URL FTP scheme (phishing) | trailer="ftp://malware.com" | "Trailer URL phải là link YouTube hoặc Vimeo" | Cả hai |
+| 2.1.20 | Rating âm | rating=-0.1 | "Điểm đánh giá phải từ 0 đến 10" | BE |
+| 2.1.21 | Rating > 10 | rating=10.1 | "Điểm đánh giá phải từ 0 đến 10" | BE |
+| 2.1.22 | Rating thang nhầm 100 | rating=100.0 | "Điểm đánh giá phải từ 0 đến 10" | BE |
+| 2.1.23 | Rating null (phim chưa có review) | rating=null | OK | BE |
+| 2.1.24 | Rating boundary 0.0 và 10.0 | rating=0.0 hoặc rating=10.0 | OK | BE |
 
 ### 2.2 Upload poster
 
 | # | Test Case | Input | Expected | BE/FE |
 |---|-----------|-------|----------|-------|
 | 2.2.1 | Upload JPG/PNG thành công | file.jpg < 5MB | Poster hiện trên bảng + Cloudinary | Cả hai |
-| 2.2.2 | File không phải ảnh | file.pdf | "File không hợp lệ" | BE |
-| 2.2.3 | File > 5MB | big.jpg | "File không hợp lệ" | BE |
+| 2.2.2 | File không phải ảnh (BE check) | file.pdf | "Định dạng không hỗ trợ — chỉ chấp nhận JPG, PNG, WebP" | Cả hai |
+| 2.2.3 | File > 5MB | big.jpg (6MB) | "Ảnh quá lớn (6.0MB) — tối đa 5MB" | Cả hai |
 | 2.2.4 | Upload = action riêng | Click icon Upload trên table | Lưu ngay, không phụ thuộc form | FE |
+| 2.2.5 | Upload GIF (không support) | anim.gif | "Định dạng không hỗ trợ — chỉ chấp nhận JPG, PNG, WebP" | Cả hai |
+| 2.2.6 | Upload WebP | file.webp | OK (đồng bộ industry, browser support 95%+) | Cả hai |
+| 2.2.7 | Magic bytes check (BE only) | file đổi ext .jpg nhưng nội dung .exe | "File không hợp lệ" — BE detect magic bytes | BE |
 
 ---
 
@@ -96,6 +112,17 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 3.6 | Tạo thể loại → hiện trong form phim | Tạo "Tâm lý" → mở form phim | "Tâm lý" hiện trong MultiSelect | FE |
 | 3.7 | Lưu trữ thể loại | Chọn → Trạng thái → Lưu trữ | storageState=ARCHIVED, badge cam | Cả hai |
 | 3.8 | Khôi phục thể loại | Chọn → Trạng thái → Khôi phục | storageState=ACTIVE, badge xanh | Cả hai |
+| 3.9 | Tên có khoảng trắng đầu/cuối | name="  Hài Hước  " | Save thành "Hài Hước" (auto trim) | BE |
+| 3.10 | Tên chỉ khoảng trắng | name="   " | "Tên thể loại không được rỗng (chỉ có khoảng trắng)" | BE |
+| 3.11 | Trùng case-insensitive (UPPER) | name="ACTION" khi đã có "Action" | "Thể loại 'ACTION' đã tồn tại (không phân biệt hoa thường)" | BE |
+| 3.12 | Trùng case-insensitive (lower) | name="action" khi đã có "Action" | "Thể loại 'action' đã tồn tại (không phân biệt hoa thường)" | BE |
+| 3.13 | Trùng sau khi trim | name="  Action  " khi đã có "Action" | Reject duplicate (đã trim trước check) | BE |
+| 3.14 | Update đổi case của chính nó | "Action" → "action" | OK (chỉ đổi case của chính nó, không phải duplicate khác) | BE |
+| 3.15 | Xoá thể loại có phim | "Hành động" có 12 phim active | "Thể loại đang được 12 phim sử dụng. Hãy xoá hoặc đổi thể loại của các phim trước khi xoá" | BE |
+| 3.16 | Xoá thể loại 1 phim | "Tài liệu" có 1 phim | "Thể loại đang được 1 phim sử dụng..." | BE |
+| 3.17 | Xoá thể loại 0 phim (đã archived all) | "Thử nghiệm" có 0 phim active | Xoá thành công (soft-delete) | Cả hai |
+| 3.18 | Bulk delete fail-fast | Chọn 3 genres, 1 còn phim | Toàn bộ bulk fail với message count chính xác | BE |
+| 3.19 | Update giữ nguyên tên → không check unique | Save lại với cùng tên | OK (skip unique check) | BE |
 
 ---
 
@@ -151,6 +178,12 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 5.7 | Sửa suất chiếu có booking | Update showtime có 3 vé đặt | "Không thể sửa suất chiếu đã có 3 vé đặt" | BE |
 | 5.8 | PriceInput format | Nhập 75000 | Hiện "75.000đ" trên ô input | FE |
 | 5.9 | Nhập "e" vào giá | Gõ "e" | Chặn, không nhập được | FE |
+| 5.10 | Xoá suất status SCHEDULED | DELETE /showtimes/{id} status=SCHEDULED, không có booking | Soft-delete OK | BE |
+| 5.11 | Xoá suất status ONGOING | DELETE status=ONGOING | "Chỉ có thể xoá suất chiếu đang ở trạng thái SCHEDULED" | BE |
+| 5.12 | Xoá suất status FINISHED | DELETE status=FINISHED | "Suất FINISHED không thể xoá — giữ làm lịch sử" | BE |
+| 5.13 | Xoá suất có booking active | DELETE status=SCHEDULED nhưng có 3 vé HOLDING/CONFIRMED | "Không thể xoá suất chiếu đã có 3 vé đặt. Hãy cancel suất chiếu (sẽ hoàn vé tự động) thay vì xoá" | BE |
+| 5.14 | Bulk delete fail-fast | 3 suất, 1 ở status ONGOING | Toàn bộ bulk fail, không suất nào bị archive | BE |
+| 5.15 | Tạo suất phòng MAINTENANCE | room.status=MAINTENANCE | "Phòng 'X' đang bảo trì — không thể tạo suất chiếu" | BE |
 
 ---
 
@@ -185,6 +218,9 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 6.2.7 | Check-in vé chưa confirm | Vé HOLDING | "Vé chưa được xác nhận" | BE |
 | 6.2.8 | Quét QR camera | Camera quét mã | Tự gọi check-in API | FE |
 | 6.2.9 | FE TicketDetailPage hủy vé | Click Hủy vé → ConfirmDialog | Hiện dialog xác nhận, không dùng window.confirm | FE |
+| 6.2.10 | Check-in suất đã CANCELLED | Staff scan vé khi suất CANCELLED | "Suất chiếu đã bị huỷ — không thể check-in. Hướng khách ra quầy refund" | BE |
+| 6.2.11 | Check-in vé suất SCHEDULED (chưa bắt đầu) | Suất start_time = +30 phút | OK — vé CHECKED_IN (early check-in) | BE |
+| 6.2.12 | Check-in vé suất ONGOING | Suất đang chiếu | OK — vé CHECKED_IN | BE |
 
 ---
 
@@ -199,6 +235,14 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 7.5 | Gửi email vé + QR | Callback success | Email có QR code inline gửi đến Mailtrap | BE |
 | 7.6 | Xem payment booking khác | GET /payments/{bookingId} khác user | "Không phải đơn đặt vé của bạn" | BE |
 | 7.7 | UI hiện đúng thời gian giữ | PaymentPage | "Vé sẽ được giữ trong vòng 10 phút" | FE |
+| 7.8 | Callback amount khớp | amount=100000 = payment.amount | OK, payment COMPLETED | BE |
+| 7.9 | Callback amount sai (fraud/glitch) | callback amount=50000 ≠ payment.amount=100000 | Payment FAILED, log AMOUNT_MISMATCH, throw "Số tiền callback không khớp với giao dịch" | BE |
+| 7.10 | Callback không có field amount | params không có "amount" | Skip check, vẫn COMPLETED (mock/test mode) | BE |
+| 7.11 | Callback amount không parse được | amount="abc" | Log warning, skip check, vẫn COMPLETED | BE |
+| 7.12 | Idempotency callback | Gọi callback 2 lần cùng transactionCode | Lần 2 trả response cũ, không double-charge | BE |
+| 7.13 | PaymentCleanupScheduler auto-fail | Payment PENDING > 30 phút (config) | Scheduler set status=FAILED, log "Auto-failed payment X kẹt PENDING > 30 phút" | BE |
+| 7.14 | PaymentCleanupScheduler ShedLock | 2 instance chạy cùng | Chỉ 1 instance execute, instance khác skip | BE |
+| 7.15 | Race condition booking đã CANCELLED | Callback đến khi booking CANCELLED | Payment COMPLETED + needsRefund=true, admin xử lý refund manual | BE |
 
 ---
 
@@ -218,6 +262,14 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 8.10 | Input PERCENTAGE → suffix "%" | discountType=PERCENTAGE | Ô nhập hiện suffix "%" thay "đ" | FE |
 | 8.11 | Input FIXED → PriceInput "đ" | discountType=FIXED_AMOUNT | Ô nhập format "50.000đ" | FE |
 | 8.12 | startDate/endDate required | Để trống | "Ngày bắt đầu là bắt buộc" | Cả hai |
+| 8.13 | SUPER_ADMIN xem list → có cột "Phạm vi" | login super_admin | Hiện cột Phạm vi với badge GLOBAL/THEATER | FE |
+| 8.14 | BRANCH_ADMIN xem list → KHÔNG cột "Phạm vi" | login admin.hn | Cột Phạm vi ẩn (admin đã ở scope CN mình) | FE |
+| 8.15 | SUPER_ADMIN filter scope | Filter drawer | Hiện option Phạm vi GLOBAL/THEATER | FE |
+| 8.16 | BRANCH_ADMIN filter scope | Filter drawer | Option Phạm vi ẩn | FE |
+| 8.17 | BRANCH_ADMIN click voucher GLOBAL | code GLOBAL có icon Lock | Toast "Voucher toàn hệ thống chỉ SUPER_ADMIN sửa được", dialog KHÔNG mở | FE |
+| 8.18 | BRANCH_ADMIN click voucher THEATER mình | code voucher của CN | Dialog edit mở bình thường | Cả hai |
+| 8.19 | SUPER_ADMIN sửa voucher GLOBAL | login super | Dialog mở, sửa được | Cả hai |
+| 8.20 | Voucher GLOBAL hiện cho BRANCH_ADMIN | Auto-scope filter | Vẫn thấy GLOBAL voucher trong list (apply cho CN) nhưng read-only | Cả hai |
 
 ---
 
@@ -232,6 +284,12 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 9.5 | Danh mục là select | Mở form | 4 option: Bắp rang, Nước uống, Combo, Khác | FE |
 | 9.6 | Upload ảnh = action riêng | Click icon Upload trên table | Chọn file → lưu Cloudinary ngay | FE |
 | 9.7 | Danh mục badge có icon | Bắp rang | Icon Popcorn + badge vàng gold | FE |
+| 9.8 | Trim name khi tạo | name="  Bắp Bơ  " | Lưu thành "Bắp Bơ" | BE |
+| 9.9 | Reject all-space name | name="   " | "Tên đồ ăn không được rỗng" | BE |
+| 9.10 | Case-insensitive duplicate | name="bắp bơ" khi đã có "Bắp Bơ" | "Đồ ăn 'bắp bơ' đã tồn tại trong chi nhánh này" | BE |
+| 9.11 | Update đổi theaterId | PUT với theaterId khác | "Không thể đổi chi nhánh của đồ ăn" | BE |
+| 9.12 | Xoá snack có combo ACTIVE dùng | Bắp Bơ đang trong 2 combo ACTIVE | "Đồ ăn 'Bắp Bơ' đang được 2 combo sử dụng. Hãy gỡ khỏi combo hoặc archive combo trước" | BE |
+| 9.13 | Bulk delete fail-fast | 3 snack, 1 đang trong combo | Toàn bộ bulk fail | BE |
 
 ---
 
@@ -262,6 +320,74 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 11.5 | Phone sai format | phone="abc" | "Số điện thoại không hợp lệ" | BE |
 | 11.6 | Phone hợp lệ (0 hoặc +84) | phone="0901234567" / "+84901234567" | OK | Cả hai |
 | 11.7 | Toggle enabled switch | Bật/tắt toggle | Hiện mô tả "Tài khoản bị khóa sẽ không thể đăng nhập" | FE |
+| 11.8 | Disable SUPER_ADMIN cuối cùng | Hệ thống chỉ có 1 super_admin enabled, set enabled=false | "Không thể vô hiệu hoá SUPER_ADMIN cuối cùng. Hãy thăng cấp 1 user khác lên SUPER_ADMIN trước" | BE |
+| 11.9 | Demote SUPER_ADMIN cuối cùng | Chỉ 1 super, đổi role ADMIN | "Không thể đổi vai trò SUPER_ADMIN cuối cùng..." | BE |
+| 11.10 | Disable super khi còn super khác | 2 super enabled, disable 1 | OK | BE |
+| 11.11 | Demote super khi còn super khác | 2 super, demote 1 thành USER | OK | BE |
+| 11.12 | Promote user → SUPER_ADMIN | role USER → SUPER_ADMIN | OK, theaterId tự null | BE |
+
+### Money Flow Critical Fixes
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| MF.1 | Voucher return khi payment FAIL | User hold seats + voucher SUMMER50 (usedCount+1) → payment FAIL callback | Booking CANCELLED + voucher.usedCount -1 + VoucherUsage entry deleted (khách dùng lại được voucher) | BE |
+| MF.2 | Voucher giữ nguyên khi payment SUCCESS | Payment COMPLETED | usedCount giữ nguyên (đúng — đã consume vì có vé) | BE |
+| MF.3 | Voucher return khi booking expire (HOLDING timeout) | Booking HOLDING > 10 phút → BookingCleanupScheduler | Voucher returned, seats released | BE |
+| MF.4 | Voucher return khi user cancel CONFIRMED | User cancel booking đã pay | Booking CANCELLED + payment REFUNDED + voucher returned + seats AVAILABLE + email | BE |
+| MF.5 | Cancel showtime SCHEDULED → cascade refund | POST /showtimes/{id}/cancel với showtime có 10 vé CONFIRMED | Showtime CANCELLED, 10 booking CANCELLED, 10 payment REFUNDED, 10 voucher returned (nếu có), 10 email gửi đi, WebSocket broadcast | BE |
+| MF.6 | Cancel showtime ONGOING | Suất đang chiếu (force majeure) | OK, cascade refund | BE |
+| MF.7 | Cancel showtime FINISHED | Suất đã chiếu xong | "Suất chiếu đã ở trạng thái FINISHED — không thể huỷ thêm" | BE |
+| MF.8 | Cancel showtime CANCELLED | Idempotent | "Suất chiếu đã ở trạng thái CANCELLED — không thể huỷ thêm" | BE |
+| MF.9 | Cancel showtime với 0 booking | Suất rỗng cancel | OK, cancelledBookings=0 | BE |
+| MF.10 | Reason mặc định nếu body null | POST /cancel không có body | reason="Suất chiếu bị huỷ" default | BE |
+| MF.11 | Check-in vé suất đã CANCELLED (sau cascade) | Khách đến trễ scan vé | "Suất chiếu đã bị huỷ" (case 6.2.10) | BE |
+| MF.12 | RBAC BRANCH_ADMIN cancel showtime CN khác | admin.hn cancel showtime HCM | 403 Forbidden | BE |
+| MF.13 | Pessimistic lock race: callback vs user cancel | 2 thread cùng lúc: callback COMPLETED + user cancel | Lock force serialize, thread thứ 2 đợi commit → đọc đúng status mới, không inconsistent | BE |
+| MF.14 | NO_SHOW count tăng | Booking CONFIRMED qua endTime + 30 phút | user.noShowCount += 1, booking.status = NO_SHOW | BE |
+| MF.15 | NO_SHOW block khách sau 3 lần | user.noShowCount = 3 | user.blockedUntil = now + 7 days (config) | BE |
+| MF.16 | User blocked không hold seats được | user.blockedUntil > now → POST /bookings | "Tài khoản bị tạm khoá đặt vé đến {datetime} do nhiều lần không đến xem phim (NO_SHOW)" | BE |
+| MF.17 | User blocked đã hết hạn | user.blockedUntil < now | Hold OK | BE |
+| MF.18 | Manual refund admin | POST /admin/payments/{id}/refund payment COMPLETED | Refund triggered, payment status = REFUNDED, needsRefund=false | BE |
+| MF.19 | Manual refund payment PENDING | Payment chưa COMPLETED | "Chỉ có thể refund payment ở trạng thái COMPLETED" | BE |
+| MF.20 | Manual refund BRANCH_ADMIN cross-CN | admin.hn refund payment HCM | 403 Forbidden | BE |
+| MF.21 | Manual refund reason default | Body null | reason="Manual refund by admin" | BE |
+| MF.22 | NoShowScheduler counter-sale skip | Booking POS (user=null) | Skip user update, vẫn mark NO_SHOW booking | BE |
+
+### Industry UX Features (Phase 2)
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| UX.1 | Payment retry sau FAIL | createPayment lần 2 với booking có payment FAILED cũ | Update record cũ với transactionCode mới + status PENDING, không tạo row mới | BE |
+| UX.2 | Payment retry sau REFUNDED | createPayment lần 2 với booking REFUNDED | OK retry (status REFUNDED cho phép) | BE |
+| UX.3 | Payment retry block PENDING | createPayment khi đã có payment PENDING | "Đơn đặt vé này đã có thanh toán đang xử lý" | BE |
+| UX.4 | Payment retry block COMPLETED | createPayment khi đã có payment COMPLETED | "Đơn đặt vé này đã có thanh toán đã hoàn tất" | BE |
+| UX.5 | Payment FAIL không cancel booking | MoMo callback FAIL | Payment FAILED, booking VẪN HOLDING, voucher giữ nguyên (cleanup scheduler sẽ expire sau 10 phút) | BE |
+| UX.6 | Payment FAIL → retry → SUCCESS | FAIL MoMo → retry CASH → callback SUCCESS | Booking CONFIRMED, payment COMPLETED, voucher consumed đúng 1 lần | BE |
+| UX.7 | NO_SHOW warning email 2/3 strike | user.noShowCount = 2 (threshold=3) | Email "Cảnh báo: bạn đã không đến xem phim 2 lần. Còn 1 lần sẽ bị khoá 7 ngày" | BE |
+| UX.8 | NO_SHOW warning email không gửi nếu count < threshold-1 | user.noShowCount = 1 | Không gửi email | BE |
+| UX.9 | NO_SHOW block không gửi warning | user.noShowCount = 3 (threshold) | Set blockedUntil, KHÔNG gửi warning email (đã quá muộn, không cần warn) | BE |
+| UX.10 | ShowtimeReminderScheduler 1h trước | Booking CONFIRMED có showtime trong [now+60min, now+75min] | Email "Suất chiếu sắp đến — còn 1 giờ", bao gồm mã vé + phòng + rạp | BE |
+| UX.11 | ShowtimeReminder skip CANCELLED showtime | Showtime CANCELLED trong window | Không gửi (đã cancel rồi) | BE |
+| UX.12 | ShowtimeReminder skip counter-sale | Booking POS (user=null hoặc email=null) | Skip, không crash | BE |
+| UX.13 | ShowtimeReminder window 15 phút | Scheduler chạy mỗi 15 phút | Mỗi booking gửi đúng 1 lần (window khớp fixedRate) | BE |
+| UX.14 | Email infra @Async | Email không block transaction | sendNoShowWarningEmail chạy async thread riêng | BE |
+
+### POS Snack — 16.x bổ sung
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 16.10 | Quantity > 100 mỗi item | quantity=101 | "Số lượng tối đa 100 mỗi item (anti-spam/DoS)" | BE |
+| 16.11 | Quantity = 100 (boundary) | quantity=100 | OK | BE |
+| 16.12 | Quantity = 1 (boundary min) | quantity=1 | OK | BE |
+
+### System Config — 22.x bổ sung
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 22.5 | BRANCH_ADMIN truy cập config | login admin.hn, GET /configs | 403 Forbidden (chỉ SUPER_ADMIN) | BE |
+| 22.6 | BRANCH_ADMIN update config | PUT /configs/{key} với BRANCH_ADMIN token | 403 Forbidden | BE |
+| 22.7 | SUPER_ADMIN update config có audit log | PUT booking.hold_minutes=15 | Audit log entry: action=UPDATE_SYSTEM_CONFIG, entityType=SystemConfig, userId | BE |
+| 22.8 | SUPER_ADMIN list configs | GET /configs với super token | 200 OK trả list | BE |
 
 ---
 
@@ -524,7 +650,30 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 24.6 | SUPER_ADMIN xem mọi theater | role=SUPER_ADMIN, GET /theaters/{X}/rooms | OK với mọi X | BE |
 | 24.7 | counter-sale theater scope | BRANCH_ADMIN A book showtimeId của theater B | 403 — derive showtime theater + check scope | BE |
 | 24.8 | Trùng code theater | INSERT trùng code đã có ACTIVE | 400, unique constraint | BE |
-| 24.9 | Soft delete theater còn rooms | Theater có active rooms → DELETE | Warning hoặc cascade ARCHIVE rooms | BE |
+| 24.9 | Soft delete theater còn rooms | Theater có active rooms → DELETE | "Không thể xoá chi nhánh đang có N phòng hoạt động" | BE |
+| 24.10 | Soft delete theater còn showtime active | Theater có suất SCHEDULED/ONGOING | "Không thể xoá chi nhánh đang có N suất chiếu lên lịch hoặc đang chiếu" | BE |
+| 24.11 | Soft delete theater còn booking active | Theater có booking HOLDING/CONFIRMED | "Không thể xoá chi nhánh đang có N vé giữ hoặc đã thanh toán" | BE |
+| 24.12 | Hotline format đúng 1900xxx | hotline="1900123456" | OK | BE |
+| 24.13 | Hotline format đúng 0xxx | hotline="0901234567" | OK | BE |
+| 24.14 | Hotline rỗng (optional) | hotline="" | OK | BE |
+| 24.15 | Hotline format sai | hotline="abc-123" hoặc "12345" | "Hotline phải dạng 1900xxxxxx hoặc 0xxxxxxxxx" | BE |
+| 24.16 | Email format sai | email="abc@@def" | "Email không hợp lệ" | BE |
+| 24.17 | Lat ngoài range | latitude=91.0 | "Vĩ độ phải từ -90 đến 90" | BE |
+| 24.18 | Long ngoài range | longitude=181.0 | "Kinh độ phải từ -180 đến 180" | BE |
+| 24.19 | Lat boundary | latitude=-90.0 hoặc 90.0 | OK | BE |
+| 24.20 | Long boundary | longitude=-180.0 hoặc 180.0 | OK | BE |
+
+### Room — 4.x bổ sung
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 4.20 | Trim name khi tạo | name="  Phòng 1  " | Lưu thành "Phòng 1" | BE |
+| 4.21 | Reject all-space name | name="   " | "Tên phòng không được rỗng" | BE |
+| 4.22 | Case-insensitive duplicate | name="phòng 1" khi đã có "Phòng 1" | "Phòng 'phòng 1' đã tồn tại trong chi nhánh này" | BE |
+| 4.23 | Xoá phòng có booking active | Phòng có booking HOLDING/CONFIRMED | "Không thể xoá phòng đang có vé khách giữ hoặc đã thanh toán" | BE |
+| 4.24 | Tạo showtime ở phòng MAINTENANCE | room.status=MAINTENANCE | "Phòng 'X' đang bảo trì — không thể tạo suất chiếu" | BE |
+| 4.25 | Tạo showtime ở phòng INACTIVE | room.status=INACTIVE | "Phòng 'X' đang đóng — không thể tạo suất chiếu" | BE |
+| 4.26 | totalSeats không cho admin set | POST /rooms với totalSeats=999 | Lưu thành 0, admin gen seat sau mới có số thật | BE |
 
 ---
 
@@ -561,6 +710,14 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 26.10 | Cache invalidation | Admin sửa rule, gọi pricingEngine.refresh() | Cache clear, giá mới ngay | BE |
 | 26.11 | Schedule refresh 5 phút | Rule HOUR_RANGE 22h-24h, không có user activity | 22:01 tự reload, áp giá happy hour | BE |
 | 26.12 | WYSIWYP end-to-end | Showtime price 100k FE, confirm payment | Charge đúng 100k | Cả hai |
+| 26.13 | SUPER_ADMIN xem list → có cột "Phạm vi" | login super_admin | Hiện cột Phạm vi với badge GLOBAL/THEATER | FE |
+| 26.14 | BRANCH_ADMIN xem list → KHÔNG cột "Phạm vi" | login admin.hn | Cột Phạm vi ẩn | FE |
+| 26.15 | SUPER_ADMIN filter scope | Filter drawer | Hiện option Phạm vi | FE |
+| 26.16 | BRANCH_ADMIN filter scope | Filter drawer | Option Phạm vi ẩn | FE |
+| 26.17 | BRANCH_ADMIN click rule GLOBAL | code GLOBAL có icon Lock | Toast "Rule toàn hệ thống chỉ SUPER_ADMIN sửa được", dialog KHÔNG mở | FE |
+| 26.18 | BRANCH_ADMIN click rule THEATER mình | code rule của CN | Dialog edit mở bình thường | Cả hai |
+| 26.19 | SUPER_ADMIN sửa rule GLOBAL | login super | Dialog mở, sửa được | Cả hai |
+| 26.20 | BE reject BRANCH_ADMIN update GLOBAL | API call manual với rule GLOBAL | 403 FORBIDDEN (defense in depth) | BE |
 
 ---
 
@@ -592,6 +749,12 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 | 28.5 | Tính tổng combo trong booking | 2 combo SOLO + 1 FAMILY | tổng = 2×80k + 210k = 370k | BE |
 | 28.6 | Combo INACTIVE không hiện FE | combo.active=false | List user không hiện | FE |
 | 28.7 | Admin Combo CRUD | Standard CRUD + filter | OK | Cả hai |
+| 28.8 | Trim combo name | name="  Combo Family  " | Lưu thành "Combo Family" | BE |
+| 28.9 | Reject all-space name | name="   " | "Tên combo không được rỗng" | BE |
+| 28.10 | Case-insensitive duplicate name | name="combo family" khi đã có "Combo Family" | "Combo tên 'combo family' đã tồn tại trong chi nhánh này" | BE |
+| 28.11 | Update đổi theaterId | PUT với theaterId khác | "Không thể đổi chi nhánh của combo" | BE |
+| 28.12 | Combo bundle snack ARCHIVED | items có snack đã archive | "Snack 'X' đã archived — không thể đưa vào combo" | BE |
+| 28.13 | Combo bundle snack unavailable | items có snack available=false | "Snack 'X' đang hết hàng (unavailable) — không thể đưa vào combo" | BE |
 
 ---
 
@@ -635,7 +798,34 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 
 ---
 
-## 31. AGE RATING — 3-tier enforcement
+## 31. STAFF ROLE — Nhân viên quầy POS
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| ST.1 | Tạo user STAFF | POST /users role=STAFF, theaterId=1 | OK, user STAFF scope theater 1 | BE |
+| ST.2 | STAFF không có theaterId | role=STAFF, theaterId=null | "STAFF phải được gán 1 chi nhánh" | BE |
+| ST.3 | USER có theaterId | role=USER, theaterId=1 | "USER / SUPER_ADMIN không được gán chi nhánh" | BE |
+| ST.4 | STAFF login → vào /admin | Login STAFF | OK qua canEnterAdminPanel guard | FE |
+| ST.5 | STAFF chỉ thấy 4 menu | Login STAFF | Menu chỉ: Tổng quan, POS Đồ ăn, POS Bán vé, Quét vé | FE |
+| ST.6 | STAFF KHÔNG thấy Phim/Phòng/Suất chiếu menu | Login STAFF | Menu ẩn (staffAllowed=false) | FE |
+| ST.7 | STAFF gọi POS counter-sale | POST /bookings/counter-sale với STAFF token | OK (hierarchy hasRole STAFF) | BE |
+| ST.8 | STAFF gọi POS snack-order | POST /snack-orders với STAFF token | OK | BE |
+| ST.9 | STAFF gọi check-in | POST /bookings/check-in với STAFF token | OK | BE |
+| ST.10 | STAFF gọi list bookings | GET /bookings (admin) với STAFF token | 403 (chỉ hasRole ADMIN trở lên) | BE |
+| ST.11 | STAFF gọi update showtime | PUT /showtimes/{id} | 403 Forbidden | BE |
+| ST.12 | STAFF gọi update room | PUT /rooms/{id} | 403 Forbidden | BE |
+| ST.13 | STAFF gọi config | GET /configs | 403 Forbidden (SUPER_ADMIN only) | BE |
+| ST.14 | STAFF scope theater | STAFF Hà Nội query suất | Filter override theaterId=HN, không thấy HCM | BE |
+| ST.15 | STAFF POS sell cross-CN | STAFF HN counter-sale showtime của HCM | 403 requireAccessToTheater throw | BE |
+| ST.16 | ADMIN xuống STAFF endpoint | ADMIN gọi /bookings/check-in | OK (role hierarchy: ADMIN > STAFF) | BE |
+| ST.17 | SUPER_ADMIN xuống STAFF endpoint | SUPER_ADMIN gọi /snack-orders | OK | BE |
+| ST.18 | Promote STAFF → ADMIN | PUT /users/{id} role STAFF→ADMIN | OK, theaterId giữ nguyên | BE |
+| ST.19 | Demote ADMIN → STAFF | PUT /users/{id} role ADMIN→STAFF | OK (không phải SUPER_ADMIN cuối) | BE |
+| ST.20 | Self-update role STAFF→ADMIN | STAFF tự update mình | "Không thể chỉnh sửa tài khoản của chính mình" | BE |
+
+---
+
+## 32. AGE RATING — 3-tier enforcement
 
 | # | Test Case | Input | Expected | BE/FE |
 |---|-----------|-------|----------|-------|
@@ -744,4 +934,134 @@ Tài liệu liệt kê toàn bộ test cases cho hệ thống CineX, phân theo 
 
 ---
 
-*Tổng: 36 module, 300+ test cases. Cập nhật lần cuối: 11/06/2026 (bổ sung Seat revamp Option C: 6 SeatType chuẩn industry CGV/Lotte/BHD + AISLE + BLOCKED + HANDICAP compliance NĐ 28/2012 + RoomType-aware preset).*
+## 37. CONFIG KEY ALIGNMENT — Migration 028 fix bug ẩn
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 37.1 | Auth login max attempts đọc đúng key | LoginRateLimitService sai 6 lần | Block sau lần 5 (auth.login_max_attempts) | BE |
+| 37.2 | Loyalty earn rate đúng decimal | Booking 100.000đ | User nhận 100 điểm (rate 0.001) | BE |
+| 37.3 | Loyalty tier silver | User lifetimePoints = 500 | Auto promote SILVER (loyalty.tier.silver_threshold) | BE |
+| 37.4 | Loyalty redeem min | User 50 điểm redeem | "Cần tối thiểu 100 điểm" (loyalty.min_redeem_points) | BE |
+| 37.5 | Loyalty redeem value | 200 điểm redeem | Voucher giảm 200.000đ (loyalty.redeem_value=1000) | BE |
+| 37.6 | Reset password token TTL | Click link reset sau 15 phút | "Link hết hạn" (auth.reset_token_expiry_minutes) | BE |
+| 37.7 | Check-in rate limit max | 1 IP fail check-in 60 lần | Block IP (checkin.max_fails_per_ip) | BE |
+| 37.8 | Check-in block duration | IP bị block | Mở lại sau 15 phút (checkin.block_minutes) | BE |
+| 37.9 | Email verify expiry | Click verify sau 24h | "Link hết hạn" (auth.email_verification_expiry_hours) | BE |
+| 37.10 | Statistics default range | Dashboard không params | Lấy 7 ngày (statistics.default_range_days) | BE |
+| 37.11 | Statistics max range | Query 400 ngày | 400 "Vượt quá 365 ngày" (statistics.max_range_days) | BE |
+| 37.12 | Payment cleanup window | PENDING payment 31 phút | Scheduler đánh FAILED (payment.pending_cleanup_minutes) | BE |
+| 37.13 | Admin sửa loyalty.earn_rate | UI đổi 0.001 → 0.002 | Booking 100.000đ tích 200 điểm (BE thực sự đọc key mới) | Cả hai |
+| 37.14 | Admin sửa auth.login_max_attempts | UI đổi 5 → 3 | Block sau lần 3 ngay phiên login tiếp | Cả hai |
+| 37.15 | Drop dead keys | SELECT * FROM system_config | Không còn auth.login_window_minutes, statistics.cache_ttl_seconds | BE |
+
+---
+
+## 38. NO_SHOW RESET ON CHECK-IN — Industry tha "vé bùng"
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 38.1 | Khách bùng 2 vé rồi check-in | noShowCount=2 → check-in vé mới | Reset noShowCount=0, blockedUntil=null | BE |
+| 38.2 | Khách bị block check-in | noShowCount=3, blockedUntil=tương lai, check-in OK | Mở khoá: blockedUntil=null + count=0 | BE |
+| 38.3 | Khách 0 bùng check-in | noShowCount=0 → check-in | Không log reset (không thay đổi) | BE |
+| 38.4 | Counter-sale check-in (không user) | booking.user=null check-in | Không crash, không reset (skip) | BE |
+| 38.5 | Reset audit log | Check-in user có count > 0 | Log "Reset noShowCount X → 0 cho user Y" | BE |
+
+---
+
+## 39. SHOWTIME REMINDER 24H — Slot mới
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 39.1 | Reminder 24h scheduler | Showtime trong 24h-25h, booking CONFIRMED | Email "1 ngày" gửi 1 lần duy nhất | BE |
+| 39.2 | Reminder 24h skip CANCELLED showtime | Showtime CANCELLED trong window | Không gửi email | BE |
+| 39.3 | Reminder 24h skip counter-sale | Booking.user=null | Skip (không có email) | BE |
+| 39.4 | Reminder 24h + 1h cùng booking | Booking showtime 1h sau | Nhận email 1h, không nhận 24h (đã qua window) | BE |
+| 39.5 | Booking đặt 12h trước showtime | Booking tạo, showtime 12h sau | Chỉ nhận reminder 1h (skip 24h) | BE |
+| 39.6 | SchedulerLock multi-instance | 2 instance backend chạy 24h slot | Chỉ 1 instance gửi email (ShedLock) | BE |
+| 39.7 | Window 1h chính xác | Showtime now+25h+1min | Skip (ngoài window now+24h..now+25h) | BE |
+
+---
+
+## 40. VAT 8% — Industry VAT-inclusive
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 40.1 | Booking 100k → VAT breakdown | total=100.000 | subtotal=92.593, vat=7.407, vatPercent=8 | BE |
+| 40.2 | Booking 250k → breakdown | total=250.000 | subtotal=231.481, vat=18.519 | BE |
+| 40.3 | Đổi config vat 8% → 10% | UPDATE pricing.vat_percent=10 | Booking mới: subtotal=total*100/110 | BE |
+| 40.4 | Vé cũ giữ % cũ | Vé tạo trước khi đổi config | Hiển thị đúng vat_percent=8 (history-preserving) | BE |
+| 40.5 | UI hiển thị breakdown | Mở TicketDetailPage | Có 3 dòng: Tạm tính + VAT (8%) + Tổng cộng | FE |
+| 40.6 | UI PaymentPage breakdown | Mở thanh toán | Cùng 3 dòng | FE |
+| 40.7 | Backfill booking cũ | SELECT * FROM booking | vat_percent=8, subtotal=ROUND(total*100/108), vat=total-subtotal | BE |
+| 40.8 | Counter-sale có VAT | POS bán vé | Booking có đầy đủ subtotal/vat/percent | BE |
+
+---
+
+## 41. LOYALTY TIER DISCOUNT — Tự động giảm theo hạng
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 41.1 | STANDARD không giảm | user.tier=STANDARD, booking 100k | tierDiscount=0, total=100k | BE |
+| 41.2 | SILVER giảm 3% | user.tier=SILVER, booking 100k | tierDiscount=3000, total=97k | BE |
+| 41.3 | GOLD giảm 5% | user.tier=GOLD, booking 100k | tierDiscount=5000, total=95k | BE |
+| 41.4 | PLATINUM giảm 10% | user.tier=PLATINUM, booking 100k | tierDiscount=10000, total=90k | BE |
+| 41.5 | Counter-sale không tier | user=null | tierDiscount=0, tierAtBooking=null | BE |
+| 41.6 | UI hiện ưu đãi hạng GOLD | TicketDetail user GOLD | Dòng "Ưu đãi hạng Vàng −5.000đ" màu xanh | FE |
+| 41.7 | UI ẩn nếu STANDARD | TicketDetail user STANDARD | KHÔNG hiện dòng ưu đãi hạng | FE |
+| 41.8 | Voucher stack trên tier | GOLD + voucher 10%, booking 100k | seatTotal=100k, tier=5k, afterTier=95k, voucher=9.5k, total=85.5k | BE |
+| 41.9 | Admin đổi % silver | UPDATE silver_discount=5 | Booking mới SILVER giảm 5% | BE |
+| 41.10 | History preserving | Vé GOLD cũ, đổi gold% 5→7 | Vé cũ giữ tier_discount đã lưu, không recalc | BE |
+
+---
+
+## 42. POINTS EXPIRY — FIFO batch tracking
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 42.1 | EARN tạo batch | Booking 100k tích 100 điểm | LoyaltyTx.expiresAt=+12 tháng, remainingPoints=100 | BE |
+| 42.2 | REDEEM FIFO | User có 2 batch (cũ 50p, mới 100p) redeem 70p | Trừ batch cũ 50p hết, batch mới còn 80p | BE |
+| 42.3 | EXPIRE batch hết hạn | Scheduler quét batch expires<now còn remaining | Tạo EXPIRE tx, trừ user.loyaltyPoints, remaining=0 | BE |
+| 42.4 | Lifetime KHÔNG tụt | User PLATINUM expire 5000 điểm | lifetimePoints giữ nguyên, tier vẫn PLATINUM | BE |
+| 42.5 | Cap floor 0 | User loyaltyPoints=10, batch expire 100 | loyaltyPoints=0 (max 0, không âm) | BE |
+| 42.6 | Scheduler batch size 500 | 1000 batch hết hạn | Lần 1 xử lý 500, lần 2 (tích tắc sau) 500 còn lại | BE |
+| 42.7 | ShedLock multi-instance | 2 instance chạy scheduler | Chỉ 1 instance xử lý, instance kia skip | BE |
+| 42.8 | Skip non-EARN | Batch type=REDEEM | Không process (chỉ EARN có expires) | BE |
+| 42.9 | Skip batch remaining=0 | Batch đã redeem hết | Scheduler không pick (WHERE remaining > 0) | BE |
+| 42.10 | Admin đổi expiry months | UPDATE 12 → 6 | Booking mới: expiresAt = +6 tháng | BE |
+
+---
+
+## 43. GROUP BOOKING DISCOUNT — Event công ty
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 43.1 | < threshold không giảm | 9 ghế, threshold=10 | groupDiscount=0 | BE |
+| 43.2 | = threshold giảm 5% | 10 ghế 100k, group 5% | groupDiscount=5000 (afterTier * 5%) | BE |
+| 43.3 | > threshold giảm 5% | 15 ghế 150k | groupDiscount=7.500 | BE |
+| 43.4 | Stack với tier | GOLD + 12 ghế 100k | tier=5k, after=95k, group=4.750 | BE |
+| 43.5 | Stack với voucher | 10 ghế + voucher 10% | seat=100k, group=5k, after=95k, voucher=9.5k, total=85.5k | BE |
+| 43.6 | Counter-sale có group | POS bán 12 vé event công ty | groupDiscount > 0 (POS vẫn áp) | BE |
+| 43.7 | UI hiện group | TicketDetail booking 12 vé | Dòng "Giảm giá nhóm (12 vé) −5.000đ" xanh | FE |
+| 43.8 | Admin tắt group (% = 0) | UPDATE percent=0 | Booking 20 vé KHÔNG giảm group | BE |
+| 43.9 | max_seats < threshold | max_seats=8, threshold=10 | Khách không thể hold 10 vé → không trigger | BE |
+| 43.10 | Order pipeline rõ | 10 vé 100k GOLD + voucher 10% | Order: seat → tier(5k) → group(4.75k) → voucher(9.025k) → total=81.225k | BE |
+
+---
+
+## 44. POST-SHOWTIME FEEDBACK — Email mời đánh giá
+
+| # | Test Case | Input | Expected | BE/FE |
+|---|-----------|-------|----------|-------|
+| 44.1 | Scheduler 24h sau | Booking CHECKED_IN, showtime endTime 24h trước | Email "Cảm ơn bạn đã xem phim X" gửi 1 lần | BE |
+| 44.2 | Skip NO_SHOW | Booking NO_SHOW, endTime 24h trước | KHÔNG gửi | BE |
+| 44.3 | Skip CANCELLED | Booking CANCELLED | KHÔNG gửi | BE |
+| 44.4 | Skip counter-sale | booking.user=null | KHÔNG gửi (không có email) | BE |
+| 44.5 | Link review đúng phim | Email body có URL | href={frontend}/movies/{movieId} | BE |
+| 44.6 | Window 1h chính xác | endTime 24h+1min trước | Skip (ngoài window) | BE |
+| 44.7 | SchedulerLock | 2 instance chạy | Chỉ 1 instance gửi (postShowtimeFeedback lock) | BE |
+| 44.8 | Subject email | endTime=2026-06-13 23:00 | Subject "CineX — Bạn thấy phim X thế nào?" | BE |
+| 44.9 | Template Thymeleaf | Render OK | Có CTA gold "Đánh giá ngay" + mã vé monospace | BE |
+
+---
+
+*Tổng: 44 module, 360+ test cases. Cập nhật lần cuối: 14/06/2026 (Phase 2 industry features: VAT 8% + Loyalty tier discount + Points expiry 12 tháng FIFO + Group discount 10+ vé + Post-showtime feedback email).*

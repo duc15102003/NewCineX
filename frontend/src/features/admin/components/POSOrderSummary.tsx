@@ -2,10 +2,20 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Check } from 'lucide-react'
 import { fmtDateTime, fmtVnd, PAYMENT_METHOD_LABELS } from '@/utils/labels'
+import { SEAT_TYPE_PRICE_TEXT } from '@/utils/colors'
 import type { POSShowtime, POSSeat } from '@/hooks/usePOS'
+import { usePublicConfigNumber } from '@/hooks/useConfig'
 
-/** Phương thức thanh toán cho POS quầy — không bao gồm online (VNPAY/MOMO online flow). */
-const POS_PAYMENT_METHODS = ['CASH', 'CARD_POS', 'TRANSFER'] as const
+/**
+ * Phương thức thanh toán cho POS quầy — pattern rạp VN:
+ * - CASH: tiền mặt (30-50% giao dịch)
+ * - CARD_POS: thẻ ATM/Visa/Master qua máy POS swipe (30-40%)
+ * - MOMO: QR scan tại quầy (20-30%, đang tăng nhanh)
+ *
+ * KHÔNG có TRANSFER (chuyển khoản banking) — không auto-confirm được,
+ * queue quầy không chờ được.
+ */
+const POS_PAYMENT_METHODS = ['CASH', 'CARD_POS', 'MOMO'] as const
 export type PosPaymentMethod = typeof POS_PAYMENT_METHODS[number]
 
 export interface POSOrderSummaryProps {
@@ -33,6 +43,9 @@ export default function POSOrderSummary({
             <SelectedSeatsBadges seats={allSeats} selectedSeatIds={selectedSeats} />
             {selectedSeats.length > 0 && (
               <PriceBreakdown showtime={showtime} selectedSeats={selectedSeats} allSeats={allSeats} />
+            )}
+            {selectedSeats.length > 0 && (
+              <GroupDiscountHint seatCount={selectedSeats.length} />
             )}
           </div>
 
@@ -120,11 +133,79 @@ function PriceBreakdown({ showtime, selectedSeats, allSeats }: PriceBreakdownPro
   const standardCount = counts.STANDARD + counts.HANDICAP
   return (
     <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-300">
-      {standardCount > 0 && <span>Thường x{standardCount} = {fmtVnd(standardCount * showtime.basePrice)}</span>}
-      {counts.VIP > 0 && <span>VIP x{counts.VIP} = {fmtVnd(counts.VIP * vipPrice)}</span>}
-      {counts.COUPLE > 0 && <span>Đôi x{counts.COUPLE} = {fmtVnd(counts.COUPLE * couplePrice)}</span>}
-      {counts.SWEETBOX > 0 && <span>Sweetbox x{counts.SWEETBOX} = {fmtVnd(counts.SWEETBOX * sweetboxPrice)}</span>}
-      {counts.DELUXE > 0 && <span>Deluxe x{counts.DELUXE} = {fmtVnd(counts.DELUXE * deluxePrice)}</span>}
+      {standardCount > 0 && (
+        <span>Thường x{standardCount} = <span className={`font-semibold ${SEAT_TYPE_PRICE_TEXT.STANDARD}`}>{fmtVnd(standardCount * showtime.basePrice)}</span></span>
+      )}
+      {counts.VIP > 0 && (
+        <span>VIP x{counts.VIP} = <span className={`font-semibold ${SEAT_TYPE_PRICE_TEXT.VIP}`}>{fmtVnd(counts.VIP * vipPrice)}</span></span>
+      )}
+      {counts.COUPLE > 0 && (
+        <span>Đôi x{counts.COUPLE} = <span className={`font-semibold ${SEAT_TYPE_PRICE_TEXT.COUPLE}`}>{fmtVnd(counts.COUPLE * couplePrice)}</span></span>
+      )}
+      {counts.SWEETBOX > 0 && (
+        <span>Sweetbox x{counts.SWEETBOX} = <span className={`font-semibold ${SEAT_TYPE_PRICE_TEXT.SWEETBOX}`}>{fmtVnd(counts.SWEETBOX * sweetboxPrice)}</span></span>
+      )}
+      {counts.DELUXE > 0 && (
+        <span>Deluxe x{counts.DELUXE} = <span className={`font-semibold ${SEAT_TYPE_PRICE_TEXT.DELUXE}`}>{fmtVnd(counts.DELUXE * deluxePrice)}</span></span>
+      )}
+    </div>
+  )
+}
+
+interface GroupDiscountHintProps {
+  seatCount: number
+}
+
+/**
+ * Hint cho cashier biết khách đủ điều kiện giảm giá nhóm. Đọc threshold +
+ * percent từ public config — khớp BE auto-apply trong counterSale.
+ */
+function GroupDiscountHint({ seatCount }: GroupDiscountHintProps) {
+  const { data: threshold = 10 } = usePublicConfigNumber('booking.group_discount_threshold', 10)
+  const { data: percent = 5 } = usePublicConfigNumber('booking.group_discount_percent', 5)
+  if (percent <= 0 || seatCount < threshold) return null
+  return (
+    <div className="text-xs text-green-400 bg-green-500/5 border border-green-500/20 rounded-md px-3 py-2 inline-flex items-center gap-1.5">
+      <Check size={12} /> Đủ điều kiện giảm giá nhóm {percent}% (từ {threshold} vé)
+    </div>
+  )
+}
+
+interface PriceTotalBoxProps {
+  totalAmount: number
+}
+
+/**
+ * Box tổng tiền POS — tách VAT breakdown (industry: subtotal + VAT trên hóa
+ * đơn). Đọc % VAT từ public config để khớp BE — nếu admin đổi 8% → 10%, POS
+ * tự cập nhật.
+ *
+ * <p>Group discount KHÔNG tính ở FE vì POS counter-sale có user=null nên BE
+ * vẫn áp group nếu seats ≥ threshold. FE hiện hint "Sẽ giảm X%" để cashier
+ * biết tư vấn khách.
+ */
+function PriceTotalBox({ totalAmount }: PriceTotalBoxProps) {
+  // VAT-inclusive: total = subtotal × (1 + vat/100) → subtotal = total × 100 / (100 + vat)
+  const { data: vatPercent = 8 } = usePublicConfigNumber('pricing.vat_percent', 8)
+  const subtotal = Math.round((totalAmount * 100) / (100 + vatPercent))
+  const vat = totalAmount - subtotal
+
+  return (
+    <div className="text-right w-full space-y-1">
+      {totalAmount > 0 && (
+        <div className="space-y-0.5 mb-1.5">
+          <div className="flex justify-between text-xs text-gray-400">
+            <span>Tạm tính</span>
+            <span>{fmtVnd(subtotal)}</span>
+          </div>
+          <div className="flex justify-between text-xs text-gray-400">
+            <span>VAT ({vatPercent}%)</span>
+            <span>{fmtVnd(vat)}</span>
+          </div>
+        </div>
+      )}
+      <p className="text-gray-400 text-xs">Tổng tiền</p>
+      <p className="text-[#ffc107] text-3xl font-bold">{fmtVnd(totalAmount)}</p>
     </div>
   )
 }
@@ -142,11 +223,8 @@ function ConfirmSection({
   totalAmount, disabled, loading, paymentMethod, onPaymentMethodChange, onClick,
 }: ConfirmSectionProps) {
   return (
-    <div className="flex flex-col items-end justify-center gap-3 md:border-l md:border-white/5 md:pl-6 min-w-[240px]">
-      <div className="text-right w-full">
-        <p className="text-gray-400 text-xs">Tổng tiền</p>
-        <p className="text-[#ffc107] text-3xl font-bold">{fmtVnd(totalAmount)}</p>
-      </div>
+    <div className="flex flex-col items-end justify-center gap-3 md:border-l md:border-white/5 md:pl-6 min-w-[260px]">
+      <PriceTotalBox totalAmount={totalAmount} />
       <div className="w-full">
         <label className="text-gray-400 text-xs block mb-1">Phương thức thanh toán</label>
         <select

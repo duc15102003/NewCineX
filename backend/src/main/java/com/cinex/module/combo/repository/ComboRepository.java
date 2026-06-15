@@ -16,6 +16,14 @@ public interface ComboRepository extends JpaRepository<Combo, Long>, JpaSpecific
     /** Check code trùng trong cùng 1 chi nhánh — code có thể trùng giữa 2 rạp. */
     boolean existsByTheaterIdAndCode(Long theaterId, String code);
 
+    /** Trim + case-insensitive unique name per theater. */
+    boolean existsByNameIgnoreCaseAndTheaterIdAndStorageState(
+            String name, Long theaterId, StorageState storageState);
+
+    /** Loại trừ id chính nó khi update. */
+    boolean existsByNameIgnoreCaseAndTheaterIdAndIdNotAndStorageState(
+            String name, Long theaterId, Long excludeId, StorageState storageState);
+
     /** Find với items + snack fetch — tránh N+1 khi list combo. */
     @EntityGraph(attributePaths = {"items", "items.snack"})
     @Override

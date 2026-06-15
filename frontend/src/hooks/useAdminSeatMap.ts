@@ -52,10 +52,16 @@ export function useBulkUpdateSeats(roomId: number) {
         grouped.set(type, list)
       })
       for (const [type, seatIds] of grouped) {
+        // CHÚ Ý: getDisplayType ưu tiên aisle > BLOCKED > BROKEN > seatType.
+        // Nên mọi transition đến trạng thái KHÔNG phải AISLE đều phải gửi
+        // aisle=false để clear flag — nếu không, BROKEN/BLOCKED paint lên
+        // ghế AISLE cũ sẽ vô hình ở DB (aisle vẫn true).
+        // Tương tự transition đến AISLE phải reset status=AVAILABLE (lối
+        // đi không thể "hỏng" hay "chặn").
         if (type === 'BROKEN' || type === 'BLOCKED') {
-          await api.put(`/api/rooms/${roomId}/seats/bulk-update`, { seatIds, status: type })
+          await api.put(`/api/rooms/${roomId}/seats/bulk-update`, { seatIds, status: type, aisle: false })
         } else if (type === 'AISLE') {
-          await api.put(`/api/rooms/${roomId}/seats/bulk-update`, { seatIds, aisle: true })
+          await api.put(`/api/rooms/${roomId}/seats/bulk-update`, { seatIds, aisle: true, status: 'AVAILABLE' })
         } else {
           // STANDARD / VIP / COUPLE / SWEETBOX / DELUXE / HANDICAP
           await api.put(`/api/rooms/${roomId}/seats/bulk-update`, { seatIds, seatType: type, aisle: false })
@@ -70,5 +76,31 @@ export function useBulkUpdateSeats(roomId: number) {
       qc.invalidateQueries({ queryKey: ['admin', 'room-seat-types', roomId] })
     },
     onError: (e) => toast.error(getErrorMessage(e, 'Lỗi khi lưu')),
+  })
+}
+
+export interface ResizeSeatGridRequest {
+  rows: number
+  cols: number
+}
+
+/**
+ * Resize lưới ghế — preserve seats hiện có (id stable), chỉ thêm/bớt biên.
+ * BE block nếu phòng có booking active (HOLDING/CONFIRMED).
+ */
+export function useResizeSeatGrid(roomId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (req: ResizeSeatGridRequest) => {
+      const res = await api.put<ApiResponse<SeatMapData>>(
+        `/api/rooms/${roomId}/seats/dimensions`, req)
+      return res.data.data
+    },
+    onSuccess: () => {
+      toast.success('Đã đổi kích thước sơ đồ ghế')
+      qc.invalidateQueries({ queryKey: ['seatmap', roomId] })
+      qc.invalidateQueries({ queryKey: ['admin', 'room-seat-types', roomId] })
+    },
+    onError: (e) => toast.error(getErrorMessage(e, 'Đổi kích thước thất bại')),
   })
 }

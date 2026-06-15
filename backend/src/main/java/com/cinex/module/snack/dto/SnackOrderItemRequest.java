@@ -1,6 +1,7 @@
 package com.cinex.module.snack.dto;
 
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -25,6 +26,7 @@ public class SnackOrderItemRequest {
 
     @NotNull(message = "Số lượng không được để trống")
     @Min(value = 1, message = "Số lượng tối thiểu là 1")
+    @Max(value = 100, message = "Số lượng tối đa 100 mỗi item (anti-spam/DoS)")
     private Integer quantity;
 
     @AssertTrue(message = "Mỗi line phải có đúng một trong snackId hoặc comboId")

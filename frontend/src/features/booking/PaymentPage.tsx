@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Loading from '@/components/common/Loading'
-import { fmtDateTime, label, ROOM_TYPE_LABELS, fmtVnd } from '@/utils/labels'
+import BookingSteps from './components/BookingSteps'
+import { fmtDateTime, label, ROOM_TYPE_LABELS, LOYALTY_TIER_LABELS, fmtVnd } from '@/utils/labels'
+import { SEAT_TYPE_PRICE_TEXT, ROOM_TYPE_TEXT } from '@/utils/colors'
 
 const PAYMENT_METHODS = [
   {
@@ -106,7 +108,8 @@ export default function PaymentPage() {
   const canPay = booking.status === 'HOLDING' && !isExpired && !createPayment.isPending
 
   return (
-    <div className="min-h-screen bg-[#181309] text-white py-10 px-4">
+    <div className="min-h-screen bg-[#181309] text-white pb-10 px-4">
+      <BookingSteps current={2} />
       <div className="max-w-2xl mx-auto space-y-6">
 
         <h1 className="text-2xl font-bold text-center text-[#ffc107]">Thanh toán vé</h1>
@@ -146,7 +149,7 @@ export default function PaymentPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Phòng</span>
-              <span className="font-medium">{booking.roomName} ({label(ROOM_TYPE_LABELS, booking.roomType)})</span>
+              <span className="font-medium">{booking.roomName} (<span className={ROOM_TYPE_TEXT[booking.roomType] ?? ''}>{label(ROOM_TYPE_LABELS, booking.roomType)}</span>)</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Mã đặt vé</span>
@@ -159,15 +162,47 @@ export default function PaymentPage() {
               <div className="flex flex-wrap gap-1.5">
                 {booking.seats.map(s => (
                   <Badge key={s.seatId} variant="outline" className="text-xs border-white/10 text-gray-200">
-                    {s.seatNumber} — {fmtVnd(s.price)}
+                    {s.seatNumber} — <span className={`ml-0.5 font-semibold ${SEAT_TYPE_PRICE_TEXT[s.seatType] ?? ''}`}>{fmtVnd(s.price)}</span>
                   </Badge>
                 ))}
               </div>
             </div>
 
-            <div className="border-t border-white/10 pt-3 flex justify-between font-semibold text-base">
-              <span>Tổng tiền</span>
-              <span className="text-[#ffc107] text-lg">{fmtVnd(booking.totalAmount)}</span>
+            <div className="border-t border-white/10 pt-3 space-y-1.5">
+              {booking.tierDiscountAmount != null && booking.tierDiscountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-400">
+                  <span>Ưu đãi hạng {booking.tierAtBooking ? label(LOYALTY_TIER_LABELS, booking.tierAtBooking) : ''}</span>
+                  <span>−{fmtVnd(booking.tierDiscountAmount)}</span>
+                </div>
+              )}
+              {booking.groupDiscountAmount != null && booking.groupDiscountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-400">
+                  <span>Giảm giá nhóm ({booking.seats.length} vé)</span>
+                  <span>−{fmtVnd(booking.groupDiscountAmount)}</span>
+                </div>
+              )}
+              {booking.loyaltyDiscountAmount != null && booking.loyaltyDiscountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-400">
+                  <span>Đổi {booking.pointsRedeemed?.toLocaleString('vi-VN')} điểm</span>
+                  <span>−{fmtVnd(booking.loyaltyDiscountAmount)}</span>
+                </div>
+              )}
+              {booking.subtotalAmount != null && booking.vatAmount != null && (
+                <>
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>Tạm tính</span>
+                    <span>{fmtVnd(booking.subtotalAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>VAT {booking.vatPercent != null ? `(${Number(booking.vatPercent).toFixed(0)}%)` : ''}</span>
+                    <span>{fmtVnd(booking.vatAmount)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between font-semibold text-base pt-1.5 border-t border-white/5">
+                <span>Tổng tiền</span>
+                <span className="text-[#ffc107] text-lg">{fmtVnd(booking.totalAmount)}</span>
+              </div>
             </div>
           </CardContent>
         </Card>

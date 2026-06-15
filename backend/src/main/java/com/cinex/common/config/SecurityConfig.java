@@ -123,10 +123,13 @@ public class SecurityConfig {
     }
 
     /**
-     * Role hierarchy — SUPER_ADMIN có TẤT CẢ quyền của ADMIN + USER.
+     * Role hierarchy — phản ánh chain of command nhân sự rạp:
+     * SUPER_ADMIN (HQ) → ADMIN (manager) → STAFF (cashier) → USER.
      *
      * <p><b>Tác động:</b> mọi {@code @PreAuthorize("hasRole('ADMIN')")} hiện tại
-     * (72+ chỗ) tự động cho phép SUPER_ADMIN — KHÔNG cần sửa từng nơi.
+     * (72+ chỗ) tự động cho phép SUPER_ADMIN. {@code hasRole('STAFF')} cho phép
+     * cả ADMIN và SUPER_ADMIN — manager có thể thao tác POS nếu cần. STAFF
+     * KHÔNG được quyền ADMIN (không sửa config được).
      *
      * <p>Spring convert {@code Role.ADMIN} thành authority {@code ROLE_ADMIN}.
      */
@@ -134,7 +137,8 @@ public class SecurityConfig {
     public RoleHierarchy roleHierarchy() {
         return RoleHierarchyImpl.fromHierarchy(
                 "ROLE_SUPER_ADMIN > ROLE_ADMIN\n" +
-                "ROLE_ADMIN > ROLE_USER"
+                "ROLE_ADMIN > ROLE_STAFF\n" +
+                "ROLE_STAFF > ROLE_USER"
         );
     }
 }
