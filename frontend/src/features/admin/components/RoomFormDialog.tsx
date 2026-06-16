@@ -10,6 +10,7 @@ import { useTheaterOptions, type Theater } from '@/hooks/useAdminTheaters'
 import { useAuthStore } from '@/store/authStore'
 import type { AdminRoom } from '@/hooks/useAdminRooms'
 import { ROOM_TYPE_LABELS, ROOM_STATUS_LABELS } from '@/utils/labels'
+import { FEATURES } from '@/config/featureFlags'
 import LockedTheaterBadge from './LockedTheaterBadge'
 
 interface RoomFormData {
@@ -97,7 +98,11 @@ export default function RoomFormDialog({
               </div>
             )}
             <div className="grid grid-cols-12 gap-4">
-              {(editingItem || theaterLocked) ? (
+              {!FEATURES.multiTheater ? (
+                // Single-theater mode: ẨN toàn bộ UI chi nhánh, vẫn submit
+                // theaterId qua hidden input (lấy từ scopedTheaterId).
+                <input type="hidden" {...register('theaterId', { valueAsNumber: true })} />
+              ) : (editingItem || theaterLocked) ? (
                 <>
                   <LockedTheaterBadge
                     theaterId={editingItem ? editingItem.theaterId : scopedTheaterId}

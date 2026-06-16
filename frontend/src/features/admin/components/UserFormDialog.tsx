@@ -9,6 +9,7 @@ import { useAdminUpdateUser, useAdminCreateUser } from '@/hooks/useAdmin'
 import type { AdminUser } from '@/hooks/useAdminUsers'
 import { useTheaterOptions, type Theater } from '@/hooks/useAdminTheaters'
 import { useAuthStore } from '@/store/authStore'
+import { FEATURES } from '@/config/featureFlags'
 
 const SELECT_CLS =
   'w-full h-10 rounded-lg border border-white/10 bg-[#2a2317] text-white text-sm px-3 focus:outline-none focus:ring-1 focus:ring-[#ffc107]'
@@ -201,7 +202,7 @@ export default function UserFormDialog({ open, onOpenChange, editingItem }: User
                 )}
               </div>
 
-              {(selectedRole === 'ADMIN' || selectedRole === 'STAFF') && (
+              {(selectedRole === 'ADMIN' || selectedRole === 'STAFF') && FEATURES.multiTheater && (
                 <BranchTheaterSelect
                   register={register}
                   errors={errors}

@@ -10,6 +10,7 @@ import { FilterTrigger } from '@/components/common/FilterDrawer'
 
 import UserFormDialog from './components/UserFormDialog'
 import UserFilterDrawer from './components/UserFilterDrawer'
+import { FEATURES } from '@/config/featureFlags'
 
 import { useAdminUsers } from '@/hooks/useAdmin'
 import type { AdminUser, AdminUserFilter } from '@/hooks/useAdminUsers'
@@ -164,7 +165,7 @@ export default function AdminUserPage() {
               <TableHead className="text-gray-400">Họ tên</TableHead>
               <TableHead className="text-gray-400">SĐT</TableHead>
               <TableHead className="text-gray-400">Vai trò</TableHead>
-              <TableHead className="text-gray-400">Chi nhánh</TableHead>
+              {FEATURES.multiTheater && <TableHead className="text-gray-400">Chi nhánh</TableHead>}
               <TableHead className="text-gray-400">Trạng thái</TableHead>
               <TableHead className="text-gray-400">Lưu trữ</TableHead>
             </TableRow>
@@ -172,7 +173,7 @@ export default function AdminUserPage() {
           <TableBody>
             {users.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-12">
+                <TableCell colSpan={FEATURES.multiTheater ? 9 : 8} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2 text-gray-500">
                     <Users size={32} className="text-gray-600" />
                     <p className="text-sm">{keywordInput ? `Không tìm thấy người dùng khớp "${keywordInput}"` : 'Chưa có người dùng nào'}</p>
@@ -199,9 +200,11 @@ export default function AdminUserPage() {
                     {label(ROLE_LABELS, u.role)}
                   </span>
                 </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  {renderTheaterCell(u)}
-                </TableCell>
+                {FEATURES.multiTheater && (
+                  <TableCell className="whitespace-nowrap">
+                    {renderTheaterCell(u)}
+                  </TableCell>
+                )}
                 <TableCell className="whitespace-nowrap">
                   <span className={`text-xs px-2 py-1 rounded border ${u.enabled
                     ? 'bg-green-500/10 text-green-400 border-green-500/30'
