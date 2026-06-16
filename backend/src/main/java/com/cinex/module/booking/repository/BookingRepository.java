@@ -6,9 +6,13 @@ import com.cinex.module.booking.entity.BookingStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.lang.Nullable;
 
 import java.time.LocalDateTime;
@@ -36,6 +40,20 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
 
     Optional<Booking> findByBookingCode(String bookingCode);
 
+    /**
+     * Pessimistic lock booking — chống race condition handleCallback vs
+     * cancelBooking song song. SQL Server tự sinh SELECT ... WITH (UPDLOCK).
+     *
+     * <p><b>Bug fix:</b> trước PaymentService.handleCallback check
+     * booking.status == HOLDING ở line 186, set CONFIRMED ở line 195. Giữa
+     * 2 dòng đó nếu thread khác (user cancel hoặc scheduler expire) đổi
+     * status → inconsistent state (payment COMPLETED + booking REFUNDED,
+     * hoặc payment REFUNDED + booking CONFIRMED). Lock row prevent.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.id = :id")
+    Optional<Booking> findByIdForUpdate(@Param("id") Long id);
+
     // Tìm booking theo qr_token (random 32 ký tự) — dùng cho check-in qua QR scan
     Optional<Booking> findByQrToken(String qrToken);
 
@@ -49,6 +67,17 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
     // Suất chiếu kết thúc trước now - buffer (vd 30 phút) và user chưa CHECKED_IN → đánh NO_SHOW
     List<Booking> findByStatusAndShowtime_EndTimeBefore(BookingStatus status, LocalDateTime endTimeBefore);
 
+    // Tìm booking CONFIRMED có showtime trong window → dùng ShowtimeReminderScheduler
+    // (gửi email reminder 1 giờ trước). Loại trừ showtime CANCELLED để không gửi nhầm.
+    List<Booking> findByStatusAndShowtime_StartTimeBetweenAndShowtime_StatusNot(
+            BookingStatus status, LocalDateTime start, LocalDateTime end,
+            com.cinex.module.showtime.entity.ShowtimeStatus excludeStatus);
+
+    // Tìm booking CHECKED_IN có showtime kết thúc trong window → dùng
+    // PostShowtimeFeedbackScheduler gửi email mời đánh giá 24h sau showtime.
+    List<Booking> findByStatusAndShowtime_EndTimeBetween(
+            BookingStatus status, LocalDateTime start, LocalDateTime end);
+
     // Đếm booking active (HOLDING/CONFIRMED) theo showtimeId → dùng để chặn sửa suất chiếu có vé
     long countByShowtimeIdAndStatusIn(Long showtimeId, List<BookingStatus> statuses);
 
@@ -57,6 +86,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpec
 
     // Kiểm tra phòng có booking active (HOLDING/CONFIRMED) nào không → chặn tạo lại seat map khi đang có vé
     boolean existsByShowtime_Room_IdAndStatusIn(Long roomId, List<BookingStatus> statuses);
+
+    // Đếm booking active toàn chi nhánh — dùng để chặn archive Theater
+    long countByShowtime_Room_Theater_IdAndStatusIn(Long theaterId, List<BookingStatus> statuses);
+
+    // List booking để cascade cancel khi suất chiếu bị huỷ
+    List<Booking> findByShowtimeIdAndStatusIn(Long showtimeId, List<BookingStatus> statuses);
 
     // Đếm số booking HOLDING của 1 user trên 1 showtime → chặn user hold nhiều booking cùng suất
     long countByUserIdAndShowtimeIdAndStatus(Long userId, Long showtimeId, BookingStatus status);

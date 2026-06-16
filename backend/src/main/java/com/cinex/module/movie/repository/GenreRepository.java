@@ -11,4 +11,10 @@ public interface GenreRepository extends JpaRepository<Genre, Long>, JpaSpecific
     Optional<Genre> findByName(String name);
 
     boolean existsByName(String name);
+
+    /**
+     * Case-insensitive unique check — "Action" và "action" coi như duplicate.
+     * Industry chuẩn (CGV/Lotte): tên genre normalize → tránh data pollution.
+     */
+    boolean existsByNameIgnoreCase(String name);
 }

@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CalendarRange } from 'lucide-react'
 import type { TopMovieRun } from '@/hooks/useAdmin'
-import { fmtVnd, fmtDate } from '@/utils/labels'
+import { fmtVnd, fmtDate, MOVIE_RUN_TYPE_LABELS, label } from '@/utils/labels'
+import { MOVIE_RUN_TYPE_COLORS } from '@/utils/colors'
 import { cdnImage } from '@/utils/image'
 
 interface Props {
@@ -77,23 +78,12 @@ export default function DashboardMovieRunsTable({ items }: Props) {
   )
 }
 
-/** Badge màu khác nhau cho FIRST_RUN / REISSUE / FESTIVAL — distributor nhìn lập tức biết loại. */
+/** Badge loại đợt chiếu — dùng canonical MOVIE_RUN_TYPE_COLORS/LABELS. */
 function RunTypeBadge({ type }: { type: string }) {
-  const colors: Record<string, string> = {
-    FIRST_RUN: 'bg-[#ffc107]/10 text-[#ffc107] border-[#ffc107]/30',
-    REISSUE: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
-    FESTIVAL: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-    HOLDOVER: 'bg-green-500/10 text-green-400 border-green-500/30',
-  }
-  const labels: Record<string, string> = {
-    FIRST_RUN: 'Khởi chiếu',
-    REISSUE: 'Chiếu lại',
-    FESTIVAL: 'Liên hoan phim',
-    HOLDOVER: 'Kéo dài',
-  }
+  const colorClass = MOVIE_RUN_TYPE_COLORS[type] ?? 'bg-gray-500/10 text-gray-400 border-gray-500/30'
   return (
-    <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-md border mt-0.5 ${colors[type] ?? 'bg-gray-500/10 text-gray-400 border-gray-500/30'}`}>
-      {labels[type] ?? type}
+    <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-md border mt-0.5 ${colorClass}`}>
+      {label(MOVIE_RUN_TYPE_LABELS, type)}
     </span>
   )
 }

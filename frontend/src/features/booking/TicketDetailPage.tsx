@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useBookingDetail, useTicket, useCancelBooking } from '@/hooks/useBooking'
 import { usePublicConfigNumber } from '@/hooks/useConfig'
+import { FEATURES } from '@/config/featureFlags'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
-import { label, BOOKING_STATUS_LABELS, SEAT_TYPE_LABELS, ROOM_TYPE_LABELS, fmtDateTime, fmtVnd, needsAgeConfirm, AGE_RATING_LABELS } from '@/utils/labels'
+import { label, BOOKING_STATUS_LABELS, SEAT_TYPE_LABELS, ROOM_TYPE_LABELS, LOYALTY_TIER_LABELS, fmtDateTime, fmtVnd, needsAgeConfirm, AGE_RATING_LABELS } from '@/utils/labels'
+import { SEAT_TYPE_PRICE_TEXT, ROOM_TYPE_TEXT } from '@/utils/colors'
 import { IdCard } from 'lucide-react'
 import Loading from '@/components/common/Loading'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -116,7 +118,7 @@ export default function TicketDetailPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Phòng chiếu</span>
-              <span className="font-medium">{booking.roomName} ({label(ROOM_TYPE_LABELS, booking.roomType)})</span>
+              <span className="font-medium">{booking.roomName} (<span className={ROOM_TYPE_TEXT[booking.roomType] ?? ''}>{label(ROOM_TYPE_LABELS, booking.roomType)}</span>)</span>
             </div>
           </CardContent>
         </Card>
@@ -135,12 +137,44 @@ export default function TicketDetailPage() {
                   </Badge>
                   <span className="text-gray-400 text-xs">{label(SEAT_TYPE_LABELS, s.seatType)}</span>
                 </div>
-                <span className="text-gray-200">{fmtVnd(s.price)}</span>
+                <span className={`font-semibold ${SEAT_TYPE_PRICE_TEXT[s.seatType] ?? 'text-gray-200'}`}>{fmtVnd(s.price)}</span>
               </div>
             ))}
-            <div className="border-t border-white/10 pt-3 flex justify-between font-semibold">
-              <span>Tổng cộng</span>
-              <span className="text-[#ffc107] text-lg">{fmtVnd(booking.totalAmount)}</span>
+            <div className="border-t border-white/10 pt-3 space-y-1.5">
+              {FEATURES.loyaltyTier && booking.tierDiscountAmount != null && booking.tierDiscountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-400">
+                  <span>Ưu đãi hạng {booking.tierAtBooking ? label(LOYALTY_TIER_LABELS, booking.tierAtBooking) : ''}</span>
+                  <span>−{fmtVnd(booking.tierDiscountAmount)}</span>
+                </div>
+              )}
+              {FEATURES.groupDiscount && booking.groupDiscountAmount != null && booking.groupDiscountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-400">
+                  <span>Giảm giá nhóm ({booking.seats.length} vé)</span>
+                  <span>−{fmtVnd(booking.groupDiscountAmount)}</span>
+                </div>
+              )}
+              {FEATURES.loyaltyRedeem && booking.loyaltyDiscountAmount != null && booking.loyaltyDiscountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-400">
+                  <span>Đổi {booking.pointsRedeemed?.toLocaleString('vi-VN')} điểm</span>
+                  <span>−{fmtVnd(booking.loyaltyDiscountAmount)}</span>
+                </div>
+              )}
+              {FEATURES.vatDisplay && booking.subtotalAmount != null && booking.vatAmount != null && (
+                <>
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>Tạm tính</span>
+                    <span>{fmtVnd(booking.subtotalAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>VAT {booking.vatPercent != null ? `(${Number(booking.vatPercent).toFixed(0)}%)` : ''}</span>
+                    <span>{fmtVnd(booking.vatAmount)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between font-semibold pt-1.5 border-t border-white/5">
+                <span>Tổng cộng</span>
+                <span className="text-[#ffc107] text-lg">{fmtVnd(booking.totalAmount)}</span>
+              </div>
             </div>
           </CardContent>
         </Card>

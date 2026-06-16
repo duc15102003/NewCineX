@@ -123,4 +123,22 @@ public class Showtime extends BaseEntity {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private ShowtimeStatus status = ShowtimeStatus.SCHEDULED;
+
+    /**
+     * Định dạng chiếu (2D/3D/IMAX/4DX/Screen-X) — chuẩn industry CGV/Lotte/BHD.
+     * Nullable cho backward-compat: showtime cũ trước migration 035 = NULL,
+     * mapper/response trả NULL → FE hiển thị "—" hoặc default về TWO_D.
+     * Suất mới luôn yêu cầu format ở DTO request.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "format", length = 16)
+    private ShowtimeFormat format;
+
+    /**
+     * Mode ngôn ngữ (SUB_VI/DUB_VI/ORIGINAL) — chính sách rạp per-suất.
+     * Nullable cùng lý do với {@link #format}.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "language_mode", length = 16)
+    private ShowtimeLanguage languageMode;
 }

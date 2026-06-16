@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu, X, User, LogOut, Ticket, Heart, LayoutDashboard, Film } from 'lucide-react'
+import { Menu, X, User, LogOut, Ticket, Heart, LayoutDashboard, Film, Clapperboard, ScanLine } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useLogout } from '@/hooks/useAuth'
 import NotificationBell from '@/components/common/NotificationBell'
 import TheaterSelector from '@/components/theater/TheaterSelector'
+import { FEATURES } from '@/config/featureFlags'
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const { user, isLoggedIn, isAdmin } = useAuthStore()
+  const { user, isLoggedIn, isAdmin, isStaff } = useAuthStore()
   const logout = useLogout()
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -37,21 +38,19 @@ export default function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-6 text-sm">
-            {/* [DEMO ĐỒ ÁN] Ẩn link public — uncomment khi đã sẵn sàng cho user:
             <Link to="/" className="text-gray-300 hover:text-[#ffc107] transition-colors">
               Trang chủ
             </Link>
             <Link to="/movies" className="text-gray-300 hover:text-[#ffc107] transition-colors">
               Phim
             </Link>
-            */}
 
-            {/* Theater selector — badge "📍 CineX Hà Nội" luôn hiện, click để đổi chi nhánh */}
-            <TheaterSelector />
+            {/* Theater selector — ẩn khi single-theater mode. */}
+            {FEATURES.multiTheater && <TheaterSelector />}
 
             {isLoggedIn() ? (
               <>
-              <NotificationBell />
+              {FEATURES.notifications && <NotificationBell />}
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -90,14 +89,41 @@ export default function Header() {
                       >
                         <Ticket size={16} className="text-gray-400" /> Vé của tôi
                       </Link>
-                      <Link
-                        to="/favorites"
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                        onClick={() => setDropdownOpen(false)}
-                      >
-                        <Heart size={16} className="text-gray-400" /> Phim yêu thích
-                      </Link>
+                      {FEATURES.favorites && (
+                        <Link
+                          to="/favorites"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          <Heart size={16} className="text-gray-400" /> Phim yêu thích
+                        </Link>
+                      )}
                     </div>
+
+                    {/* STAFF: quick links vào ca làm việc — POS Bán vé là cái
+                        STAFF dùng nhiều nhất nên đặt đầu, kèm Quét vé cho cổng. */}
+                    {isStaff() && (
+                      <>
+                        <hr className="border-[#3f382d] my-1" />
+                        <p className="px-4 pt-1 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                          Ca làm việc
+                        </p>
+                        <Link
+                          to="/admin/ticket-pos"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-[#ffc107] hover:bg-[#ffc107]/5 transition-colors"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          <Clapperboard size={16} /> POS Bán vé
+                        </Link>
+                        <Link
+                          to="/admin/check-in"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-[#ffc107] hover:bg-[#ffc107]/5 transition-colors"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          <ScanLine size={16} /> Quét vé
+                        </Link>
+                      </>
+                    )}
 
                     {isAdmin() && (
                       <>
@@ -154,14 +180,12 @@ export default function Header() {
       {/* Mobile menu */}
       {menuOpen && (
         <div className="md:hidden bg-[#201b11] border-t border-[#3f382d] px-4 py-4 space-y-1">
-          {/* [DEMO ĐỒ ÁN] Ẩn link public mobile — uncomment khi đã sẵn sàng cho user:
           <Link to="/" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#ffc107]" onClick={() => setMenuOpen(false)}>
             Trang chủ
           </Link>
           <Link to="/movies" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5 hover:text-[#ffc107]" onClick={() => setMenuOpen(false)}>
             Phim
           </Link>
-          */}
 
           {isLoggedIn() ? (
             <>
@@ -185,9 +209,25 @@ export default function Header() {
               <Link to="/my-tickets" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
                 <Ticket size={16} className="text-gray-400" /> Vé của tôi
               </Link>
-              <Link to="/favorites" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
-                <Heart size={16} className="text-gray-400" /> Phim yêu thích
-              </Link>
+              {FEATURES.favorites && (
+                <Link to="/favorites" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-white/5" onClick={() => setMenuOpen(false)}>
+                  <Heart size={16} className="text-gray-400" /> Phim yêu thích
+                </Link>
+              )}
+              {isStaff() && (
+                <>
+                  <hr className="border-[#3f382d] my-1" />
+                  <p className="px-3 pt-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                    Ca làm việc
+                  </p>
+                  <Link to="/admin/ticket-pos" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#ffc107] hover:bg-[#ffc107]/5" onClick={() => setMenuOpen(false)}>
+                    <Clapperboard size={16} /> POS Bán vé
+                  </Link>
+                  <Link to="/admin/check-in" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#ffc107] hover:bg-[#ffc107]/5" onClick={() => setMenuOpen(false)}>
+                    <ScanLine size={16} /> Quét vé
+                  </Link>
+                </>
+              )}
               {isAdmin() && (
                 <Link to="/admin" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#ffc107] hover:bg-[#ffc107]/5" onClick={() => setMenuOpen(false)}>
                   <LayoutDashboard size={16} /> Quản trị

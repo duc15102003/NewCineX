@@ -391,6 +391,30 @@ public class VoucherService {
                 voucher.getCode(), user.getUsername(), booking.getBookingCode());
     }
 
+    /**
+     * Trả lại voucher đã dùng — decrement usedCount + xoá VoucherUsage entry.
+     *
+     * <p>Industry bug fix: trước returnUsedVouchers chỉ được gọi từ
+     * BookingService.cancelBooking. Khi payment FAIL (handleCallback FAILED
+     * path) → booking CANCELLED nhưng voucher KHÔNG được return → khách mất
+     * voucher vĩnh viễn (stuck "used" trong DB). Method này giờ public để
+     * cả BookingService + PaymentService gọi được.
+     *
+     * <p>Dùng atomic UPDATE decrementUsedCount để chống race condition khi
+     * nhiều booking song song return cùng voucher.
+     */
+    @Transactional
+    public void returnUsedVouchers(Booking booking) {
+        var usages = voucherUsageRepository.findByBookingId(booking.getId());
+        for (var usage : usages) {
+            var voucher = usage.getVoucher();
+            voucherRepository.decrementUsedCount(voucher.getId());
+            voucherUsageRepository.delete(usage);
+            log.info("Voucher {} returned for booking {} (cancelled/payment-failed)",
+                    voucher.getCode(), booking.getBookingCode());
+        }
+    }
+
     public BigDecimal calculateDiscount(Voucher voucher, BigDecimal orderAmount) {
         if (voucher.getDiscountType() == DiscountType.PERCENTAGE) {
             BigDecimal discount = orderAmount

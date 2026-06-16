@@ -7,3 +7,29 @@
 body {
   font-family: 'Inter', sans-serif;
 }
+
+/* Print mode — chỉ in vùng .receipt-printable trong ReceiptDialog. Ẩn toàn bộ
+   sidebar/topbar/dialog chrome để máy in chỉ tốn giấy cho phần hoá đơn/vé. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .receipt-printable,
+  .receipt-printable * {
+    visibility: visible;
+  }
+  .receipt-printable {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 16px 12px;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

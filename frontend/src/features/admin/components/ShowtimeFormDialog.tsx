@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
+import { Send, Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 
 import {
   useCreateShowtime, useUpdateShowtime, useShowtimeDetail, useAdminMovies, useAdminRooms,
+  usePublishShowtime,
 } from '@/hooks/useAdmin'
 import { useMovieRuns } from '@/hooks/useMovieRuns'
 import { useTheaterOptions } from '@/hooks/useAdminTheaters'
@@ -14,7 +16,8 @@ import { useRoomSeatTypes, type AdminRoom, type SeatType } from '@/hooks/useAdmi
 import type { AdminMovie } from '@/hooks/useAdminMovies'
 import { useAuthStore } from '@/store/authStore'
 import { OPTIONS_DROPDOWN_PAGE_SIZE } from '@/utils/constants'
-import { toLocalDateTimeInput } from '@/utils/labels'
+import { toLocalDateTimeInput,
+  SHOWTIME_FORMAT_LABELS, SHOWTIME_LANGUAGE_LABELS } from '@/utils/labels'
 
 import TheaterRoomChain from './showtime/TheaterRoomChain'
 import MovieRunSelect from './showtime/MovieRunSelect'
@@ -28,6 +31,10 @@ export interface ShowtimeFormDialogProps {
   editingId: number | null
   scopedTheaterId: number | null
   theaterLocked: boolean
+  /** Pre-fill khi user click ô trống trong calendar view (chỉ áp dụng create mode). */
+  presetRoomId?: number | null
+  /** Pre-fill datetime-local (YYYY-MM-DDTHH:mm) khi tạo từ calendar. */
+  presetStartTime?: string | null
 }
 
 /**
@@ -37,6 +44,7 @@ export interface ShowtimeFormDialogProps {
  */
 export default function ShowtimeFormDialog({
   open, onOpenChange, editingId, scopedTheaterId, theaterLocked,
+  presetRoomId, presetStartTime,
 }: ShowtimeFormDialogProps) {
   const isEditMode = editingId != null
 
@@ -44,9 +52,13 @@ export default function ShowtimeFormDialog({
   // Khi theater bị lock (BRANCH_ADMIN hoặc super admin đã pick 1 CN) → CHỈ
   // load phòng/phim của CN đó (tránh leak CN khác + tiết kiệm bandwidth).
   // Khi "Tất cả chi nhánh" → load all, form có cascading filter client-side.
+  // eligibleForShowtime=true → BE lọc phim có MovieRun ACTIVE/UPCOMING tại CN.
+  // Trước đây thiếu cờ này → BE rơi vào nhánh "phim đã có showtime tại CN"
+  // → chỉ phim đầu tiên (Avatar 3) lọt vào dropdown.
   const { data: moviesData } = useAdminMovies({
     size: OPTIONS_DROPDOWN_PAGE_SIZE,
     theaterId: scopedTheaterId ?? undefined,
+    eligibleForShowtime: scopedTheaterId ? true : undefined,
   })
   const { data: roomsData } = useAdminRooms({
     size: OPTIONS_DROPDOWN_PAGE_SIZE,
@@ -57,6 +69,8 @@ export default function ShowtimeFormDialog({
 
   const createMut = useCreateShowtime()
   const updateMut = useUpdateShowtime()
+  const publishMut = usePublishShowtime()
+  const isDraft = isEditMode && showtimeDetail?.status === 'DRAFT'
 
   // Movies dropdown: chỉ phim NOW_SHOWING + COMING_SOON
   const movies = useMemo(
@@ -71,8 +85,8 @@ export default function ShowtimeFormDialog({
 
   // Watch: movieId → lazy load runs; theaterId → filter rooms + đợt chiếu;
   // roomId → fetch seat types để render input giá ĐỘNG.
-  // Cascading filter chuẩn industry: chọn chi nhánh trước → dropdown đợt chiếu
-  // CHỈ hiện run của chi nhánh đó (MovieRun PER-THEATER).
+  // Cascading filter: chọn chi nhánh trước → dropdown đợt chiếu CHỈ hiện run
+  // của chi nhánh đó (MovieRun PER-THEATER).
   const selectedMovieId = useWatch({ control, name: 'movieId' })
   const selectedTheaterId = useWatch({ control, name: 'theaterId' })
   const selectedRoomId = useWatch({ control, name: 'roomId' })
@@ -102,22 +116,27 @@ export default function ShowtimeFormDialog({
         couplePrice: showtimeDetail.couplePrice ?? 0,
         sweetboxPrice: showtimeDetail.sweetboxPrice ?? 0,
         deluxePrice: showtimeDetail.deluxePrice ?? 0,
+        // Suất legacy trước migration 035 → format/languageMode null → fallback default
+        format: showtimeDetail.format ?? 'TWO_D',
+        languageMode: showtimeDetail.languageMode ?? 'SUB_VI',
       })
     } else {
       reset({
         movieId: 0,
         movieRunId: '',
         theaterId: (scopedTheaterId ?? '') as number | '',
-        roomId: 0,
-        startTime: '',
+        roomId: (presetRoomId ?? 0) as number,
+        startTime: presetStartTime ?? '',
         basePrice: 0,
         vipPrice: 0,
         couplePrice: 0,
         sweetboxPrice: 0,
         deluxePrice: 0,
+        format: 'TWO_D',
+        languageMode: 'SUB_VI',
       })
     }
-  }, [open, isEditMode, showtimeDetail, scopedTheaterId, reset])
+  }, [open, isEditMode, showtimeDetail, scopedTheaterId, presetRoomId, presetStartTime, reset])
 
   function onSubmit(data: ShowtimeFormData) {
     const presentTypes = new Set(roomSeatTypes?.seatTypes.map((s) => s.seatType) ?? [])
@@ -132,6 +151,8 @@ export default function ShowtimeFormDialog({
       roomId: Number(data.roomId),
       startTime: data.startTime,
       basePrice: Number(data.basePrice) || 0,
+      format: data.format,
+      languageMode: data.languageMode,
     }
     if (has('VIP')) payload.vipPrice = Number(data.vipPrice) || 0
     if (has('COUPLE')) payload.couplePrice = Number(data.couplePrice) || 0
@@ -147,9 +168,17 @@ export default function ShowtimeFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
+      <DialogContent size="xl" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
         <DialogHeader>
-          <DialogTitle>{isEditMode ? 'Chỉnh sửa suất chiếu' : 'Thêm mới suất chiếu'}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            {isEditMode ? 'Chỉnh sửa suất chiếu' : 'Thêm mới suất chiếu'}
+            {isDraft && (
+              <span className="text-xs px-2 py-0.5 rounded-md font-semibold
+                bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                Nháp — chưa public
+              </span>
+            )}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogBody>
@@ -192,6 +221,26 @@ export default function ShowtimeFormDialog({
                 {errors.startTime && <p className="text-red-400 text-xs mt-1">{String(errors.startTime.message)}</p>}
               </div>
 
+              {/* Định dạng + ngôn ngữ chọn per-suất. Lưu ở showtime (KHÔNG ở
+                  room) vì 1 phòng IMAX có thể chiếu cả IMAX 2D và IMAX 3D ở
+                  các suất khác nhau trong ngày. */}
+              <div className="col-span-6">
+                <label className="text-sm text-gray-400 mb-1.5 block">Định dạng chiếu</label>
+                <select {...register('format', { required: 'Chọn định dạng' })} className={SELECT_CLS}>
+                  {Object.entries(SHOWTIME_FORMAT_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-6">
+                <label className="text-sm text-gray-400 mb-1.5 block">Ngôn ngữ</label>
+                <select {...register('languageMode', { required: 'Chọn ngôn ngữ' })} className={SELECT_CLS}>
+                  {Object.entries(SHOWTIME_LANGUAGE_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </div>
+
               <PriceTierInputs
                 control={control}
                 errors={errors}
@@ -203,8 +252,20 @@ export default function ShowtimeFormDialog({
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}
               className="border-white/10 text-gray-300 hover:bg-white/5">Hủy</Button>
+            {isDraft && editingId != null && (
+              <Button type="button"
+                onClick={() => publishMut.mutate(editingId, { onSuccess: () => onOpenChange(false) })}
+                disabled={publishMut.isPending || createMut.isPending || updateMut.isPending}
+                className="bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg gap-1.5"
+                title="Đẩy suất nháp này lên lịch chính — khách sẽ nhìn thấy ngay">
+                {publishMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                Đăng ngay
+              </Button>
+            )}
             <Button type="submit" className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg"
-              disabled={createMut.isPending || updateMut.isPending}>Lưu</Button>
+              disabled={createMut.isPending || updateMut.isPending}>
+              {isDraft ? 'Lưu nháp' : 'Lưu'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

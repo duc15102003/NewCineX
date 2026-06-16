@@ -20,10 +20,14 @@ import com.cinex.module.booking.entity.Booking;
 import com.cinex.module.booking.entity.BookingSeat;
 import com.cinex.module.booking.entity.BookingSeatStatus;
 import com.cinex.module.booking.entity.BookingStatus;
+import com.cinex.module.room.entity.Room;
+import com.cinex.module.room.entity.RoomStatus;
 import com.cinex.module.booking.repository.BookingRepository;
 import com.cinex.module.booking.repository.BookingSeatRepository;
 import com.cinex.module.booking.specification.BookingSpecification;
 import com.cinex.module.config.service.SystemConfigService;
+import com.cinex.module.loyalty.entity.LoyaltyTier;
+import com.cinex.module.loyalty.service.LoyaltyService;
 import com.cinex.module.seat.entity.Seat;
 import com.cinex.module.seat.entity.SeatStatus;
 import com.cinex.module.seat.entity.SeatType;
@@ -52,6 +56,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -79,6 +84,8 @@ public class BookingService {
     private final SecurityService securityService;
     private final BookingResponseMapper bookingResponseMapper;
     private final QrCodeService qrCodeService;
+    private final VatCalculator vatCalculator;
+    private final LoyaltyService loyaltyService;
 
     /**
      * Hold ghế — tạo booking HOLDING, lock ghế 10 phút.
@@ -95,6 +102,16 @@ public class BookingService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
+        // Chặn user đang bị block do NO_SHOW quá threshold. Pattern thường gặp:
+        // 3 lần no-show → block 7 ngày. NoShowScheduler set blockedUntil khi
+        // user.noShowCount >= booking.no_show_block_threshold.
+        if (user.getBlockedUntil() != null && user.getBlockedUntil().isAfter(LocalDateTime.now())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tài khoản bị tạm khoá đặt vé đến " + user.getBlockedUntil() +
+                    " do nhiều lần không đến xem phim (NO_SHOW). " +
+                    "Đến rạp xác nhận identity để được mở khoá sớm.");
+        }
+
         // Refactor: orchestration ngắn gọn, mỗi bước là 1 helper method có tên rõ ý định.
         validateUserBookingCapacity(userId, request.getShowtimeId());
         Showtime showtime = lockAndValidateShowtime(request.getShowtimeId());
@@ -104,24 +121,33 @@ public class BookingService {
         List<Long> uniqueSeatIds = validateSeatSelection(request.getSeatIds());
         List<Seat> seats = validateSeatsAvailableAndOperational(request.getShowtimeId(), uniqueSeatIds);
 
+        int redeemPoints = request.getRedeemPoints() != null ? request.getRedeemPoints() : 0;
+        PriceBreakdown breakdown = computePriceBreakdown(PricingInput.online(
+                seats, showtime, user, request.getVoucherCode(), redeemPoints));
         Long bookingTheaterId = showtime.getRoom().getTheater().getId();
-        BigDecimal totalAmount = computeTotalAmountWithVoucher(
-                seats, showtime, request.getVoucherCode(), userId, bookingTheaterId);
 
-        Booking booking = createHoldingBooking(user, showtime, totalAmount);
+        Booking booking = createHoldingBooking(user, showtime, breakdown);
         registerVoucherUsageIfPresent(request.getVoucherCode(), user, booking, bookingTheaterId);
+        // Loyalty redeem sau khi booking đã có id để link tx → booking.
+        // Truyền afterGroup làm maxDiscountCap — LoyaltyService chỉ trừ đúng
+        // số điểm CẦN để cover cap (cap-aware), tránh khách mất điểm oan khi
+        // nhập thừa (vd vé 80k user nhập 200 điểm = 200k → trừ 80 điểm, không 200).
+        if (redeemPoints > 0) {
+            loyaltyService.redeemForBooking(user, redeemPoints, breakdown.afterGroup(), booking);
+        }
         List<BookingSeatResponse> seatResponses = persistHeldBookingSeats(booking, seats, showtime, uniqueSeatIds);
 
         seatWebSocketService.notifySeatChanged(showtime.getId(), request.getSeatIds(), "HELD");
-        log.info("User {} held {} seats for showtime {}, booking {}",
-                user.getUsername(), seats.size(), showtime.getId(), booking.getBookingCode());
+        log.info("User {} held {} seats for showtime {}, booking {} (tier {}, discount {})",
+                user.getUsername(), seats.size(), showtime.getId(), booking.getBookingCode(),
+                breakdown.tier(), breakdown.tierDiscount());
 
         int holdMinutes = systemConfigService.getInt("booking.hold_minutes", 10);
         return HoldSeatsResponse.builder()
                 .bookingId(booking.getId())
                 .bookingCode(booking.getBookingCode())
                 .holdExpiry(booking.getCreatedAt().plusMinutes(holdMinutes))
-                .totalAmount(totalAmount)
+                .totalAmount(breakdown.total())
                 .seats(seatResponses)
                 .build();
     }
@@ -197,7 +223,16 @@ public class BookingService {
      * Tránh user gửi [1,1,2] → count = 3 nhưng thực ra chỉ 2 ghế khác nhau.
      */
     private List<Long> validateSeatSelection(List<Long> rawSeatIds) {
+        if (rawSeatIds == null || rawSeatIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Vui lòng chọn ít nhất 1 ghế");
+        }
         List<Long> uniqueSeatIds = rawSeatIds.stream().distinct().toList();
+        // Defense after dedup — list có thể không rỗng nhưng tất cả null sau filter
+        if (uniqueSeatIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Vui lòng chọn ít nhất 1 ghế");
+        }
         int maxSeats = systemConfigService.getInt("booking.max_seats", 8);
         if (uniqueSeatIds.size() > maxSeats) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
@@ -259,34 +294,139 @@ public class BookingService {
     }
 
     /**
-     * Tính tổng tiền: SUM(price từng ghế) → áp voucher (nếu có) → cap floor 0.
-     * Voucher resolution dùng theaterId của booking để match theater-specific vs global.
+     * Tính breakdown đầy đủ cho 1 booking — pipeline:
+     * <pre>
+     *   seatTotal       = SUM(seat prices)
+     *   tierDiscount    = seatTotal × tier%        (giảm theo hạng thành viên SILVER+)
+     *   afterTier       = seatTotal - tierDiscount
+     *   groupDiscount   = afterTier × group%       (nếu seats.size >= threshold)
+     *   afterGroup      = afterTier - groupDiscount
+     *   loyaltyDiscount = redeemPoints × redeem_value  (đổi điểm thành tiền)
+     *   afterLoyalty    = afterGroup - loyaltyDiscount
+     *   voucherResult   = validateVoucher(afterLoyalty)
+     *   total           = max(0, afterLoyalty - voucherDiscount)
+     * </pre>
+     *
+     * <p>Counter-sale ({@code user == null}) skip tier + loyalty discount nhưng
+     * VẪN áp group discount (event công ty đặt POS).
+     *
+     * <p>Validate loyalty trước khi áp: user phải đủ điểm + ≥ min_redeem_points.
+     * BookingService chưa trừ điểm ở đây — chỉ tính discount. Trừ điểm thật ở
+     * {@code loyaltyService.redeemForBooking} sau khi tạo booking.
      */
-    private BigDecimal computeTotalAmountWithVoucher(List<Seat> seats, Showtime showtime,
-                                                     String voucherCode, Long userId, Long theaterId) {
-        BigDecimal totalAmount = BigDecimal.ZERO;
+    private PriceBreakdown computePriceBreakdown(PricingInput input) {
+        List<Seat> seats = input.seats();
+        Showtime showtime = input.showtime();
+        User user = input.user();
+        String voucherCode = input.voucherCode();
+        int redeemPoints = input.redeemPoints();
+        Long theaterId = input.theaterId();   // derived from showtime — không phải param
+
+        BigDecimal seatTotal = BigDecimal.ZERO;
         for (Seat seat : seats) {
-            totalAmount = totalAmount.add(getPriceForSeat(seat.getSeatType(), showtime));
+            seatTotal = seatTotal.add(getPriceForSeat(seat.getSeatType(), showtime));
         }
-        if (voucherCode == null || voucherCode.isBlank()) return totalAmount;
 
-        ValidateVoucherResponse voucherResult = voucherService.validateVoucher(
-                voucherCode, totalAmount, userId, theaterId);
-        if (!voucherResult.isValid()) return totalAmount;
+        // Tier discount — áp tự động cho user có hạng SILVER+
+        LoyaltyTier tier = (user != null) ? user.getTier() : null;
+        BigDecimal tierDiscount = loyaltyService.calculateTierDiscount(seatTotal, tier);
+        BigDecimal afterTier = seatTotal.subtract(tierDiscount);
 
-        BigDecimal discounted = totalAmount.subtract(voucherResult.getDiscountAmount());
-        return discounted.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : discounted;
+        // Group discount — áp nếu đủ ngưỡng số vé (industry: 10+ vé)
+        BigDecimal groupDiscount = calculateGroupDiscount(afterTier, seats.size());
+        BigDecimal afterGroup = afterTier.subtract(groupDiscount);
+
+        // Loyalty redeem — user dùng điểm tích đổi giảm giá (chỉ cho user có account)
+        BigDecimal loyaltyDiscount = BigDecimal.ZERO;
+        if (user != null && redeemPoints > 0) {
+            loyaltyDiscount = loyaltyService.previewRedeemDiscount(user, redeemPoints, afterGroup);
+        }
+        BigDecimal afterLoyalty = afterGroup.subtract(loyaltyDiscount);
+
+        // Voucher discount — validate trên afterLoyalty
+        BigDecimal total = afterLoyalty;
+        if (voucherCode != null && !voucherCode.isBlank()) {
+            Long userId = (user != null) ? user.getId() : null;
+            ValidateVoucherResponse voucherResult = voucherService.validateVoucher(
+                    voucherCode, afterLoyalty, userId, theaterId);
+            if (voucherResult.isValid()) {
+                total = afterLoyalty.subtract(voucherResult.getDiscountAmount());
+            }
+        }
+        if (total.compareTo(BigDecimal.ZERO) < 0) total = BigDecimal.ZERO;
+
+        return new PriceBreakdown(seatTotal, tierDiscount, groupDiscount,
+                afterGroup, redeemPoints, loyaltyDiscount, tier, total);
     }
 
-    /** Persist booking ở trạng thái HOLDING + sinh mã unique. */
-    private Booking createHoldingBooking(User user, Showtime showtime, BigDecimal totalAmount) {
+    /**
+     * Tính group discount — đọc threshold + percent từ system_config.
+     * Trả 0 nếu seats.size dưới threshold hoặc percent = 0.
+     */
+    private BigDecimal calculateGroupDiscount(BigDecimal afterTier, int seatCount) {
+        int threshold = systemConfigService.getInt("booking.group_discount_threshold", 10);
+        int percent = systemConfigService.getInt("booking.group_discount_percent", 5);
+        if (seatCount < threshold || percent <= 0) return BigDecimal.ZERO;
+        return afterTier
+                .multiply(BigDecimal.valueOf(percent))
+                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Container truyền giữa compute → createHoldingBooking. Immutable.
+     * <p>{@code afterGroup} = giá sau tier + group discount, TRƯỚC loyalty —
+     * dùng làm maxDiscountCap khi gọi {@link LoyaltyService#redeemForBooking}
+     * để cap-aware deduction (không trừ thừa điểm của khách).
+     */
+    private record PriceBreakdown(BigDecimal seatTotal, BigDecimal tierDiscount,
+                                  BigDecimal groupDiscount, BigDecimal afterGroup,
+                                  int pointsRedeemed,
+                                  BigDecimal loyaltyDiscount, LoyaltyTier tier,
+                                  BigDecimal total) {}
+
+    /**
+     * Parameter Object cho {@link #computePriceBreakdown}. Refactor từ 6 tham
+     * số rời rạc (code smell) — gom thành 1 record + factory methods phân
+     * biệt context rõ ràng (online booking vs POS counter-sale).
+     * <p>theaterId KHÔNG là field — derive từ showtime.room.theater để tránh
+     * 2 nguồn truth lệch nhau.
+     */
+    private record PricingInput(List<Seat> seats, Showtime showtime,
+                                 User user, String voucherCode, int redeemPoints) {
+        /** Theater suy ra từ showtime — single source of truth. */
+        Long theaterId() {
+            return showtime.getRoom().getTheater().getId();
+        }
+        /** Online booking — đầy đủ tùy chọn. user/voucher/redeem có thể null/0. */
+        static PricingInput online(List<Seat> seats, Showtime showtime,
+                                    User user, String voucherCode, int redeemPoints) {
+            return new PricingInput(seats, showtime, user, voucherCode, redeemPoints);
+        }
+        /** POS counter-sale — không có user account, không voucher, không loyalty. */
+        static PricingInput counterSale(List<Seat> seats, Showtime showtime) {
+            return new PricingInput(seats, showtime, null, null, 0);
+        }
+    }
+
+    /** Persist booking ở trạng thái HOLDING + sinh mã unique + snapshot tier discount. */
+    private Booking createHoldingBooking(User user, Showtime showtime, PriceBreakdown breakdown) {
         String bookingCode = idTrackerService.nextCodeWithDate("BOOKING");
+        VatCalculator.VatBreakdown vat = vatCalculator.breakdownFromGross(breakdown.total());
         Booking booking = Booking.builder()
                 .user(user)
                 .showtime(showtime)
                 // Snapshot theater immutable từ showtime.room.theater — chuẩn industry.
                 .theater(showtime.getRoom().getTheater())
-                .totalAmount(totalAmount)
+                .totalAmount(breakdown.total())
+                .seatTotalAmount(breakdown.seatTotal())
+                .subtotalAmount(vat.subtotal())
+                .vatAmount(vat.vat())
+                .vatPercent(vat.vatPercent())
+                .tierDiscountAmount(breakdown.tierDiscount())
+                .tierAtBooking(breakdown.tier() != null ? breakdown.tier().name() : null)
+                .groupDiscountAmount(breakdown.groupDiscount())
+                .pointsRedeemed(breakdown.pointsRedeemed())
+                .loyaltyDiscountAmount(breakdown.loyaltyDiscount())
                 .status(BookingStatus.HOLDING)
                 .bookingCode(bookingCode)
                 .qrToken(generateQrToken())
@@ -422,6 +562,7 @@ public class BookingService {
         markBookingAsCancelled(booking);
         refundPaymentIfExists(bookingId);
         returnUsedVouchers(booking);
+        refundLoyaltyPointsIfRedeemed(booking);
         notifySeatsReleased(booking);
         sendCancellationEmail(booking);
 
@@ -451,6 +592,23 @@ public class BookingService {
     }
 
     /**
+     * Admin cancel booking khi suất chiếu bị huỷ (cascade từ ShowtimeService).
+     * Bỏ qua validateBookingCancellable vì lý do từ phía rạp, không phải user.
+     * Full cleanup: cancel + refund + return voucher + notify FE + email.
+     */
+    @Transactional
+    public void cancelDueToShowtimeCancel(Booking booking, String reason) {
+        markBookingAsCancelled(booking);
+        refundPaymentIfExists(booking.getId());
+        returnUsedVouchers(booking);
+        refundLoyaltyPointsIfRedeemed(booking);
+        notifySeatsReleased(booking);
+        sendCancellationEmail(booking);
+        log.info("Booking {} auto-cancelled vì showtime cancel: {}",
+                booking.getBookingCode(), reason);
+    }
+
+    /**
      * Refund qua PaymentService — logic refund tập trung tại Payment module,
      * BookingService không gọi cổng thanh toán trực tiếp (SRP).
      */
@@ -459,18 +617,18 @@ public class BookingService {
                 paymentService.refundPayment(payment, "User cancelled booking"));
     }
 
-    /** Trả lại voucher đã dùng (decrement usedCount + xóa VoucherUsage). */
+    /** Delegate sang VoucherService — logic giờ tập trung 1 chỗ, dùng được
+     *  cả từ PaymentService.handleCallback FAILED path. */
     private void returnUsedVouchers(Booking booking) {
-        var usages = voucherUsageRepository.findByBookingId(booking.getId());
-        for (var usage : usages) {
-            var voucher = usage.getVoucher();
-            if (voucher.getUsedCount() > 0) {
-                voucher.setUsedCount(voucher.getUsedCount() - 1);
-            }
-            voucherUsageRepository.delete(usage);
-            log.info("Voucher {} returned for cancelled booking {}",
-                    voucher.getCode(), booking.getBookingCode());
-        }
+        voucherService.returnUsedVouchers(booking);
+    }
+
+    /**
+     * Hoàn điểm loyalty đã redeem khi cancel/expire booking — đảm bảo khách
+     * không mất điểm khi hủy vé. Idempotent (skip nếu đã refund).
+     */
+    private void refundLoyaltyPointsIfRedeemed(Booking booking) {
+        loyaltyService.refundPointsForBooking(booking);
     }
 
     /** WebSocket broadcast: ghế trả lại trạng thái AVAILABLE cho user khác đang xem sơ đồ. */
@@ -620,18 +778,32 @@ public class BookingService {
         securityService.requireAccessToTheater(showtimeTheaterId);
 
         validateShowtimeBookable(showtime);
+        // Room status guard — chặn bán vé tại room MAINTENANCE/CLOSED. Online
+        // booking đã check qua ShowtimeService.holdSeats; counter-sale trước
+        // đây skip → POS có thể bán nhầm cho room đang sửa → khách check-in
+        // fail tại cổng → dispute.
+        Room counterRoom = showtime.getRoom();
+        if (counterRoom.getStatus() != RoomStatus.ACTIVE) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Phòng '" + counterRoom.getName() + "' đang "
+                            + (counterRoom.getStatus() == RoomStatus.MAINTENANCE ? "bảo trì" : "đóng")
+                            + " — không thể bán vé tại quầy");
+        }
         List<Long> uniqueSeatIds = request.getSeatIds().stream().distinct().toList();
         List<Seat> seats = validateSeatsAvailableAndOperational(request.getShowtimeId(), uniqueSeatIds);
-        BigDecimal totalAmount = computeSeatsTotal(seats, showtime);
+        // Counter-sale: user=null → skip tier + loyalty redeem, VẪN áp group discount
+        // (event công ty đặt POS — pattern thường gặp).
+        PriceBreakdown breakdown = computePriceBreakdown(
+                PricingInput.counterSale(seats, showtime));
 
-        Booking booking = createConfirmedBooking(showtime, totalAmount);
+        Booking booking = createConfirmedBooking(showtime, breakdown);
         persistBookedSeats(booking, seats, showtime);
-        createCompletedCashPayment(booking, totalAmount, request.getPaymentMethod());
+        createCompletedCashPayment(booking, breakdown.total(), request.getPaymentMethod());
 
         seatWebSocketService.notifySeatChanged(showtime.getId(),
                 seats.stream().map(Seat::getId).toList(), "BOOKED");
-        log.info("Counter sale: {} - {} seats - {} VND",
-                booking.getBookingCode(), seats.size(), totalAmount);
+        log.info("Counter sale: {} - {} seats - {} VND (groupDiscount {})",
+                booking.getBookingCode(), seats.size(), breakdown.total(), breakdown.groupDiscount());
         return toBookingResponse(booking);
     }
 
@@ -654,13 +826,23 @@ public class BookingService {
     }
 
     /** Tạo booking CONFIRMED ngay (POS không qua HOLDING). */
-    private Booking createConfirmedBooking(Showtime showtime, BigDecimal totalAmount) {
+    private Booking createConfirmedBooking(Showtime showtime, PriceBreakdown breakdown) {
         String bookingCode = idTrackerService.nextCodeWithDate("BOOKING");
+        VatCalculator.VatBreakdown vat = vatCalculator.breakdownFromGross(breakdown.total());
         Booking booking = Booking.builder()
                 .showtime(showtime)
                 // Snapshot theater immutable từ showtime.room.theater — chuẩn industry.
                 .theater(showtime.getRoom().getTheater())
-                .totalAmount(totalAmount)
+                .totalAmount(breakdown.total())
+                .seatTotalAmount(breakdown.seatTotal())
+                .subtotalAmount(vat.subtotal())
+                .vatAmount(vat.vat())
+                .vatPercent(vat.vatPercent())
+                .tierDiscountAmount(breakdown.tierDiscount())
+                .tierAtBooking(breakdown.tier() != null ? breakdown.tier().name() : null)
+                .groupDiscountAmount(breakdown.groupDiscount())
+                .pointsRedeemed(0)
+                .loyaltyDiscountAmount(BigDecimal.ZERO)
                 .status(BookingStatus.CONFIRMED)
                 .bookingCode(bookingCode)
                 .qrToken(generateQrToken())
@@ -684,7 +866,7 @@ public class BookingService {
         }
     }
 
-    /** Payment cho POS — CASH/MOMO/TRANSFER + status COMPLETED ngay (tiền tại quầy). */
+    /** Payment cho POS — CASH/CARD_POS/MOMO + status COMPLETED ngay (tiền tại quầy). */
     private void createCompletedCashPayment(Booking booking, BigDecimal amount, String paymentMethod) {
         String txCode = idTrackerService.nextCodeWithDate("PAYMENT");
         Payment payment = Payment.builder()
@@ -699,7 +881,8 @@ public class BookingService {
     }
 
     /**
-     * Validate payment method cho POS — chỉ chấp nhận CASH, MOMO, TRANSFER.
+     * Validate payment method cho POS — chỉ chấp nhận CASH, CARD_POS, MOMO.
+     * TRANSFER không hợp lý ở quầy (không auto-confirm).
      * Trước đây fallback CASH khi method sai → admin có thể gửi method bậy bạ
      * mà hệ thống vẫn nhận → khó audit. Giờ throw lỗi rõ ràng.
      */
@@ -710,11 +893,13 @@ public class BookingService {
             parsed = PaymentMethod.valueOf(method);
         } catch (IllegalArgumentException e) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                    "Payment method không hợp lệ cho POS");
+                    "Phương thức thanh toán không hợp lệ cho POS quầy");
         }
-        if (parsed != PaymentMethod.CASH && parsed != PaymentMethod.MOMO && parsed != PaymentMethod.TRANSFER) {
+        if (parsed != PaymentMethod.CASH
+                && parsed != PaymentMethod.CARD_POS
+                && parsed != PaymentMethod.MOMO) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                    "Payment method không hợp lệ cho POS");
+                    "Tại quầy chỉ chấp nhận: Tiền mặt, Thẻ qua máy POS, hoặc MoMo QR");
         }
         return parsed;
     }

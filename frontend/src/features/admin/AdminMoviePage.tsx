@@ -1,5 +1,5 @@
-import { useMemo, useState, useRef } from 'react'
-import { Plus, X } from 'lucide-react'
+import { useEffect, useMemo, useState, useRef } from 'react'
+import { Plus, X, Film } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -21,12 +21,26 @@ import {
 import { useAuthStore } from '@/store/authStore'
 import { useGenres } from '@/hooks/useMovies'
 import type { AdminMovieFilter } from '@/types/movie'
+import { usePageTitle } from '@/hooks/usePageTitle'
+import { validateImageUpload } from '@/utils/image'
 
 const LIST_PAGE_SIZE = 10
 
 export default function AdminMoviePage() {
+  usePageTitle('Quản lý phim')
   const [page, setPage] = useState(0)
+  const [keywordInput, setKeywordInput] = useState('')
   const [keyword, setKeyword] = useState('')
+  // Debounce keyword 400ms — tránh fire API mỗi keystroke
+  const debounceRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (debounceRef.current) window.clearTimeout(debounceRef.current)
+    debounceRef.current = window.setTimeout(() => {
+      setKeyword(keywordInput)
+      setPage(0)
+    }, 400)
+    return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current) }
+  }, [keywordInput])
   const [sort, setSort] = useState<string>('createdAt,desc')
   const [advancedFilter, setAdvancedFilter] = useState<AdminMovieFilter>({})
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -37,7 +51,7 @@ export default function AdminMoviePage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploadId, setUploadId] = useState<number | null>(null)
   // RBAC: Movie CRUD chỉ SUPER_ADMIN — BRANCH_ADMIN xem read-only.
-  const isSuperAdmin = useAuthStore(s => s.isSuperAdmin())
+  const isAdmin = useAuthStore(s => s.isAdmin())
   // Dialog quản lý đợt chiếu (MovieRun)
   const [runsDialogOpen, setRunsDialogOpen] = useState(false)
   const [runsMovie, setRunsMovie] = useState<{ id: number; title: string } | null>(null)
@@ -107,10 +121,11 @@ export default function AdminMoviePage() {
   }
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (file && uploadId) {
-      uploadMut.mutate({ id: uploadId, file })
-      e.target.value = ''
-    }
+    e.target.value = ''
+    if (!file || !uploadId) return
+    const err = validateImageUpload(file)
+    if (err) { toast.error(err); return }
+    uploadMut.mutate({ id: uploadId, file })
   }
 
   return (
@@ -121,8 +136,8 @@ export default function AdminMoviePage() {
           <div className="flex-1 max-w-sm">
             <Input
               placeholder="Tìm kiếm phim..."
-              value={keyword}
-              onChange={(e) => { setKeyword(e.target.value); setPage(0) }}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
             />
           </div>
           <FilterTrigger onClick={() => setDrawerOpen(true)} activeCount={activeFilterCount} />
@@ -143,7 +158,7 @@ export default function AdminMoviePage() {
           </div>
         </div>
         {/* Movie CRUD chỉ SUPER_ADMIN — BRANCH_ADMIN xem read-only, ẩn nút Create + Bulk */}
-        {isSuperAdmin && (
+        {isAdmin && (
           <div className="flex items-center gap-2">
             <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
               <Plus size={16} className="mr-1" /> Thêm mới
@@ -184,7 +199,18 @@ export default function AdminMoviePage() {
           <TableBody>
             {movies.length === 0 && (
               <TableRow>
-                <TableCell colSpan={11} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
+                <TableCell colSpan={11} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2 text-gray-500">
+                    <Film size={32} className="text-gray-600" />
+                    <p className="text-sm">{keywordInput ? `Không tìm thấy phim khớp "${keywordInput}"` : 'Chưa có phim nào'}</p>
+                    {isAdmin && !keywordInput && activeFilterCount === 0 && (
+                      <button onClick={openCreate}
+                        className="text-xs text-[#ffc107] hover:underline">
+                        Thêm phim đầu tiên
+                      </button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             )}
             {movies.map((m, index) => (

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Buffer cleanup time giữa các suất chiếu (dọn phòng, đón khách kế tiếp).
+        Service đã getInt("showtime.buffer_minutes", 15) fallback 15 nhưng chưa
+        có row trong system_config → admin không thấy/sửa được qua trang config.
+    -->
+
+    <changeSet id="025-seed-showtime-buffer" author="cinex">
+        <sql>
+            IF NOT EXISTS (SELECT 1 FROM system_config WHERE config_key = N'showtime.buffer_minutes')
+            BEGIN
+                INSERT INTO system_config (config_key, config_value, description)
+                VALUES (N'showtime.buffer_minutes', N'15',
+                        N'Buffer giữa các suất chiếu (phút) — dọn phòng, đón khách kế tiếp');
+            END
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

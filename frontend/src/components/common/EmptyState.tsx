@@ -21,13 +21,7 @@ interface EmptyStateProps {
 }
 
 /**
- * Empty state chuẩn pattern e-commerce (Shopee/Lazada/Tiki):
- * <ul>
- *   <li>Icon mờ to → cảm xúc + nhận diện nhanh (vs text trắng đen)</li>
- *   <li>Title bold + description nhỏ → information hierarchy rõ</li>
- *   <li>CTA optional → hướng user ra khỏi trạng thái rỗng (tăng engagement)</li>
- * </ul>
- *
+ * Empty state: icon mờ + title + description + CTA optional.
  * <p>Backward compat: chỉ truyền {@code message} vẫn chạy được — icon/description optional.
  */
 export default function EmptyState({

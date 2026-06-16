@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Seed config "ticket.arrive_early_minutes" — số phút khuyến nghị khách
+        đến sớm trước giờ chiếu (in trên vé + hiển thị footer).
+
+        Trước đây hardcode "15 phút" trong ReceiptDialog + receiptPdf
+        → admin không đổi được mà không sửa code. Đẩy về system_config theo
+        pattern các config thời gian khác (booking.hold_minutes,
+        showtime.buffer_minutes, ...).
+
+        Public read (GET /api/configs/public/{key}) vì FE in vé cần truy cập
+        không qua auth. Admin sửa qua trang Cấu hình hệ thống → category
+        "showtime" cùng nhóm với buffer dọn phòng.
+
+        Lưu ý schema: system_config KHÔNG có created_at/updated_at — các
+        timestamp đó lấy từ audit log riêng. Cột hợp lệ: config_key,
+        config_value, description, label, hint, unit, category, display_order,
+        visible, min_value, max_value.
+    -->
+
+    <changeSet id="038-seed-arrive-early-config" author="cinex">
+        <sql splitStatements="false"><![CDATA[
+            IF NOT EXISTS (SELECT 1 FROM system_config WHERE config_key = N'ticket.arrive_early_minutes')
+            BEGIN
+                INSERT INTO system_config (
+                    config_key, config_value, description,
+                    label, hint, unit, category, display_order, visible,
+                    min_value, max_value
+                ) VALUES (
+                    'ticket.arrive_early_minutes', '15',
+                    N'Số phút khuyến nghị khách đến sớm trước giờ chiếu',
+                    N'Đến sớm trước giờ chiếu',
+                    N'In ở footer vé phim: "Đến sớm N phút trước giờ chiếu". Khuyến nghị 10-20 phút để khách có thời gian mua snack và vào chỗ.',
+                    N'phút', 'showtime', 20, 1, 0, 60
+                );
+            END
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>

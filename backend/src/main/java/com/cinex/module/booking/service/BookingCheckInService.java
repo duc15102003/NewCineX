@@ -9,6 +9,9 @@ import com.cinex.module.booking.entity.Booking;
 import com.cinex.module.booking.entity.BookingStatus;
 import com.cinex.module.booking.mapper.BookingResponseMapper;
 import com.cinex.module.booking.repository.BookingRepository;
+import com.cinex.module.auth.entity.User;
+import com.cinex.module.auth.repository.UserRepository;
+import com.cinex.module.showtime.entity.ShowtimeStatus;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +37,7 @@ public class BookingCheckInService {
     private final BookingRepository bookingRepository;
     private final BookingResponseMapper bookingResponseMapper;
     private final CheckInRateLimitService rateLimitService;
+    private final UserRepository userRepository;
 
     /**
      * Check-in vé tại cổng: CONFIRMED → CHECKED_IN.
@@ -54,9 +58,30 @@ public class BookingCheckInService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "Đơn đặt vé chưa được xác nhận, trạng thái: " + booking.getStatus());
         }
+        // Suất chiếu bị huỷ → không cho check-in (industry chuẩn Cinetixx/Veezi).
+        // Trường hợp staff scan vé vào lúc suất bị huỷ → từ chối check-in,
+        // hướng customer ra quầy refund.
+        if (booking.getShowtime().getStatus() == ShowtimeStatus.CANCELLED) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Suất chiếu đã bị huỷ — không thể check-in. Hướng khách ra quầy refund.");
+        }
 
         booking.setStatus(BookingStatus.CHECKED_IN);
         bookingRepository.save(booking);
+
+        // Reset noShowCount khi khách check-in thành công — pattern industry
+        // (CGV/Lotte/BHD): "vé bùng" được tha khi khách quay lại sử dụng. Tránh
+        // 1 lần lỡ vé khoá khách vĩnh viễn dù sau đó khách dùng app bình thường.
+        // Reset ở đây thay vì scheduler riêng → feedback ngay, đỡ tốn cron.
+        User user = booking.getUser();
+        if (user != null && user.getNoShowCount() != null && user.getNoShowCount() > 0) {
+            int prev = user.getNoShowCount();
+            user.setNoShowCount(0);
+            user.setBlockedUntil(null);
+            userRepository.save(user);
+            log.info("Reset noShowCount {} → 0 cho user {} sau check-in thành công",
+                    prev, user.getUsername());
+        }
 
         rateLimitService.clearFails(ip);
         log.info("Booking {} checked in", booking.getBookingCode());

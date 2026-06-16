@@ -122,4 +122,24 @@ public class User extends BaseEntity {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private LoyaltyTier tier = LoyaltyTier.STANDARD;
+
+    /**
+     * Số lần khách đặt vé nhưng không đến (NO_SHOW). Industry chuẩn (CGV/Lotte):
+     * sau N lần (config booking.no_show_block_threshold, default 3) → khách bị
+     * block đặt vé trong M ngày (booking.no_show_block_days, default 7).
+     *
+     * <p>Tăng bởi NoShowScheduler khi booking CONFIRMED quá endTime + buffer
+     * mà chưa CHECKED_IN. Reset về 0 ngay khi khách check-in thành công 1 lần
+     * (BookingCheckInService) — tránh 1 lần lỡ vé khoá khách vĩnh viễn.
+     */
+    @Column(name = "no_show_count", nullable = false)
+    @Builder.Default
+    private Integer noShowCount = 0;
+
+    /**
+     * Khách bị block đặt vé đến thời điểm này. null = không bị block.
+     * Set bởi NoShowScheduler khi noShowCount vượt threshold.
+     */
+    @Column(name = "blocked_until")
+    private java.time.LocalDateTime blockedUntil;
 }

@@ -23,7 +23,15 @@ export const RULE_TYPE_LABELS: Record<PricingRuleType, string> = {
   DAY_OF_WEEK: 'Theo thứ trong tuần',
   HOUR_RANGE: 'Theo khung giờ',
   DATE_RANGE: 'Theo khoảng ngày',
-  COMPOSITE: 'Kết hợp (AND)',
+  COMPOSITE: 'Nhiều điều kiện cùng lúc',
+}
+
+/** Hint giải thích cho từng loại — dùng làm tooltip + helper text trong form. */
+export const RULE_TYPE_HINTS: Record<PricingRuleType, string> = {
+  DAY_OF_WEEK: 'Áp dụng vào các ngày cụ thể trong tuần (vd: T7, CN)',
+  HOUR_RANGE: 'Áp dụng trong 1 khung giờ trong ngày (vd: 19h-22h "giờ vàng")',
+  DATE_RANGE: 'Áp dụng trong khoảng ngày cố định (vd: dịp Tết, Halloween)',
+  COMPOSITE: 'Phải thoả MỌI điều kiện cùng lúc (vd: T7 + khung 19h-22h)',
 }
 
 export const DAY_OPTIONS = [

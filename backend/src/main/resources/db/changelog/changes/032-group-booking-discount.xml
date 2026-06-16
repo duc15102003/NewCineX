@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Group booking discount — chuẩn industry (CGV/Lotte/BHD): đặt từ N vé trở
+        lên giảm M% tự động. Hỗ trợ event công ty, lớp học, sinh nhật...
+
+        Mặc định 10 vé giảm 5% — gần đúng CGV "Group Pack" và Lotte "Big Group".
+        Admin có thể tăng % để cạnh tranh hoặc bỏ (% = 0).
+
+        Lưu group_discount_amount vào booking để history-preserving.
+
+        Lưu ý: max_seats vẫn áp dụng (default 8). Nếu kích group discount cần
+        nâng max_seats > group_threshold để khách thực sự đặt được số vé này.
+    -->
+
+    <changeSet id="032-add-group-discount-field" author="cinex">
+        <addColumn tableName="bookings">
+            <column name="group_discount_amount" type="DECIMAL(12,0)" defaultValueNumeric="0"
+                    remarks="Tiền giảm cho group booking (≥ threshold vé)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="032-seed-group-configs" author="cinex">
+        <sql><![CDATA[
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES
+            ('booking.group_discount_threshold', '10',
+             N'Số vé tối thiểu để nhận giảm giá nhóm',
+             N'Ngưỡng vé để giảm giá nhóm',
+             N'Khách đặt từ X vé trở lên trong 1 đơn được giảm tự động % theo cấu hình bên dưới. Industry: 10 vé. Lưu ý phải tăng "Ghế tối đa mỗi lần đặt" lên ≥ X để khách thực sự đặt được.',
+             N'vé', 'booking', 100, 1, 2, 100),
+
+            ('booking.group_discount_percent', '5',
+             N'% giảm khi đặt vé nhóm',
+             N'Tỷ lệ giảm khi đặt vé nhóm',
+             N'Khi đơn đạt ngưỡng vé, giảm tự động X% tổng giá vé. Industry: 5-10%. Đặt 0 để tắt giảm giá nhóm.',
+             N'%', 'booking', 110, 1, 0, 50);
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>

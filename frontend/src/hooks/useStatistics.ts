@@ -143,3 +143,107 @@ export function useOccupancy(date: string, theaterId?: number) {
     enabled: !!date,
   })
 }
+
+// ──────────────────────────────────────────────────────────────
+// Phase 1 KPI bổ sung — chuẩn industry rạp lớn (CGV/Lotte/BHD)
+// ──────────────────────────────────────────────────────────────
+
+export interface OccupancyAggregate {
+  bookedSeats: number
+  totalSeats: number
+  occupancyRate: number  // 0-100 (%)
+  sessionCount: number
+}
+
+/**
+ * KPI số 1 của rạp — tỉ lệ lấp ghế tổng hợp tuần/tháng. Khác useOccupancy
+ * (per-showtime), method này gom tổng để dashboard summary.
+ */
+export function useOccupancyAggregate(from: string, to: string, theaterId?: number) {
+  return useQuery({
+    queryKey: ['admin', 'occupancy-aggregate', from, to, theaterId ?? 'all'],
+    queryFn: async () => {
+      const params: Record<string, string | number> = { from, to }
+      if (theaterId) params.theaterId = theaterId
+      const res = await api.get<ApiResponse<OccupancyAggregate>>(
+        '/api/statistics/occupancy-aggregate', { params })
+      return res.data.data
+    },
+    enabled: !!from && !!to,
+  })
+}
+
+export interface BookingHealth {
+  confirmedCount: number
+  checkedInCount: number
+  noShowCount: number
+  noShowRate: number     // 0-100 (%)
+  cancelledCount: number
+  expiredCount: number
+  totalBookings: number
+  cancelRate: number     // 0-100 (%)
+  expireRate: number     // 0-100 (%)
+}
+
+/**
+ * Sức khoẻ vận hành booking — đánh giá UX checkout + thái độ khách.
+ * Track 3 tỉ lệ: no-show, cancel, hết hạn hold.
+ */
+export function useBookingHealth(from: string, to: string, theaterId?: number) {
+  return useQuery({
+    queryKey: ['admin', 'booking-health', from, to, theaterId ?? 'all'],
+    queryFn: async () => {
+      const params: Record<string, string | number> = { from, to }
+      if (theaterId) params.theaterId = theaterId
+      const res = await api.get<ApiResponse<BookingHealth>>(
+        '/api/statistics/booking-health', { params })
+      return res.data.data
+    },
+    enabled: !!from && !!to,
+  })
+}
+
+export interface RevenueBreakdown {
+  ticketRevenue: number
+  snackRevenue: number
+  totalRevenue: number
+  ticketPercent: number
+  snackPercent: number
+}
+
+/** Cơ cấu doanh thu: vé vs đồ ăn — pie chart. */
+export function useRevenueBreakdown(from: string, to: string, theaterId?: number) {
+  return useQuery({
+    queryKey: ['admin', 'revenue-breakdown', from, to, theaterId ?? 'all'],
+    queryFn: async () => {
+      const params: Record<string, string | number> = { from, to }
+      if (theaterId) params.theaterId = theaterId
+      const res = await api.get<ApiResponse<RevenueBreakdown>>(
+        '/api/statistics/revenue-breakdown', { params })
+      return res.data.data
+    },
+    enabled: !!from && !!to,
+  })
+}
+
+export interface RevenueByRoomType {
+  roomType: string  // TWO_D / THREE_D / IMAX / FOUR_DX
+  ticketCount: number
+  revenue: number
+  percent: number
+}
+
+/** Doanh thu theo loại phòng — validate pricing strategy (IMAX vs 2D). */
+export function useRevenueByRoomType(from: string, to: string, theaterId?: number) {
+  return useQuery({
+    queryKey: ['admin', 'revenue-by-room-type', from, to, theaterId ?? 'all'],
+    queryFn: async () => {
+      const params: Record<string, string | number> = { from, to }
+      if (theaterId) params.theaterId = theaterId
+      const res = await api.get<ApiResponse<RevenueByRoomType[]>>(
+        '/api/statistics/revenue-by-room-type', { params })
+      return res.data.data
+    },
+    enabled: !!from && !!to,
+  })
+}

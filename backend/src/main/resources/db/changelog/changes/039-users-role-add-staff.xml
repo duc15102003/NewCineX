@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Lỗi runtime: INSERT users gặp CHECK constraint chk_users_role rejection
+        khi role = 'STAFF' (vd admin tạo nhân viên POS qua endpoint mới
+        POST /api/users).
+
+        Nguyên nhân: migration 008 seed CHECK với 3 role (USER/ADMIN/SUPER_ADMIN).
+        Sau đó Role enum bổ sung STAFF (nhân viên quầy POS + check-in) nhưng
+        QUÊN update CHECK → INSERT STAFF fail "violation of CHECK constraint".
+
+        Pattern y hệt bug 036 (showtime DRAFT) — thêm enum mà quên CHECK.
+        Migration này drop CHECK cũ + tạo lại với 4 giá trị đầy đủ.
+    -->
+
+    <changeSet id="039-drop-old-users-role-check" author="cinex">
+        <sql>ALTER TABLE users DROP CONSTRAINT chk_users_role</sql>
+    </changeSet>
+
+    <changeSet id="039-add-users-role-check-with-staff" author="cinex">
+        <sql>
+            ALTER TABLE users ADD CONSTRAINT chk_users_role
+            CHECK (role IN ('USER', 'STAFF', 'ADMIN', 'SUPER_ADMIN'))
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

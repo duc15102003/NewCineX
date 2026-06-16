@@ -91,6 +91,10 @@ export interface ShowtimeItem {
   effectiveDeluxePrice?: number | null
   appliedRules?: AppliedPricingRule[]
   status: string
+  /** Số ghế còn trống (tổng ghế phòng - ghế HOLDING/BOOKED). BE compute realtime. */
+  availableSeats?: number
+  /** Tổng ghế của phòng — dùng để tính % còn lại. Có thể tính từ availableSeats nếu có totalSeats. */
+  totalSeats?: number
   /** Sau refactor MovieRun: showtime thuộc 1 đợt chiếu cụ thể. */
   movieRunId?: number | null
   runType?: MovieRunType | null
@@ -132,6 +136,13 @@ export interface MovieFilter {
   releaseDateTo?: string
   hasActiveShowtimes?: boolean
   showing?: boolean
+  /**
+   * Lọc phim đủ điều kiện TẠO SUẤT CHIẾU tại {@code theaterId} — phim phải có MovieRun
+   * ACTIVE hoặc UPCOMING tại chi nhánh, KHÔNG đòi showtime sẵn có. Chuẩn rạp CGV/Lotte/BHD.
+   * Dùng cho dropdown phim trong form tạo suất chiếu (đơn lẻ + hàng loạt).
+   * Phải dùng kèm {@code theaterId} (nếu null sẽ bị bỏ qua).
+   */
+  eligibleForShowtime?: boolean
   page?: number
   size?: number
   sort?: string // VD: "rating,desc"

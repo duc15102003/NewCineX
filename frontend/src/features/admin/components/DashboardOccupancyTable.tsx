@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users } from 'lucide-react'
+import { Users, DoorOpen } from 'lucide-react'
 import type { Occupancy } from '@/hooks/useAdmin'
 import { fmtTime } from '@/utils/labels'
 
@@ -50,7 +50,12 @@ export default function DashboardOccupancyTable({ items, date }: Props) {
                   <tr key={o.showtimeId} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
                     <td className="py-3 pr-3 text-white font-mono whitespace-nowrap">{fmtTime(o.startTime)}</td>
                     <td className="py-3 pr-3 text-white truncate max-w-xs">{o.movieTitle}</td>
-                    <td className="py-3 pr-3 text-gray-400 whitespace-nowrap">{o.roomName}</td>
+                    <td className="py-3 pr-3 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-200">
+                        <DoorOpen size={12} className="text-[#ffc107]" />
+                        {o.roomName}
+                      </span>
+                    </td>
                     <td className="py-3 pr-3 text-right text-gray-300 whitespace-nowrap">
                       {o.bookedSeats}/{o.totalSeats}
                     </td>
@@ -71,16 +76,16 @@ export default function DashboardOccupancyTable({ items, date }: Props) {
 }
 
 /**
- * Bar visual + % number. Color thay đổi theo dải:
- * - <30%: xám đỏ (ế, cân nhắc bỏ slot)
- * - 30-70%: vàng (trung bình, ổn)
- * - >70%: xanh (lấp đầy tốt, có thể thêm suất)
+ * Bar visual + % number. Threshold đồng bộ với DashboardKpiCards:
+ * - <30%: đỏ (ế, cân nhắc bỏ khung giờ)
+ * - 30-60%: vàng (trung bình)
+ * - >=60%: xanh (đạt benchmark profit, có thể thêm suất)
  */
 function OccupancyBar({ rate }: { rate: number }) {
   const pct = Math.round(rate)
   let color = 'bg-red-500/60'
   let textColor = 'text-red-400'
-  if (pct >= 70) {
+  if (pct >= 60) {
     color = 'bg-green-500/60'
     textColor = 'text-green-400'
   } else if (pct >= 30) {

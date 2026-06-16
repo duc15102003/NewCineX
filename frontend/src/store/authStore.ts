@@ -2,10 +2,10 @@ import { create } from 'zustand'
 
 interface User {
   username: string
-  /** USER / ADMIN / SUPER_ADMIN — match Role enum BE. */
+  /** USER / STAFF / ADMIN / SUPER_ADMIN — match Role enum BE. */
   role: string
   avatarUrl?: string | null
-  /** Chi nhánh user thuộc về — null cho USER + SUPER_ADMIN. Có id cho branch ADMIN. */
+  /** Chi nhánh user thuộc về — null cho USER + SUPER_ADMIN. Có id cho ADMIN/STAFF (theater-scoped roles). */
   theaterId?: number | null
   theaterName?: string | null
   theaterCity?: string | null
@@ -18,11 +18,15 @@ interface AuthState {
   updateUser: (partial: Partial<User>) => void
   logout: () => void
   isLoggedIn: () => boolean
-  /** Bất kỳ admin nào (branch ADMIN hoặc SUPER_ADMIN). */
+  /** Bất kỳ admin nào (branch ADMIN hoặc SUPER_ADMIN). Dùng cho admin panel access. */
   isAdmin: () => boolean
   isSuperAdmin: () => boolean
   /** Branch ADMIN (có theater_id). */
   isBranchAdmin: () => boolean
+  /** Nhân viên quầy — chỉ thao tác POS + check-in. */
+  isStaff: () => boolean
+  /** Bất kỳ role có thể vào admin panel (STAFF/ADMIN/SUPER_ADMIN). */
+  canEnterAdminPanel: () => boolean
 }
 
 function parseUser(): User | null {
@@ -75,4 +79,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   isSuperAdmin: () => get().user?.role === 'SUPER_ADMIN',
   isBranchAdmin: () => get().user?.role === 'ADMIN' && get().user?.theaterId != null,
+  isStaff: () => get().user?.role === 'STAFF' && get().user?.theaterId != null,
+  canEnterAdminPanel: () => {
+    const role = get().user?.role
+    return role === 'STAFF' || role === 'ADMIN' || role === 'SUPER_ADMIN'
+  },
 }))

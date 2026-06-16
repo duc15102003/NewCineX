@@ -33,7 +33,7 @@ export default function MockPaymentGateway() {
             <ShieldCheck size={24} className="text-[#ffc107]" />
             <h1 className="text-xl font-bold text-white">CineX Pay</h1>
           </div>
-          <p className="text-xs text-gray-500">Cổng thanh toán giả lập — Môi trường Development</p>
+          <p className="text-xs text-gray-500">Cổng thanh toán thử nghiệm</p>
         </div>
 
         {/* Thông tin đơn hàng */}
@@ -78,8 +78,8 @@ export default function MockPaymentGateway() {
         {/* Footer */}
         <div className="bg-[#201b11] border border-white/10 rounded-b-2xl border-t-0 p-4 text-center">
           <p className="text-[10px] text-gray-600">
-            Đây là cổng thanh toán giả lập cho môi trường phát triển.
-            <br />Production sẽ tích hợp VNPay / MoMo thật qua Strategy Pattern.
+            Đây là cổng thanh toán thử nghiệm để demo quy trình đặt vé.
+            <br />Phiên bản chính thức sẽ tích hợp VNPay / MoMo.
           </p>
         </div>
       </div>

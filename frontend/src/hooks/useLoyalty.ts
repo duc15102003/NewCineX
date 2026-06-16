@@ -4,7 +4,7 @@ import type { ApiResponse } from '@/types/auth'
 import type { PageResponse } from '@/types/movie'
 
 export type LoyaltyTier = 'STANDARD' | 'SILVER' | 'GOLD' | 'PLATINUM'
-export type LoyaltyTransactionType = 'EARN' | 'REDEEM' | 'ADJUST'
+export type LoyaltyTransactionType = 'EARN' | 'REDEEM' | 'ADJUST' | 'EXPIRE'
 
 export interface LoyaltyAccount {
   loyaltyPoints: number
@@ -13,6 +13,10 @@ export interface LoyaltyAccount {
   nextTier: LoyaltyTier | null
   nextTierThreshold: number | null
   pointsToNextTier: number | null
+  /** Tổng điểm sẽ hết hạn trong 30 ngày tới — UI hiển thị warning vàng. */
+  pointsExpiringIn30Days: number
+  /** Ngày sớm nhất có batch hết hạn — ISO string, null nếu user không có batch active. */
+  nearestExpiryDate: string | null
 }
 
 export interface LoyaltyTransaction {

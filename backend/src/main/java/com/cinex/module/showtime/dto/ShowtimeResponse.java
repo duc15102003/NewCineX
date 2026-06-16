@@ -1,6 +1,8 @@
 package com.cinex.module.showtime.dto;
 
 import com.cinex.module.movie.entity.AgeRating;
+import com.cinex.module.showtime.entity.ShowtimeFormat;
+import com.cinex.module.showtime.entity.ShowtimeLanguage;
 import com.cinex.module.showtime.entity.ShowtimeStatus;
 import lombok.Builder;
 import lombok.Getter;
@@ -71,7 +73,16 @@ public class ShowtimeResponse {
 
     private ShowtimeStatus status;
 
+    /** Định dạng chiếu (2D/3D/IMAX/4DX/Screen-X) — null cho suất legacy trước migration 035. */
+    private ShowtimeFormat format;
+
+    /** Mode ngôn ngữ (SUB_VI/DUB_VI/ORIGINAL) — null cho suất legacy. */
+    private ShowtimeLanguage languageMode;
+
     private int availableSeats;
+
+    /** Tổng ghế của phòng — FE tính % để hiển thị urgency "Còn X/Y ghế". */
+    private int totalSeats;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

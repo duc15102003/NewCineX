@@ -30,4 +30,17 @@ public class UserFilter {
 
     // Mặc định ẩn user đã xóa mềm; admin có thể bật true
     private Boolean includeDeleted;
+
+    /**
+     * RBAC scope — Service set khi user gọi là branch ADMIN. Filter:
+     * (target.theater_id = scopedTheaterId) OR (target.role = USER AND theater_id IS NULL).
+     * SUPER_ADMIN gọi để null → không scope, xem hết.
+     */
+    private Long scopedTheaterId;
+
+    /**
+     * RBAC scope — true để loại ADMIN + SUPER_ADMIN khỏi kết quả. Branch
+     * ADMIN không được xem tài khoản quản trị khác.
+     */
+    private Boolean excludeAdminRoles;
 }

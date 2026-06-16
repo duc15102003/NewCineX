@@ -34,6 +34,17 @@ export interface Combo {
   savingsPercent: number | null
   createdAt: string
   updatedAt: string
+  /**
+   * BE tính: combo có thật sự bán được không.
+   * True ⇔ active && !ARCHIVED && tất cả snack ingredient còn hàng + không archived.
+   * False → POS auto-hide combo này; admin nhìn thấy badge "Tạm hết".
+   */
+  effectiveAvailable: boolean
+  /**
+   * Danh sách tên snack đang thiếu khiến combo bị block. Empty khi
+   * effectiveAvailable=true. Dùng cho tooltip "Tạm hết do: A, B".
+   */
+  unavailableItems: string[]
 }
 
 export function useAdminCombos(params: { theaterId?: number; page?: number; size?: number } = {}) {

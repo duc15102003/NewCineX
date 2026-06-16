@@ -50,10 +50,18 @@ public class GenreService {
 
     @Transactional
     public GenreResponse createGenre(GenreRequest request) {
-        if (genreRepository.existsByName(request.getName())) {
-            throw new BusinessException(ErrorCode.GENRE_EXISTED,
-                    "Thể loại '" + request.getName() + "' đã tồn tại");
+        // Trim + case-insensitive unique check — tránh "Action" + "action" +
+        // "  Action  " thành 3 record. Industry chuẩn (CGV/Lotte) luôn normalize.
+        String normalized = request.getName().trim();
+        if (normalized.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tên thể loại không được rỗng (chỉ có khoảng trắng)");
         }
+        if (genreRepository.existsByNameIgnoreCase(normalized)) {
+            throw new BusinessException(ErrorCode.GENRE_EXISTED,
+                    "Thể loại '" + normalized + "' đã tồn tại (không phân biệt hoa thường)");
+        }
+        request.setName(normalized);
 
         Genre genre = genreMapper.toEntity(request);
         genreRepository.save(genre);
@@ -66,10 +74,18 @@ public class GenreService {
         Genre genre = genreRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.GENRE_NOT_FOUND));
 
-        if (!genre.getName().equals(request.getName()) && genreRepository.existsByName(request.getName())) {
-            throw new BusinessException(ErrorCode.GENRE_EXISTED,
-                    "Thể loại '" + request.getName() + "' đã tồn tại");
+        String normalized = request.getName().trim();
+        if (normalized.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tên thể loại không được rỗng (chỉ có khoảng trắng)");
         }
+        // Case-insensitive: nếu name mới khác name cũ (bất kể case) → check unique.
+        if (!genre.getName().equalsIgnoreCase(normalized)
+                && genreRepository.existsByNameIgnoreCase(normalized)) {
+            throw new BusinessException(ErrorCode.GENRE_EXISTED,
+                    "Thể loại '" + normalized + "' đã tồn tại (không phân biệt hoa thường)");
+        }
+        request.setName(normalized);
 
         genreMapper.updateEntity(request, genre);
         genreRepository.save(genre);
@@ -129,8 +145,11 @@ public class GenreService {
         };
         long count = movieRepository.count(spec);
         if (count > 0) {
+            // Industry chuẩn (CGV/Lotte): báo số phim đang dùng để admin biết
+            // ảnh hưởng cụ thể, không nói chung chung "có phim".
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                    "Không thể xóa thể loại đang có phim sử dụng");
+                    "Thể loại đang được " + count + " phim sử dụng. " +
+                    "Hãy xoá hoặc đổi thể loại của các phim trước khi xoá thể loại này.");
         }
     }
 

@@ -2,11 +2,16 @@
  * Logic ghép cặp ghế đôi (COUPLE/SWEETBOX) — tách ra utility để SeatMapEditorPage
  * gọn, dễ test, không lẫn UI state.
  *
- * <b>Quy tắc industry (CGV/Lotte/BHD):</b>
- * - Ghế đôi luôn ghép col lẻ ↔ col chẵn kề bên: A1↔A2, A3↔A4, A5↔A6, ...
- * - Cặp KHÔNG được vắt qua lối đi (AISLE), ghế hỏng (BROKEN), ghế chặn (BLOCKED).
- *   Vì 2 người ngồi sẽ bị luồng đi lại chia đôi, hoặc không thể sử dụng.
- * - Phía nào hết cột (ghế lẻ cuối hàng) → không thể ghép → fallback STANDARD.
+ * <b>Quy tắc industry (CGV/Lotte/BHD/Vista Veezi/Cinetixx):</b>
+ * - Default canonical: col lẻ ↔ col chẵn kề bên (A1↔A2, A3↔A4, A5↔A6, ...)
+ * - <b>Fallback hướng ngược lại</b>: nếu canonical partner không tồn tại
+ *   hoặc là lối đi → thử direction còn lại. Ví dụ phòng 13 cột: click A13
+ *   (lẻ, không có A14) → ghép với A12. Phù hợp với cách Vista Veezi cho
+ *   admin pick bất kỳ 2 ghế adjacent.
+ * - Cặp KHÔNG được vắt qua lối đi (AISLE), ghế hỏng (BROKEN), ghế chặn
+ *   (BLOCKED). 2 người ngồi sẽ bị luồng đi lại chia đôi, hoặc không thể
+ *   sử dụng.
+ * - Cả 2 direction đều fail → ghế thật sự đứng lẻ → fallback STANDARD.
  */
 
 import type { SeatItem } from '@/hooks/useAdmin'
@@ -18,11 +23,56 @@ export function isDouble(t: SeatTypeKey): boolean {
   return DOUBLE_TYPES.includes(t)
 }
 
-/** Tìm ghế partner cho COUPLE/SWEETBOX — col lẻ ↔ col chẵn kề bên. */
+/**
+ * Tìm ghế partner cho COUPLE/SWEETBOX — canonical odd-left, fallback ngược.
+ *
+ * <p>Canonical: col lẻ → partner = col+1 (phải); col chẵn → partner = col-1
+ * (trái). Default cho mọi rạp cột chẵn.
+ *
+ * <p>Fallback: nếu canonical partner không tồn tại (cuối hàng cột lẻ) hoặc
+ * là lối đi → thử direction ngược lại. Cho phép ghép 12-13 ở phòng 13 cột.
+ */
 export function getDoublePartner(seat: SeatItem, seats: SeatItem[]): SeatItem | null {
   const isOdd = seat.colNumber % 2 === 1
-  const partnerCol = isOdd ? seat.colNumber + 1 : seat.colNumber - 1
-  return seats.find(s => s.colNumber === partnerCol) ?? null
+  const canonicalCol = isOdd ? seat.colNumber + 1 : seat.colNumber - 1
+  const fallbackCol = isOdd ? seat.colNumber - 1 : seat.colNumber + 1
+
+  const canonical = seats.find(s => s.colNumber === canonicalCol)
+  if (canonical && !canonical.aisle) return canonical
+
+  const fallback = seats.find(s => s.colNumber === fallbackCol)
+  if (fallback && !fallback.aisle) return fallback
+
+  return null
+}
+
+/**
+ * Tìm ghế đang được paired ACTUALLY (cùng type COUPLE/SWEETBOX adjacent).
+ *
+ * <p>Khác {@link getDoublePartner}: getDoublePartner trả CANDIDATE để pair
+ * (bất kỳ neighbor không phải aisle), còn cái này trả MATE THỰC SỰ — đã
+ * cùng type và đang tạo thành cặp. Dùng cho:
+ * <ul>
+ *   <li>Cascade unpair: pair X-Y → unpair Y's previous mate Z</li>
+ *   <li>Unpair flow: click X với STANDARD → tìm đúng mate hiện tại để cũng
+ *       set STANDARD (không dùng canonical vì cặp có thể được pair fallback
+ *       direction)</li>
+ * </ul>
+ *
+ * @param getDisplay function trả về effective type (đã apply pendingChanges)
+ */
+export function findCurrentCouplePartner(
+  seat: SeatItem,
+  rowSeats: SeatItem[],
+  getDisplay: (s: SeatItem) => SeatTypeKey,
+): SeatItem | null {
+  const myType = getDisplay(seat)
+  if (!isDouble(myType)) return null
+  const left = rowSeats.find(s => s.colNumber === seat.colNumber - 1)
+  const right = rowSeats.find(s => s.colNumber === seat.colNumber + 1)
+  if (left && getDisplay(left) === myType) return left
+  if (right && getDisplay(right) === myType) return right
+  return null
 }
 
 /**
@@ -53,24 +103,37 @@ export function findOrphanCouple(
 ): string | null {
   const byId = new Map(allSeats.map(s => [s.id, s]))
 
+  /** Trả về effective type sau khi áp pending. */
+  const effectiveType = (s: SeatItem): SeatTypeKey | 'AISLE' => {
+    const p = pending.get(s.id)
+    if (p) return p
+    if (s.aisle) return 'AISLE'
+    return s.seatType
+  }
+
   for (const [seatId, pendingType] of pending) {
     if (!isDouble(pendingType)) continue
     const seat = byId.get(seatId)
     if (!seat) continue
 
-    const partnerCol = seat.colNumber % 2 === 1 ? seat.colNumber + 1 : seat.colNumber - 1
-    const partner = allSeats.find(s => s.rowLabel === seat.rowLabel && s.colNumber === partnerCol)
+    // Tìm partner ở cả 2 direction (cùng pattern getDoublePartner: canonical
+    // odd-left, fallback ngược). Pair hợp lệ nếu CÓ ÍT NHẤT 1 neighbor cùng
+    // type ở 1 trong 2 hướng.
+    const rowSeats = allSeats.filter(s => s.rowLabel === seat.rowLabel)
+    const left = rowSeats.find(s => s.colNumber === seat.colNumber - 1)
+    const right = rowSeats.find(s => s.colNumber === seat.colNumber + 1)
 
-    if (!partner) {
-      return `Ghế ${seat.seatNumber} không có ghế cặp ở cột ${partnerCol}.`
+    const matchesType = (neighbor: SeatItem | undefined): boolean => {
+      if (!neighbor) return false
+      if (neighbor.aisle) return false
+      return effectiveType(neighbor) === pendingType
     }
-    const partnerPending = pending.get(partner.id)
-    if (partnerPending === pendingType) continue
-    if (partnerPending) {
-      return `Ghế ${seat.seatNumber} (${pendingType}) không khớp với cặp ${partner.seatNumber} (${partnerPending}).`
-    }
-    if (partner.seatType !== pendingType || partner.aisle) {
-      return `Ghế ${seat.seatNumber} không có cặp hợp lệ — ${partner.seatNumber} hiện là ${partner.aisle ? 'lối đi' : partner.seatType}.`
+
+    if (!matchesType(left) && !matchesType(right)) {
+      const reason = !left && !right
+        ? 'không có ghế kề bên'
+        : `cả ${left ? left.seatNumber : 'trái'} và ${right ? right.seatNumber : 'phải'} không cùng loại`
+      return `Ghế ${seat.seatNumber} (${pendingType}) không có cặp hợp lệ — ${reason}.`
     }
   }
   return null

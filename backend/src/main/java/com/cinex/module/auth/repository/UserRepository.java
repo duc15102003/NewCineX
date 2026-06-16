@@ -1,5 +1,6 @@
 package com.cinex.module.auth.repository;
 
+import com.cinex.module.auth.entity.Role;
 import com.cinex.module.auth.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -21,4 +22,10 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     boolean existsByUsername(String username);
 
     boolean existsByEmail(String email);
+
+    /**
+     * Đếm user enabled theo role — dùng để chặn disable/demote SUPER_ADMIN cuối
+     * cùng (tránh lockout hệ thống không ai quản trị tổng).
+     */
+    long countByRoleAndEnabledTrue(Role role);
 }

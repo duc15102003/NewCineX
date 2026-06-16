@@ -10,6 +10,7 @@ import { useTheaterOptions, type Theater } from '@/hooks/useAdminTheaters'
 import { useAuthStore } from '@/store/authStore'
 import type { AdminRoom } from '@/hooks/useAdminRooms'
 import { ROOM_TYPE_LABELS, ROOM_STATUS_LABELS } from '@/utils/labels'
+import { FEATURES } from '@/config/featureFlags'
 import LockedTheaterBadge from './LockedTheaterBadge'
 
 interface RoomFormData {
@@ -88,8 +89,20 @@ export default function RoomFormDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogBody>
+            {editingItem && (
+              <div className="mb-4 rounded-md border border-blue-500/30 bg-blue-500/[0.06] px-3 py-2 text-xs text-blue-200 leading-relaxed">
+                Phòng này hiện có <span className="font-semibold">{editingItem.totalSeats}</span> ghế.{' '}
+                Form này chỉ đổi <span className="font-semibold">thông tin chung</span> (tên, loại, trạng thái).
+                Để thêm/sửa/xoá ghế, đóng form và bấm nút{' '}
+                <span className="font-semibold text-[#ffc107]">"Sơ đồ ghế"</span> trên hàng phòng.
+              </div>
+            )}
             <div className="grid grid-cols-12 gap-4">
-              {(editingItem || theaterLocked) ? (
+              {!FEATURES.multiTheater ? (
+                // Single-theater mode: ẨN toàn bộ UI chi nhánh, vẫn submit
+                // theaterId qua hidden input (lấy từ scopedTheaterId).
+                <input type="hidden" {...register('theaterId', { valueAsNumber: true })} />
+              ) : (editingItem || theaterLocked) ? (
                 <>
                   <LockedTheaterBadge
                     theaterId={editingItem ? editingItem.theaterId : scopedTheaterId}
@@ -139,14 +152,6 @@ export default function RoomFormDialog({
                   ))}
                 </select>
               </div>
-              {editingItem && (
-                <div className="col-span-12">
-                  <label className="text-sm text-gray-400 mb-1.5 block">Tổng số ghế</label>
-                  <div className="h-10 flex items-center px-3 rounded-lg border border-white/5 bg-white/5 text-gray-400 text-sm">
-                    {editingItem.totalSeats} ghế <span className="text-gray-600 ml-2">(cập nhật qua Tạo sơ đồ ghế)</span>
-                  </div>
-                </div>
-              )}
             </div>
           </DialogBody>
           <DialogFooter className="gap-2">

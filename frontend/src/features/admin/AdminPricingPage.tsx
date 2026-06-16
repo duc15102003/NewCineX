@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react'
-import { Plus, Globe2, Building2, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Plus, Globe2, Building2, Lock, X, Percent } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
 import FilterDrawer, { FilterTrigger, FilterField } from '@/components/common/FilterDrawer'
-import TheaterGroupHeaderRow from '@/components/admin/TheaterGroupHeaderRow'
 
 import PricingRuleFormDialog from './components/PricingRuleFormDialog'
 
@@ -16,22 +15,16 @@ import {
   useAdminPricingRules, useBulkArchivePricingRules, useBulkRestorePricingRules,
 } from '@/hooks/useAdminPricingRules'
 import type { PricingRule, PricingRuleType } from '@/hooks/useAdminPricingRules'
+import { RULE_TYPE_LABELS, RULE_TYPE_HINTS } from './components/pricing/types'
 import { fmtDate } from '@/utils/labels'
 import { PRICING_RULE_TYPE_COLORS as RULE_TYPE_COLORS } from '@/utils/colors'
 import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
-import { groupByTheater } from '@/utils/groupByTheater'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const SELECT_CLS =
   'w-full h-10 rounded-md border border-white/10 bg-[#2a2317] text-white text-sm px-3 focus:outline-none focus:ring-1 focus:ring-[#ffc107]'
-
-const RULE_TYPE_LABELS: Record<PricingRuleType, string> = {
-  DAY_OF_WEEK: 'Theo thứ trong tuần',
-  HOUR_RANGE: 'Theo khung giờ',
-  DATE_RANGE: 'Theo khoảng ngày',
-  COMPOSITE: 'Kết hợp (AND)',
-}
 
 const DAY_LABELS: Record<string, string> = {
   MONDAY: 'T2', TUESDAY: 'T3', WEDNESDAY: 'T4', THURSDAY: 'T5',
@@ -74,6 +67,7 @@ function formatMultiplier(m: number): string {
 }
 
 export default function AdminPricingPage() {
+  usePageTitle('Quy tắc giá')
   const [keyword, setKeyword] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -133,26 +127,6 @@ export default function AdminPricingPage() {
     return n
   }, [appliedFilter])
 
-  // Grouped view khi SUPER_ADMIN xem "Tất cả chi nhánh"
-  const showGrouped = !adminTheater && !branchLocked
-  const globalRules = useMemo(
-    () => (showGrouped ? rules.filter(r => r.theaterId == null) : []),
-    [rules, showGrouped],
-  )
-  const groupedRules = useMemo(
-    () => (showGrouped ? groupByTheater(rules.filter(r => r.theaterId != null)) : null),
-    [rules, showGrouped],
-  )
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
-  const [globalCollapsed, setGlobalCollapsed] = useState(false)
-  const toggleGroup = (theaterId: number) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      next.has(theaterId) ? next.delete(theaterId) : next.add(theaterId)
-      return next
-    })
-  }
-
   const bulkArchiveMut = useBulkArchivePricingRules()
   const bulkRestoreMut = useBulkRestorePricingRules()
 
@@ -161,6 +135,11 @@ export default function AdminPricingPage() {
     setDialogOpen(true)
   }
   function openEdit(rule: PricingRule) {
+    // BRANCH_ADMIN không sửa được rule GLOBAL (SUPER_ADMIN tạo toàn hệ thống).
+    if (branchLocked && rule.theaterId == null) {
+      toast.error('Quy tắc giá toàn hệ thống — chỉ Quản trị tổng được sửa')
+      return
+    }
     setEditingItem(rule)
     setDialogOpen(true)
   }
@@ -204,6 +183,7 @@ export default function AdminPricingPage() {
 
   const renderRuleRow = (r: PricingRule, idx: number) => {
     const isArchived = r.storageState === 'ARCHIVED'
+    const isReadOnly = branchLocked && r.theaterId == null   // BRANCH_ADMIN + rule GLOBAL
     return (
       <TableRow key={r.id} className={`border-[#3f382d] hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
         <TableCell className="whitespace-nowrap">
@@ -212,24 +192,37 @@ export default function AdminPricingPage() {
         </TableCell>
         <TableCell className="text-gray-500 text-sm whitespace-nowrap">{idx + 1}</TableCell>
         <TableCell className="whitespace-nowrap">
-          <span onClick={() => openEdit(r)} className="text-[#ffc107] hover:underline cursor-pointer font-medium font-mono text-sm block">
-            {r.code}
+          {/* Tên rule là cái admin đọc — bold, hover-underline. Code là ID kỹ
+              thuật (dùng tham chiếu trong báo cáo) → subtitle nhỏ gray mono. */}
+          <span onClick={() => openEdit(r)}
+            className={`text-sm font-semibold block ${isReadOnly
+              ? 'text-gray-300 cursor-not-allowed inline-flex items-center gap-1'
+              : 'text-amber-50 hover:text-[#ffc107] hover:underline cursor-pointer'}`}
+            title={isReadOnly ? 'Quy tắc toàn hệ thống — chỉ Quản trị tổng sửa được' : 'Bấm để sửa quy tắc giá này'}>
+            {r.name}
+            {isReadOnly && <Lock size={11} className="text-gray-500" />}
           </span>
-          <span className="text-xs text-gray-400">{r.name}</span>
+          <span className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">
+            Mã: {r.code}
+          </span>
         </TableCell>
+        {!branchLocked && (
+          <TableCell className="whitespace-nowrap">
+            {r.theaterId == null ? (
+              <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border bg-[#ffc107]/10 text-[#ffc107] border-[#ffc107]/30">
+                <Globe2 size={12} /> Toàn hệ thống
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border bg-blue-500/10 text-blue-400 border-blue-500/30">
+                <Building2 size={12} /> {r.theaterName}
+              </span>
+            )}
+          </TableCell>
+        )}
         <TableCell className="whitespace-nowrap">
-          {r.theaterId == null ? (
-            <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border bg-[#ffc107]/10 text-[#ffc107] border-[#ffc107]/30">
-              <Globe2 size={12} /> Toàn hệ
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border bg-blue-500/10 text-blue-400 border-blue-500/30">
-              <Building2 size={12} /> {r.theaterName}
-            </span>
-          )}
-        </TableCell>
-        <TableCell className="whitespace-nowrap">
-          <span className={`text-xs px-2 py-1 rounded-md border ${RULE_TYPE_COLORS[r.ruleType]}`}>
+          <span
+            className={`text-xs px-2 py-1 rounded-md border cursor-help ${RULE_TYPE_COLORS[r.ruleType]}`}
+            title={RULE_TYPE_HINTS[r.ruleType]}>
             {RULE_TYPE_LABELS[r.ruleType]}
           </span>
         </TableCell>
@@ -335,7 +328,7 @@ export default function AdminPricingPage() {
               </TableHead>
               <TableHead className="text-gray-400 w-12">#</TableHead>
               <TableHead className="text-gray-400">Mã / Tên</TableHead>
-              <TableHead className="text-gray-400">Phạm vi</TableHead>
+              {!branchLocked && <TableHead className="text-gray-400">Phạm vi</TableHead>}
               <TableHead className="text-gray-400">Loại</TableHead>
               <TableHead className="text-gray-400">Điều kiện</TableHead>
               <TableHead className="text-gray-400">Hệ số</TableHead>
@@ -345,48 +338,18 @@ export default function AdminPricingPage() {
           <TableBody>
             {rules.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-gray-500 py-10">
-                  {keyword || activeFilterCount > 0 ? 'Không tìm thấy rule nào' : 'Chưa có rule nào'}
+                <TableCell colSpan={branchLocked ? 7 : 8} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2 text-gray-500">
+                    <Percent size={32} className="text-gray-600" />
+                    <p className="text-sm">{keyword || activeFilterCount > 0 ? 'Không tìm thấy rule khớp bộ lọc' : 'Chưa có quy tắc giá nào'}</p>
+                    {!keyword && activeFilterCount === 0 && (
+                      <p className="text-xs text-gray-600 max-w-sm leading-relaxed">Quy tắc giá điều chỉnh tự động theo khung giờ / ngày / ngày lễ.</p>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             )}
-            {showGrouped ? (
-              <>
-                {globalRules.length > 0 && (
-                  <React.Fragment key="group-global">
-                    <TheaterGroupHeaderRow
-                      collapsed={globalCollapsed}
-                      onToggle={() => setGlobalCollapsed(c => !c)}
-                      theaterName="Rule toàn hệ thống"
-                      theaterCity="Áp dụng mặc định mọi rạp"
-                      itemCount={globalRules.length}
-                      itemLabel="rule"
-                      colSpan={8}
-                    />
-                    {!globalCollapsed && globalRules.map((r, idx) => renderRuleRow(r, idx))}
-                  </React.Fragment>
-                )}
-                {groupedRules && groupedRules.map((group) => {
-                  const isCollapsed = collapsedGroups.has(group.theaterId)
-                  return (
-                    <React.Fragment key={`group-${group.theaterId}`}>
-                      <TheaterGroupHeaderRow
-                        collapsed={isCollapsed}
-                        onToggle={() => toggleGroup(group.theaterId)}
-                        theaterName={group.theaterName}
-                        theaterCity={group.theaterCity}
-                        itemCount={group.items.length}
-                        itemLabel="rule"
-                        colSpan={8}
-                      />
-                      {!isCollapsed && group.items.map((r, idx) => renderRuleRow(r, idx))}
-                    </React.Fragment>
-                  )
-                })}
-              </>
-            ) : (
-              rules.map((r, idx) => renderRuleRow(r, idx))
-            )}
+            {rules.map((r, idx) => renderRuleRow(r, idx))}
           </TableBody>
         </Table>
       </div>

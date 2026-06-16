@@ -55,4 +55,17 @@ public class MovieFilter {
 
     /** Alias của {@code showing} — đặt cho rõ nghĩa khi FE gọi (cả 2 đều OR-merge). */
     private Boolean hasActiveShowtimes;
+
+    /**
+     * Lọc phim đủ điều kiện TẠO SUẤT CHIẾU tại {@code theaterId} — chuẩn rạp CGV/Lotte/BHD.
+     *
+     * <p>Khác biệt với {@code theaterId} mặc định: filter mặc định ({@code hasShowtimesAtTheater})
+     * yêu cầu phim đã có ≥1 showtime tại CN (dùng cho filter LIST showtime hiện có).
+     * Còn {@code eligibleForShowtime} yêu cầu phim có MovieRun ACTIVE/UPCOMING tại CN,
+     * KHÔNG đòi showtime sẵn có — đúng nghĩa "phim đang/sắp được phép xếp suất tại CN này".
+     *
+     * <p>Dùng cho: dropdown phim trong form tạo suất chiếu (đơn lẻ + hàng loạt).
+     * Bắt buộc dùng kèm {@code theaterId} (nếu null sẽ bị bỏ qua).
+     */
+    private Boolean eligibleForShowtime;
 }

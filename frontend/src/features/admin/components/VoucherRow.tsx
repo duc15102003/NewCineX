@@ -1,5 +1,5 @@
 import { TableCell, TableRow } from '@/components/ui/table'
-import { Percent, Banknote, Globe2, Building2 } from 'lucide-react'
+import { Percent, Banknote, Globe2, Building2, Lock } from 'lucide-react'
 import { label, DISCOUNT_TYPE_LABELS, STORAGE_STATE_LABELS, fmtDate, fmtVnd } from '@/utils/labels'
 import { STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
 import type { AdminVoucher } from '@/hooks/useAdminVouchers'
@@ -13,12 +13,17 @@ export interface VoucherRowProps {
   voucher: AdminVoucher
   index: number
   selected: boolean
+  /** Hiển thị cột "Phạm vi" — chỉ true khi SUPER_ADMIN xem. BRANCH_ADMIN
+   *  không cần (chỉ thấy voucher applicable cho CN mình). */
+  showScope: boolean
   onToggleSelect: (id: number) => void
   onEdit: (v: AdminVoucher) => void
 }
 
-/** Row trong bảng AdminVoucherPage — code, scope, discount, usage, expiry. */
-export default function VoucherRow({ voucher: v, index, selected, onToggleSelect, onEdit }: VoucherRowProps) {
+/** Row trong bảng AdminVoucherPage — code, scope, discount, usage, expiry.
+ *  Voucher GLOBAL hiển thị icon Lock cho BRANCH_ADMIN biết không sửa được. */
+export default function VoucherRow({ voucher: v, index, selected, showScope, onToggleSelect, onEdit }: VoucherRowProps) {
+  const isReadOnly = !showScope && v.theaterId == null   // BRANCH_ADMIN + voucher GLOBAL
   return (
     <TableRow className="border-[#3f382d] hover:bg-white/5 group">
       <TableCell className="whitespace-nowrap">
@@ -28,21 +33,27 @@ export default function VoucherRow({ voucher: v, index, selected, onToggleSelect
       <TableCell className="text-gray-500 text-sm whitespace-nowrap">{index + 1}</TableCell>
       <TableCell className="whitespace-nowrap">
         <span onClick={() => onEdit(v)}
-          className="text-[#ffc107] hover:underline cursor-pointer font-medium">
+          className={`font-medium ${isReadOnly
+            ? 'text-gray-400 cursor-not-allowed inline-flex items-center gap-1'
+            : 'text-[#ffc107] hover:underline cursor-pointer'}`}
+          title={isReadOnly ? 'Voucher toàn hệ thống — chỉ SUPER_ADMIN sửa được' : ''}>
           {v.code}
+          {isReadOnly && <Lock size={11} className="text-gray-500" />}
         </span>
       </TableCell>
-      <TableCell className="whitespace-nowrap">
-        {v.theaterId == null ? (
-          <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border bg-[#ffc107]/10 text-[#ffc107] border-[#ffc107]/30">
-            <Globe2 size={12} /> Toàn hệ thống
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border bg-blue-500/10 text-blue-400 border-blue-500/30">
-            <Building2 size={12} /> {v.theaterName}
-          </span>
-        )}
-      </TableCell>
+      {showScope && (
+        <TableCell className="whitespace-nowrap">
+          {v.theaterId == null ? (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border bg-[#ffc107]/10 text-[#ffc107] border-[#ffc107]/30">
+              <Globe2 size={12} /> Toàn hệ thống
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border bg-blue-500/10 text-blue-400 border-blue-500/30">
+              <Building2 size={12} /> {v.theaterName}
+            </span>
+          )}
+        </TableCell>
+      )}
       <TableCell className="text-gray-400 text-sm whitespace-nowrap">{v.description}</TableCell>
       <TableCell className="whitespace-nowrap">
         {v.discountType === 'PERCENTAGE' ? (

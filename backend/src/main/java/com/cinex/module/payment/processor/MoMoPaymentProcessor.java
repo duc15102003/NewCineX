@@ -1,5 +1,7 @@
 package com.cinex.module.payment.processor;
 
+import com.cinex.common.exception.BusinessException;
+import com.cinex.common.exception.ErrorCode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -69,12 +71,35 @@ public class MoMoPaymentProcessor implements PaymentProcessor {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
+    /**
+     * Giới hạn cứng MoMo theo tài liệu chính thức:
+     * https://developers.momo.vn/v3/vi/docs/payment/api/wallet/onetime
+     * Min 10.000đ / Max 50.000.000đ per transaction. Validate trước khi gọi API
+     * để báo lỗi UX rõ thay vì để MoMo reject với code 22 generic.
+     */
+    private static final long MOMO_MIN_AMOUNT = 10_000L;
+    private static final long MOMO_MAX_AMOUNT = 50_000_000L;
+
     @Override
     public String createPayment(String transactionCode, BigDecimal amount, String description) {
+        long amountLong = amount.longValue();
+        // Pre-check ngưỡng MoMo — báo lỗi nghiệp vụ rõ ràng thay vì throw từ
+        // network call. User thấy message hành động được (đổi payment method).
+        if (amountLong < MOMO_MIN_AMOUNT) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "MoMo chỉ thanh toán đơn từ " + String.format("%,d", MOMO_MIN_AMOUNT)
+                            + "đ trở lên. Đơn hiện tại " + String.format("%,d", amountLong)
+                            + "đ — vui lòng chọn phương thức Tiền mặt tại quầy.");
+        }
+        if (amountLong > MOMO_MAX_AMOUNT) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "MoMo chỉ thanh toán đơn ≤ " + String.format("%,d", MOMO_MAX_AMOUNT)
+                            + "đ. Đơn hiện tại " + String.format("%,d", amountLong)
+                            + "đ — vui lòng chọn phương thức Tiền mặt tại quầy.");
+        }
         try {
             String requestId = UUID.randomUUID().toString();
             String orderId = transactionCode;
-            long amountLong = amount.longValue();
             String extraData = "";
             // requestType cho phép chọn UI thanh toán trên MoMo sandbox:
             //   - "payWithMethod" → hiện 3 options: Ví MoMo + Thẻ ATM + VISA/Master/JCB

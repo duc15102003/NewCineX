@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Bug: showtime hiển thị giá tier (VIP/COUPLE/SWEETBOX/DELUXE) cho phòng
+        không có loại ghế đó. VD: phòng IMAX (chỉ STANDARD+VIP) vẫn lưu
+        couple_price/sweetbox_price/deluxe_price khác null → admin nhìn list
+        thấy 5 dòng giá thay vì 2.
+
+        Nguyên nhân:
+          - resolveTierPrice() trong ShowtimeService cũ ưu tiên giá admin nhập
+            kể cả khi phòng không có seat type tương ứng (đã fix ở code).
+          - Auto-schedule cũ có thể đã set sẵn giá cho mọi tier khi admin select
+            nhiều phòng mixed seat type (data đã persist).
+
+        Migration này NULL các tier không áp dụng cho dữ liệu cũ.
+        Tier áp dụng = tier mà phòng có seat AVAILABLE + storage_state=ACTIVE.
+    -->
+
+    <changeSet id="037-null-vip-price-orphan" author="cinex">
+        <sql>
+            UPDATE st SET st.vip_price = NULL
+            FROM showtimes st
+            WHERE st.vip_price IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM seats s
+                  WHERE s.room_id = st.room_id
+                    AND s.seat_type = 'VIP'
+                    AND s.storage_state = 'ACTIVE'
+                    AND s.status = 'AVAILABLE'
+              )
+        </sql>
+    </changeSet>
+
+    <changeSet id="037-null-couple-price-orphan" author="cinex">
+        <sql>
+            UPDATE st SET st.couple_price = NULL
+            FROM showtimes st
+            WHERE st.couple_price IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM seats s
+                  WHERE s.room_id = st.room_id
+                    AND s.seat_type = 'COUPLE'
+                    AND s.storage_state = 'ACTIVE'
+                    AND s.status = 'AVAILABLE'
+              )
+        </sql>
+    </changeSet>
+
+    <changeSet id="037-null-sweetbox-price-orphan" author="cinex">
+        <sql>
+            UPDATE st SET st.sweetbox_price = NULL
+            FROM showtimes st
+            WHERE st.sweetbox_price IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM seats s
+                  WHERE s.room_id = st.room_id
+                    AND s.seat_type = 'SWEETBOX'
+                    AND s.storage_state = 'ACTIVE'
+                    AND s.status = 'AVAILABLE'
+              )
+        </sql>
+    </changeSet>
+
+    <changeSet id="037-null-deluxe-price-orphan" author="cinex">
+        <sql>
+            UPDATE st SET st.deluxe_price = NULL
+            FROM showtimes st
+            WHERE st.deluxe_price IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM seats s
+                  WHERE s.room_id = st.room_id
+                    AND s.seat_type = 'DELUXE'
+                    AND s.storage_state = 'ACTIVE'
+                    AND s.status = 'AVAILABLE'
+              )
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

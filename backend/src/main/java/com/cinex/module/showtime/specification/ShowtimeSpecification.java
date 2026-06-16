@@ -45,6 +45,12 @@ public class ShowtimeSpecification {
         if (filter.getStatus() != null) {
             spec = spec.and(hasStatus(filter.getStatus()));
         }
+        // excludeDraft=true → loại showtime DRAFT khỏi kết quả. Service tự set
+        // cờ này cho mọi caller không phải admin/staff (chuẩn Vista/Veezi publish
+        // workflow — DRAFT chỉ visible nội bộ).
+        if (Boolean.TRUE.equals(filter.getExcludeDraft())) {
+            spec = spec.and(notDraft());
+        }
 
         // ==== Spec mở rộng (J3) ====
         if (filter.getStartTimeFrom() != null || filter.getStartTimeTo() != null) {
@@ -110,6 +116,12 @@ public class ShowtimeSpecification {
                         cb.isNull(root.get("storageState")),
                         cb.notEqual(root.get("storageState"), StorageState.ARCHIVED)
                 );
+    }
+
+    /** Loại DRAFT — public-facing list KHÔNG được show suất chưa publish. */
+    public static Specification<Showtime> notDraft() {
+        return (root, query, cb) ->
+                cb.notEqual(root.get("status"), ShowtimeStatus.DRAFT);
     }
 
     // ============================================================

@@ -8,6 +8,7 @@ import com.cinex.module.booking.repository.BookingRepository;
 import com.cinex.module.room.entity.Room;
 import com.cinex.module.room.repository.RoomRepository;
 import com.cinex.module.seat.dto.BulkUpdateSeatRequest;
+import com.cinex.module.seat.dto.ResizeSeatGridRequest;
 import com.cinex.module.seat.dto.SeatFilter;
 import com.cinex.module.seat.dto.RoomSeatTypeSummaryResponse;
 import com.cinex.module.seat.dto.SeatGenerateRequest;
@@ -141,13 +142,7 @@ public class SeatService {
             request = SeatLayoutPreset.forRoomType(rt);
         }
 
-        // Business rule: KHÔNG regenerate khi có booking active
-        boolean hasActiveBooking = bookingRepository.existsByShowtime_Room_IdAndStatusIn(
-                roomId, List.of(BookingStatus.HOLDING, BookingStatus.CONFIRMED));
-        if (hasActiveBooking) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                    "Không thể tạo lại sơ đồ ghế khi phòng đang có booking. Hãy đợi tất cả booking kết thúc hoặc cancel trước.");
-        }
+        requireNoActiveBookings(roomId, "tạo lại sơ đồ ghế");
 
         // CUSTOM LAYOUT path — iterate matrix trực tiếp từ FE visual editor
         if (request.getCustomLayout() != null && !request.getCustomLayout().isEmpty()) {
@@ -235,17 +230,13 @@ public class SeatService {
             // Sanitize ghế đôi không có partner đúng type → STANDARD.
             // Partner tính theo block giữa các aisle (chuẩn industry CGV/Lotte/BHD):
             // ghế đôi vật lý chiếm 2 chỗ liền nhau trong cùng 1 dải ghế, KHÔNG vắt qua lối đi.
+            // findCouplePartnerInBlock đã verify type match nội bộ → return null
+            // nghĩa là KHÔNG có neighbor cùng type ở bất kỳ direction nào.
             if (!isAisle && (type == SeatType.COUPLE || type == SeatType.SWEETBOX)) {
-                Integer partnerCol = findCouplePartnerInBlock(cell.getRow(), cell.getCol(), index);
+                Integer partnerCol = findCouplePartnerInBlock(cell.getRow(), cell.getCol(), index, type);
                 if (partnerCol == null) {
                     type = SeatType.STANDARD;
                     fallbackCount++;
-                } else {
-                    var partner = index.get(cell.getRow() + ":" + partnerCol);
-                    if (partner == null || partner.getSeatType() != type) {
-                        type = SeatType.STANDARD;
-                        fallbackCount++;
-                    }
                 }
             }
 
@@ -276,6 +267,91 @@ public class SeatService {
     }
 
     /**
+     * Resize lưới ghế — preserve các ghế hiện có (id stable), chỉ thêm/bớt
+     * ở biên (rows ở dưới, cols ở phải).
+     *
+     * <p>Khác với {@link #generateSeats}: KHÔNG soft-delete toàn bộ + recreate
+     * (mất id, mất customization, vỡ booking lịch sử). Chỉ tác động đúng các
+     * row/col bị thay đổi.
+     *
+     * <p>Quy tắc:
+     * <ul>
+     *   <li>Active booking (HOLDING/CONFIRMED) → block 100% (giống generate).
+     *   <li>Shrink rows/cols → soft-delete (ARCHIVED) các seat ngoài biên mới.
+     *       Booking lịch sử (CHECKED_IN/CANCELLED) vẫn ref được seat id.
+     *   <li>Grow rows/cols → insert STANDARD/AVAILABLE seats, admin dùng
+     *       editor để đổi loại sau.
+     * </ul>
+     */
+    @Transactional
+    public SeatMapResponse resizeGrid(Long roomId, ResizeSeatGridRequest request) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
+
+        requireNoActiveBookings(roomId, "đổi kích thước sơ đồ ghế");
+
+        int newRows = request.getRows();
+        int newCols = request.getCols();
+
+        List<Seat> existing = seatRepository.findByRoomIdAndStorageStateOrderByRowLabelAscColNumberAsc(
+                roomId, StorageState.ACTIVE);
+
+        // Soft-delete seats nằm ngoài biên mới: row > newRows hoặc col > newCols
+        List<Seat> toDelete = new ArrayList<>();
+        List<Seat> toKeep = new ArrayList<>();
+        for (Seat s : existing) {
+            int rowIdx = s.getRowLabel().charAt(0) - 'A' + 1;       // A=1, B=2, ...
+            if (rowIdx > newRows || s.getColNumber() > newCols) {
+                toDelete.add(s);
+            } else {
+                toKeep.add(s);
+            }
+        }
+        if (!toDelete.isEmpty()) {
+            toDelete.forEach(s -> s.setStorageState(StorageState.ARCHIVED));
+            seatRepository.saveAll(toDelete);
+        }
+
+        // Index ghế còn lại theo (row, col) để biết slot nào cần insert mới
+        Set<String> keepKeys = toKeep.stream()
+                .map(s -> s.getRowLabel() + ":" + s.getColNumber())
+                .collect(Collectors.toSet());
+
+        // Grow: insert seats ở các (row, col) chưa có trong biên mới
+        List<Seat> toInsert = new ArrayList<>();
+        for (int rowIdx = 0; rowIdx < newRows; rowIdx++) {
+            String rowLabel = String.valueOf((char) ('A' + rowIdx));
+            for (int col = 1; col <= newCols; col++) {
+                String key = rowLabel + ":" + col;
+                if (keepKeys.contains(key)) continue;
+                toInsert.add(Seat.builder()
+                        .room(room)
+                        .rowLabel(rowLabel)
+                        .colNumber(col)
+                        .seatNumber(rowLabel + col)
+                        .seatType(SeatType.STANDARD)
+                        .status(SeatStatus.AVAILABLE)
+                        .aisle(false)
+                        .build());
+            }
+        }
+        if (!toInsert.isEmpty()) {
+            seatRepository.saveAll(toInsert);
+        }
+
+        // Update room.totalSeats — chỉ đếm ghế thật bán được (không aisle/blocked)
+        int realSeatCount = (int) toKeep.stream()
+                .filter(s -> !s.isAisle() && s.getStatus() != SeatStatus.BLOCKED)
+                .count() + toInsert.size();
+        room.setTotalSeats(realSeatCount);
+        roomRepository.save(room);
+
+        log.info("Resized room {} to {}x{}: -{} +{} = {} bookable",
+                room.getName(), newRows, newCols, toDelete.size(), toInsert.size(), realSeatCount);
+        return getSeatMap(roomId);
+    }
+
+    /**
      * Resolve COUPLE vs STANDARD cho 1 col trong couple row, theo block giữa các aisle.
      *
      * <p>Trong block width N: nếu N lẻ, ghế cuối cùng (positionInBlock == N) không có
@@ -297,16 +373,25 @@ public class SeatService {
      *
      * <p>Thuật toán: trong cùng row, mở rộng trái-phải từ {@code col} đến khi gặp
      * AISLE hoặc hết grid → xác định block. Trong block, vị trí thứ N (1-indexed):
-     * lẻ → partner = col+1, chẵn → partner = col-1. Nếu partner ra ngoài block (block
-     * lẻ ghế, col đứng cuối) → return null (caller fallback STANDARD).
+     * lẻ → canonical partner = col+1, chẵn → canonical partner = col-1.
+     *
+     * <p><b>Fallback hướng ngược lại</b> nếu canonical partner không có cùng
+     * sourceType. Cho phép admin set 12-13 ở phòng 13 cột — pattern Vista
+     * Veezi / Cinetixx (admin pick bất kỳ 2 ghế adjacent).
      *
      * <p>Khác parity tuyệt đối: với row có aisle cột 3, dải [4..9] sẽ pair
-     * (4,5)(6,7)(8,9) — không phải (3,4)(5,6)... vắt qua aisle.
+     * (4,5)(6,7)(8,9) — không vắt qua aisle.
+     *
+     * @param sourceType loại cặp đang xét (COUPLE / SWEETBOX). Partner chỉ
+     *                   match khi cùng sourceType.
+     * @return col của partner hợp lệ, hoặc null nếu cả canonical + fallback
+     *         đều không match (ghế thật sự đứng lẻ → caller fallback STANDARD).
      */
     private Integer findCouplePartnerInBlock(
             String rowLabel,
             int col,
-            java.util.Map<String, SeatGenerateRequest.CustomLayoutCell> index) {
+            java.util.Map<String, SeatGenerateRequest.CustomLayoutCell> index,
+            SeatType sourceType) {
         int leftBound = col;
         while (leftBound > 1) {
             var prev = index.get(rowLabel + ":" + (leftBound - 1));
@@ -321,9 +406,21 @@ public class SeatService {
         }
         int posInBlock = col - leftBound + 1;
         boolean isOddInBlock = posInBlock % 2 == 1;
-        int partnerCol = isOddInBlock ? col + 1 : col - 1;
-        if (partnerCol < leftBound || partnerCol > rightBound) return null;
-        return partnerCol;
+        int canonicalCol = isOddInBlock ? col + 1 : col - 1;
+        int fallbackCol = isOddInBlock ? col - 1 : col + 1;
+        if (canonicalCol >= leftBound && canonicalCol <= rightBound) {
+            var c = index.get(rowLabel + ":" + canonicalCol);
+            if (c != null && !Boolean.TRUE.equals(c.getAisle()) && c.getSeatType() == sourceType) {
+                return canonicalCol;
+            }
+        }
+        if (fallbackCol >= leftBound && fallbackCol <= rightBound) {
+            var f = index.get(rowLabel + ":" + fallbackCol);
+            if (f != null && !Boolean.TRUE.equals(f.getAisle()) && f.getSeatType() == sourceType) {
+                return fallbackCol;
+            }
+        }
+        return null;
     }
 
     /** Validate ranges + boundary của tất cả zone trong request. */
@@ -369,6 +466,42 @@ public class SeatService {
         if (request.getDeluxeRows() != null) {
             for (String r : request.getDeluxeRows())
                 validateRow(r, maxRowChar, maxRow, "Deluxe row");
+        }
+
+        // Couple × Deluxe rows mutually exclusive — 1 hàng không vừa Couple
+        // vừa Deluxe (semantic conflict, resolveSeatType sẽ ưu tiên Deluxe →
+        // user confused vì khai báo Couple bị bỏ qua).
+        if (request.getCoupleRows() != null && request.getDeluxeRows() != null) {
+            Set<String> overlap = new java.util.HashSet<>(request.getCoupleRows());
+            overlap.retainAll(request.getDeluxeRows());
+            if (!overlap.isEmpty()) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Hàng " + String.join(", ", overlap) + " không thể vừa là Couple vừa là Deluxe — chọn 1 loại");
+            }
+        }
+
+        // Handicap × Aisle cols overlap — vị trí khuyết tật là ghế thật,
+        // không thể trùng cột lối đi (walkway không có ghế).
+        if (request.getHandicapPositions() != null && request.getAisleCols() != null) {
+            for (var pos : request.getHandicapPositions()) {
+                if (request.getAisleCols().contains(pos.getCol())) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                            "Vị trí khuyết tật " + pos.getRow() + pos.getCol() +
+                            " trùng với cột lối đi " + pos.getCol() + " — chọn vị trí khác");
+                }
+            }
+        }
+
+        // Blocked × Aisle cols overlap — ghế chặn là ghế thật bị chặn không
+        // bán, không thể trùng cột lối đi.
+        if (request.getBlockedPositions() != null && request.getAisleCols() != null) {
+            for (var pos : request.getBlockedPositions()) {
+                if (request.getAisleCols().contains(pos.getCol())) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                            "Vị trí chặn " + pos.getRow() + pos.getCol() +
+                            " trùng với cột lối đi " + pos.getCol() + " — chọn vị trí khác");
+                }
+            }
         }
     }
 
@@ -446,6 +579,7 @@ public class SeatService {
     public SeatResponse updateSeat(Long seatId, UpdateSeatRequest request) {
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SEAT_NOT_FOUND));
+        requireNoActiveBookings(seat.getRoom().getId(), "sửa ghế");
 
         if (request.getSeatType() != null) {
             seat.setSeatType(request.getSeatType());
@@ -460,6 +594,29 @@ public class SeatService {
     }
 
     /**
+     * Business rule chuẩn industry (CGV / Lotte / Vista Veezi): khi phòng có
+     * booking HOLDING hoặc CONFIRMED → KHÔNG cho thay đổi sơ đồ ghế. Lý do:
+     * <ul>
+     *   <li>Đổi loại ghế (STANDARD → VIP) làm khách đã đặt phải trả phụ phí
+     *       bất ngờ — vi phạm "what you see is what you pay"</li>
+     *   <li>Đổi aisle / blocked / broken làm khách đến rạp không tìm thấy ghế</li>
+     *   <li>Resize / xoá ghế làm orphan booking → seat_booking ref null</li>
+     * </ul>
+     *
+     * <p>Admin phải đợi tất cả booking HOLDING expire hoặc CONFIRMED hoàn thành
+     * (CHECKED_IN / CANCELLED / NO_SHOW) trước khi sửa.
+     */
+    private void requireNoActiveBookings(Long roomId, String action) {
+        boolean hasActive = bookingRepository.existsByShowtime_Room_IdAndStatusIn(
+                roomId, List.of(BookingStatus.HOLDING, BookingStatus.CONFIRMED));
+        if (hasActive) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Không thể " + action + " khi phòng đang có booking đang giữ hoặc đã thanh toán. " +
+                    "Hãy đợi tất cả booking kết thúc hoặc cancel trước.");
+        }
+    }
+
+    /**
      * (ADMIN) Bulk update — Seat Map Editor support 3 dimension độc lập:
      * <ul>
      *   <li>{@code seatType} (STANDARD/VIP/COUPLE/SWEETBOX/DELUXE/HANDICAP)
@@ -471,6 +628,7 @@ public class SeatService {
      */
     @Transactional
     public SeatMapResponse bulkUpdateSeats(Long roomId, BulkUpdateSeatRequest request) {
+        requireNoActiveBookings(roomId, "sửa sơ đồ ghế");
         List<Seat> seats = seatRepository.findAllById(request.getSeatIds());
 
         // Defense in depth: chặn orphan COUPLE/SWEETBOX. FE đã có pair-aware
@@ -500,6 +658,20 @@ public class SeatService {
         }
 
         seatRepository.saveAll(seats);
+
+        // Defense in depth: chặn save khi 0 ghế bán được. FE đã có guard
+        // nhưng client tự build payload có thể bypass.
+        long bookableCount = seatRepository.findByRoomIdAndStorageStateOrderByRowLabelAscColNumberAsc(
+                roomId, StorageState.ACTIVE).stream()
+                .filter(s -> !s.isAisle()
+                        && s.getStatus() != SeatStatus.BROKEN
+                        && s.getStatus() != SeatStatus.BLOCKED)
+                .count();
+        if (bookableCount == 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Phòng phải có ít nhất 1 ghế bán được — không thể mark toàn bộ thành lối đi / hỏng / chặn.");
+        }
+
         return getSeatMap(roomId);
     }
 
@@ -524,31 +696,43 @@ public class SeatService {
         Set<Long> updatedIds = seatsBeingUpdated.stream().map(Seat::getId).collect(Collectors.toSet());
 
         for (Seat seat : seatsBeingUpdated) {
-            int partnerCol = (seat.getColNumber() % 2 == 1) ? seat.getColNumber() + 1 : seat.getColNumber() - 1;
-            Seat partner = byPos.get(seat.getRowLabel() + ":" + partnerCol);
+            // Canonical odd-left + fallback opposite direction (đồng bộ pattern Vista
+            // Veezi / Cinetixx — cho phép admin set 12-13 ở phòng 13 cột).
+            int canonicalCol = (seat.getColNumber() % 2 == 1)
+                    ? seat.getColNumber() + 1 : seat.getColNumber() - 1;
+            int fallbackCol = (seat.getColNumber() % 2 == 1)
+                    ? seat.getColNumber() - 1 : seat.getColNumber() + 1;
+            Seat canonical = byPos.get(seat.getRowLabel() + ":" + canonicalCol);
+            Seat fallback = byPos.get(seat.getRowLabel() + ":" + fallbackCol);
 
-            if (partner == null) {
+            if (isPartnerValid(canonical, targetType, updatedIds)) continue;
+            if (isPartnerValid(fallback, targetType, updatedIds)) continue;
+
+            // Cả 2 direction đều không match → ghế thật sự không có cặp hợp lệ
+            String typeLabel = targetType == SeatType.SWEETBOX ? "Sweetbox" : "ghế đôi";
+            if (canonical == null && fallback == null) {
                 throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                        "Ghế " + seat.getSeatNumber() + " không có ghế cặp ở cột " + partnerCol +
-                        " — không thể đặt " + (targetType == SeatType.SWEETBOX ? "Sweetbox" : "ghế đôi") + ".");
+                        "Ghế " + seat.getSeatNumber() + " không có ghế kề bên — không thể đặt " + typeLabel + ".");
             }
-            // Partner cũng đang được update → OK, cả 2 sẽ thành target type
-            if (updatedIds.contains(partner.getId())) continue;
-            // Partner không trong batch → DB state phải đã sẵn cùng type + không aisle
-            if (partner.getSeatType() != targetType || partner.isAisle()) {
-                throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                        "Ghế " + seat.getSeatNumber() + " không có cặp hợp lệ — ghế " +
-                        partner.getSeatNumber() + " hiện là " +
-                        (partner.isAisle() ? "lối đi" : partner.getSeatType().name()) +
-                        ". Cập nhật cả 2 ghế cùng lúc.");
-            }
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Ghế " + seat.getSeatNumber() + " không có cặp hợp lệ — cập nhật cả 2 ghế cùng lúc " +
+                    "hoặc đảm bảo ghế kề bên cùng loại " + typeLabel + ".");
         }
+    }
+
+    /** Partner OK nếu: trong batch update (cả 2 cùng thành targetType) HOẶC
+     *  đã có sẵn cùng targetType + không phải aisle ở DB. */
+    private boolean isPartnerValid(Seat partner, SeatType targetType, Set<Long> updatedIds) {
+        if (partner == null || partner.isAisle()) return false;
+        if (updatedIds.contains(partner.getId())) return true;
+        return partner.getSeatType() == targetType;
     }
 
     @Transactional
     public void deleteSeat(Long seatId) {
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SEAT_NOT_FOUND));
+        requireNoActiveBookings(seat.getRoom().getId(), "xoá ghế");
         seat.setStorageState(StorageState.ARCHIVED);
         seatRepository.save(seat);
         log.info("Soft deleted seat: {}", seat.getSeatNumber());
@@ -558,6 +742,7 @@ public class SeatService {
     public SeatResponse restoreSeat(Long seatId) {
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SEAT_NOT_FOUND));
+        requireNoActiveBookings(seat.getRoom().getId(), "khôi phục ghế");
         seat.setStorageState(StorageState.ACTIVE);
         seatRepository.save(seat);
         log.info("Restored seat: {}", seat.getSeatNumber());

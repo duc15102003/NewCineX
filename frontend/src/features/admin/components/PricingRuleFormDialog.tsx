@@ -14,7 +14,7 @@ import LockedTheaterBadge from './LockedTheaterBadge'
 
 import { ScopeRadio, ScopeReadOnlyBadge } from './pricing/ScopeSelector'
 import { DayOfWeekPicker, HourRangeInputs, DateRangeInputs } from './pricing/RuleConditionInputs'
-import { type FormData, type ScopeChoice, RULE_TYPE_LABELS, SELECT_CLS } from './pricing/types'
+import { type FormData, type ScopeChoice, RULE_TYPE_LABELS, RULE_TYPE_HINTS, SELECT_CLS } from './pricing/types'
 
 export interface PricingRuleFormDialogProps {
   open: boolean
@@ -38,7 +38,7 @@ export default function PricingRuleFormDialog({
   const createMut = useCreatePricingRule()
   const updateMut = useUpdatePricingRule()
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<FormData>()
+  const { register, handleSubmit, reset, watch, setValue, control, formState: { errors } } = useForm<FormData>()
   const selectedType = watch('ruleType')
   const watchedScope = watch('scope')
   const selectedDays = (watch('dayOfWeek') ?? '').split(',').filter(Boolean)
@@ -115,7 +115,7 @@ export default function PricingRuleFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
         <DialogHeader>
-          <DialogTitle>{editingItem ? 'Chỉnh sửa rule' : 'Thêm rule mới'}</DialogTitle>
+          <DialogTitle>{editingItem ? 'Chỉnh sửa quy tắc giá' : 'Thêm mới quy tắc giá'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogBody>
@@ -179,10 +179,13 @@ export default function PricingRuleFormDialog({
                 <Textarea {...register('description')} rows={2} placeholder="VD: Thứ 7, Chủ nhật tăng giá 10%" />
               </div>
               <div className="col-span-4">
-                <label className="text-sm text-gray-400 mb-1.5 block">Loại rule <span className="text-red-400">*</span></label>
+                <label className="text-sm text-gray-400 mb-1.5 block">Loại quy tắc <span className="text-red-400">*</span></label>
                 <select {...register('ruleType', { required: true })} className={SELECT_CLS}>
                   {Object.entries(RULE_TYPE_LABELS).map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
                 </select>
+                {selectedType && RULE_TYPE_HINTS[selectedType] && (
+                  <p className="text-gray-500 text-xs mt-1 leading-relaxed">{RULE_TYPE_HINTS[selectedType]}</p>
+                )}
               </div>
               <div className="col-span-4">
                 <label className="text-sm text-gray-400 mb-1.5 block">Hệ số (%) <span className="text-red-400">*</span></label>
@@ -199,7 +202,7 @@ export default function PricingRuleFormDialog({
               )}
 
               {(selectedType === 'HOUR_RANGE' || selectedType === 'COMPOSITE') && (
-                <HourRangeInputs register={register} />
+                <HourRangeInputs control={control} />
               )}
 
               {(selectedType === 'DATE_RANGE' || selectedType === 'COMPOSITE') && (

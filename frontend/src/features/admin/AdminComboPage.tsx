@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useRef } from 'react'
-import { Plus, ImagePlus, Package } from 'lucide-react'
+import { useMemo, useState, useRef } from 'react'
+import { Plus, ImagePlus, Package, PiggyBank } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
-import TheaterGroupHeaderRow from '@/components/admin/TheaterGroupHeaderRow'
 
 import ComboFormDialog from './components/ComboFormDialog'
 
@@ -17,12 +16,14 @@ import {
 import type { Combo } from '@/hooks/useAdminCombos'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
-import { groupByTheater } from '@/utils/groupByTheater'
 import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
 import { fmtVnd, label, STORAGE_STATE_LABELS } from '@/utils/labels'
 import { STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
+import { usePageTitle } from '@/hooks/usePageTitle'
+import { validateImageUpload } from '@/utils/image'
 
 export default function AdminComboPage() {
+  usePageTitle('Quản lý combo')
   const [keyword, setKeyword] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -54,21 +55,6 @@ export default function AdminComboPage() {
     )
   }, [allCombos, keyword])
 
-  // Grouped view khi SUPER_ADMIN xem "Tất cả chi nhánh"
-  const showGrouped = !adminTheater
-  const groupedCombos = useMemo(
-    () => (showGrouped ? groupByTheater(combos) : null),
-    [combos, showGrouped],
-  )
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
-  const toggleGroup = (theaterId: number) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      next.has(theaterId) ? next.delete(theaterId) : next.add(theaterId)
-      return next
-    })
-  }
-
   const bulkArchiveMut = useBulkArchiveCombos()
   const bulkRestoreMut = useBulkRestoreCombos()
   const uploadImageMut = useUploadComboImage()
@@ -84,9 +70,11 @@ export default function AdminComboPage() {
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file || !uploadId) return
-    uploadImageMut.mutate({ id: uploadId, file })
     e.target.value = ''
+    if (!file || !uploadId) return
+    const err = validateImageUpload(file)
+    if (err) { toast.error(err); return }
+    uploadImageMut.mutate({ id: uploadId, file })
   }
 
   function openCreate() {
@@ -125,6 +113,9 @@ export default function AdminComboPage() {
   const renderComboRow = (c: Combo, idx: number) => {
     const isArchived = c.storageState === 'ARCHIVED'
     const lineSavings = c.regularPrice - c.price
+    const savingsPercent = c.regularPrice > 0
+      ? Math.round((lineSavings / c.regularPrice) * 100)
+      : 0
     return (
       <TableRow key={c.id} className={`border-[#3f382d] hover:bg-white/5 group ${isArchived ? 'opacity-50' : ''}`}>
         <TableCell className="whitespace-nowrap">
@@ -157,19 +148,43 @@ export default function AdminComboPage() {
         <TableCell className="whitespace-nowrap">
           <div className="text-sm font-semibold text-[#ffc107]">{fmtVnd(c.price)}</div>
           {lineSavings > 0 && (
-            <div className="text-xs text-green-400">Tiết kiệm {fmtVnd(lineSavings)}</div>
+            <div className="text-xs text-gray-500 line-through">{fmtVnd(c.regularPrice)}</div>
+          )}
+          {lineSavings > 0 && (
+            <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-green-500/10 border border-green-500/30 text-green-400 w-fit">
+              <PiggyBank size={11} />
+              <span className="text-[10px] font-semibold">
+                {fmtVnd(lineSavings)}
+                {savingsPercent > 0 && <span className="opacity-70 ml-0.5">(-{savingsPercent}%)</span>}
+              </span>
+            </div>
           )}
         </TableCell>
         <TableCell className="whitespace-nowrap">
-          {c.active && !isArchived ? (
-            <span className="text-xs px-2 py-1 rounded border bg-green-500/10 text-green-400 border-green-500/30">Đang bán</span>
-          ) : !c.active && !isArchived ? (
-            <span className="text-xs px-2 py-1 rounded border bg-gray-500/10 text-gray-400 border-gray-500/30">Tạm tắt</span>
-          ) : (
-            <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[c.storageState] ?? ''}`}>
-              {label(STORAGE_STATE_LABELS, c.storageState)}
-            </span>
-          )}
+          <div className="flex flex-col gap-1">
+            {isArchived ? (
+              <span className={`text-xs px-2 py-1 rounded border ${STATE_COLORS[c.storageState] ?? ''}`}>
+                {label(STORAGE_STATE_LABELS, c.storageState)}
+              </span>
+            ) : c.active ? (
+              c.effectiveAvailable ? (
+                <span className="text-xs px-2 py-1 rounded border bg-green-500/10 text-green-400 border-green-500/30 w-fit">Đang bán</span>
+              ) : (
+                <span
+                  className="text-xs px-2 py-1 rounded border bg-orange-500/10 text-orange-400 border-orange-500/30 w-fit cursor-help"
+                  title={`Tạm hết do nguyên liệu thiếu: ${c.unavailableItems.join(', ')}\n→ Cập nhật trạng thái Còn hàng cho các snack trên để combo bán lại.`}>
+                  ⚠ Tạm hết
+                </span>
+              )
+            ) : (
+              <span className="text-xs px-2 py-1 rounded border bg-gray-500/10 text-gray-400 border-gray-500/30 w-fit">Tạm tắt</span>
+            )}
+            {!isArchived && c.active && !c.effectiveAvailable && (
+              <span className="text-[10px] text-orange-300/80 max-w-[160px] truncate" title={c.unavailableItems.join(', ')}>
+                Thiếu: {c.unavailableItems.join(', ')}
+              </span>
+            )}
+          </div>
         </TableCell>
         <TableCell className="text-right whitespace-nowrap">
           <Button size="sm" variant="ghost" onClick={() => handleUpload(c.id)}
@@ -229,29 +244,21 @@ export default function AdminComboPage() {
           <TableBody>
             {combos.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-gray-500 py-10">
-                  {keyword ? 'Không tìm thấy combo nào' : 'Chưa có combo nào'}
+                <TableCell colSpan={7} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2 text-gray-500">
+                    <Package size={32} className="text-gray-600" />
+                    <p className="text-sm">{keyword ? `Không tìm thấy combo khớp "${keyword}"` : 'Chưa có combo nào'}</p>
+                    {!keyword && (
+                      <button onClick={openCreate}
+                        className="text-xs text-[#ffc107] hover:underline">
+                        Thêm combo đầu tiên
+                      </button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             )}
-            {showGrouped && groupedCombos && groupedCombos.map((group) => {
-              const isCollapsed = collapsedGroups.has(group.theaterId)
-              return (
-                <React.Fragment key={`group-${group.theaterId}`}>
-                  <TheaterGroupHeaderRow
-                    collapsed={isCollapsed}
-                    onToggle={() => toggleGroup(group.theaterId)}
-                    theaterName={group.theaterName}
-                    theaterCity={group.theaterCity}
-                    itemCount={group.items.length}
-                    itemLabel="combo"
-                    colSpan={7}
-                  />
-                  {!isCollapsed && group.items.map((c, idx) => renderComboRow(c, idx))}
-                </React.Fragment>
-              )
-            })}
-            {!showGrouped && combos.map((c, idx) => renderComboRow(c, idx))}
+            {combos.map((c, idx) => renderComboRow(c, idx))}
           </TableBody>
         </Table>
       </div>

@@ -1,13 +1,14 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom'
 import MainLayout from '@/components/layout/MainLayout'
 import ProtectedRoute from './ProtectedRoute'
 import AdminRoute from './AdminRoute'
+import StaffAllowedPathGuard from './StaffAllowedPathGuard'
 import Loading from '@/components/common/Loading'
+import { FEATURES } from '@/config/featureFlags'
 
 // Lazy load — tách chunk theo route group
-// [DEMO ĐỒ ÁN] Uncomment khi mở lại HomePage:
-// const HomePage = lazy(() => import('@/features/home/HomePage'))
+const HomePage = lazy(() => import('@/features/home/HomePage'))
 const LoginPage = lazy(() => import('@/features/auth/LoginPage'))
 const RegisterPage = lazy(() => import('@/features/auth/RegisterPage'))
 const ForgotPasswordPage = lazy(() => import('@/features/auth/ForgotPasswordPage'))
@@ -56,10 +57,7 @@ export default function AppRouter() {
         <Routes>
           {/* Public routes with layout */}
           <Route element={<MainLayout />}>
-            {/* [DEMO ĐỒ ÁN] Trang chủ tạm redirect về /login để không lộ danh sách phim.
-                Uncomment dòng <Route path="/" element={<HomePage />} /> và xóa Navigate khi mở lại: */}
-            {/* <Route path="/" element={<HomePage />} /> */}
-            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -78,35 +76,44 @@ export default function AppRouter() {
               <Route path="/my-tickets" element={<MyTicketsPage />} />
               <Route path="/my-tickets/:id" element={<TicketDetailPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/favorites" element={<FavoritesPage />} />
-              <Route path="/notifications" element={<NotificationListPage />} />
-              <Route path="/loyalty" element={<LoyaltyPage />} />
+              {FEATURES.favorites && <Route path="/favorites" element={<FavoritesPage />} />}
+              {FEATURES.notifications && <Route path="/notifications" element={<NotificationListPage />} />}
+              {FEATURES.loyaltyTier && <Route path="/loyalty" element={<LoyaltyPage />} />}
             </Route>
 
           </Route>
 
           {/* Admin routes — outside MainLayout, use AdminLayout */}
+          {/* Routes wrap theo FEATURES.admin để khi user gõ URL trực tiếp các
+              page bị ẩn → React Router không match → fallback NotFound. */}
           <Route element={<AdminRoute />}>
-            <Route element={<AdminLayout />}>
-              <Route path="/admin" element={<DashboardPage />} />
-              <Route path="/admin/genres" element={<AdminGenrePage />} />
-              <Route path="/admin/movies" element={<AdminMoviePage />} />
-              <Route path="/admin/theaters" element={<AdminTheaterPage />} />
-              <Route path="/admin/rooms" element={<AdminRoomPage />} />
-              <Route path="/admin/rooms/:roomId/seats" element={<SeatMapEditorPage />} />
-              <Route path="/admin/showtimes" element={<AdminShowtimePage />} />
-              <Route path="/admin/bookings" element={<AdminBookingPage />} />
-              <Route path="/admin/payments" element={<AdminPaymentPage />} />
-              <Route path="/admin/snacks" element={<AdminSnackPage />} />
-              <Route path="/admin/combos" element={<AdminComboPage />} />
-              <Route path="/admin/vouchers" element={<AdminVoucherPage />} />
-              <Route path="/admin/users" element={<AdminUserPage />} />
-              <Route path="/admin/pos" element={<POSPage />} />
-              <Route path="/admin/ticket-pos" element={<TicketPOSPage />} />
-              <Route path="/admin/check-in" element={<CheckInPage />} />
-              <Route path="/admin/pricing" element={<AdminPricingPage />} />
-              <Route path="/admin/configs" element={<AdminConfigPage />} />
-              <Route path="/admin/reviews" element={<AdminReviewPage />} />
+            <Route element={<StaffAllowedPathGuard />}>
+              <Route element={<AdminLayout />}>
+                {/* Khi dashboard ẨN: /admin redirect sang /admin/genres (default landing
+                    cho cinex-team — admin đăng nhập vào trang Thể loại). */}
+                {FEATURES.admin.dashboard
+                  ? <Route path="/admin" element={<DashboardPage />} />
+                  : <Route path="/admin" element={<Navigate to="/admin/genres" replace />} />
+                }
+                {FEATURES.admin.genres && <Route path="/admin/genres" element={<AdminGenrePage />} />}
+                {FEATURES.admin.movies && <Route path="/admin/movies" element={<AdminMoviePage />} />}
+                {FEATURES.admin.theaters && <Route path="/admin/theaters" element={<AdminTheaterPage />} />}
+                {FEATURES.admin.rooms && <Route path="/admin/rooms" element={<AdminRoomPage />} />}
+                {FEATURES.admin.rooms && <Route path="/admin/rooms/:roomId/seats" element={<SeatMapEditorPage />} />}
+                {FEATURES.admin.showtimes && <Route path="/admin/showtimes" element={<AdminShowtimePage />} />}
+                {FEATURES.admin.bookings && <Route path="/admin/bookings" element={<AdminBookingPage />} />}
+                {FEATURES.admin.payments && <Route path="/admin/payments" element={<AdminPaymentPage />} />}
+                {FEATURES.admin.snacks && <Route path="/admin/snacks" element={<AdminSnackPage />} />}
+                {FEATURES.admin.combos && <Route path="/admin/combos" element={<AdminComboPage />} />}
+                {FEATURES.admin.vouchers && <Route path="/admin/vouchers" element={<AdminVoucherPage />} />}
+                {FEATURES.admin.users && <Route path="/admin/users" element={<AdminUserPage />} />}
+                {FEATURES.admin.pos && <Route path="/admin/pos" element={<POSPage />} />}
+                {FEATURES.admin.ticketPos && <Route path="/admin/ticket-pos" element={<TicketPOSPage />} />}
+                {FEATURES.admin.checkIn && <Route path="/admin/check-in" element={<CheckInPage />} />}
+                {FEATURES.admin.pricing && <Route path="/admin/pricing" element={<AdminPricingPage />} />}
+                {FEATURES.admin.configs && <Route path="/admin/configs" element={<AdminConfigPage />} />}
+                {FEATURES.admin.reviews && <Route path="/admin/reviews" element={<AdminReviewPage />} />}
+              </Route>
             </Route>
           </Route>
 

@@ -3,7 +3,10 @@ package com.cinex.module.user.specification;
 import com.cinex.common.entity.StorageState;
 import com.cinex.module.auth.entity.Role;
 import com.cinex.module.auth.entity.User;
+import com.cinex.module.theater.entity.Theater;
 import com.cinex.module.user.dto.UserFilter;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
@@ -31,7 +34,39 @@ public class UserSpecification {
         if (filter.getCreatedFrom() != null || filter.getCreatedTo() != null) {
             spec = spec.and(createdBetween(filter.getCreatedFrom(), filter.getCreatedTo()));
         }
+        // RBAC scope cho branch ADMIN: chỉ thấy STAFF cùng chi nhánh + USER chung
+        if (filter.getScopedTheaterId() != null) {
+            spec = spec.and(inScopedTheaterOrPublicUser(filter.getScopedTheaterId()));
+        }
+        if (Boolean.TRUE.equals(filter.getExcludeAdminRoles())) {
+            spec = spec.and(roleNotInAdmin());
+        }
         return spec;
+    }
+
+    /**
+     * Branch ADMIN scope: target thuộc 1 trong 2 nhóm:
+     *  - STAFF / ADMIN của CÙNG theater (admin cần quản nhân viên CN mình)
+     *  - USER role (khách book vé, không có theater)
+     *
+     * <p><b>LEFT JOIN bắt buộc:</b> dùng {@code root.get("theater").get("id")}
+     * sẽ sinh INNER JOIN → loại bỏ USER có {@code theater_id = NULL} (toàn bộ
+     * khách hàng). Phải dùng {@code root.join("theater", LEFT)} để giữ row USER.
+     */
+    private static Specification<User> inScopedTheaterOrPublicUser(Long theaterId) {
+        return (root, query, cb) -> {
+            Join<User, Theater> theaterJoin = root.join("theater", JoinType.LEFT);
+            return cb.or(
+                    cb.equal(theaterJoin.get("id"), theaterId),
+                    cb.equal(root.get("role"), Role.USER)
+            );
+        };
+    }
+
+    /** Loại bỏ ADMIN + SUPER_ADMIN khỏi kết quả — dùng cho branch ADMIN. */
+    private static Specification<User> roleNotInAdmin() {
+        return (root, query, cb) -> root.get("role")
+                .in(Role.ADMIN, Role.SUPER_ADMIN).not();
     }
 
     /**

@@ -3,11 +3,31 @@ import { toast } from 'sonner'
 import api, { getErrorMessage } from '@/api/axios'
 import type { ApiResponse } from '@/types/auth'
 
+/**
+ * Config item — self-describing (label + hint + unit + category + visible từ BE).
+ *
+ * <p>Trước đây FE phải hardcode metadata cho từng key — vỡ pattern enterprise.
+ * Bây giờ metadata lưu cùng record DB → BE trả full shape, FE chỉ render.
+ */
 export interface AdminConfigItem {
-  id: number
+  /** Key kỹ thuật — KHÔNG hiển thị cho admin, chỉ dùng làm identifier khi PUT. */
   configKey: string
   configValue: string
-  description?: string
+  /** Tên thân thiện tiếng Việt — hiển thị ở cột "Tên cấu hình". */
+  label: string
+  /** Tooltip giải thích "đổi giá trị → tác động gì". */
+  hint?: string | null
+  /** Đơn vị hiển thị cạnh giá trị: "phút", "lần", "ngày", "điểm", "giây". */
+  unit?: string | null
+  /** Nhóm: booking / showtime / loyalty / security / dashboard. */
+  category: string
+  /** Thứ tự trong nhóm — số nhỏ lên trước. */
+  displayOrder?: number | null
+  /** false = config kỹ thuật (ẩn mặc định trên UI). */
+  visible: boolean
+  /** Ràng buộc giá trị cho input number. */
+  minValue?: number | null
+  maxValue?: number | null
 }
 
 const PUBLIC_CONFIG_STALE_MS = 5 * 60 * 1000
@@ -29,12 +49,19 @@ export function usePublicConfigNumber(key: string, fallback: number) {
   })
 }
 
-/** Danh sách config dành cho admin (list full bảng system_config). */
-export function useAdminConfigs() {
+/**
+ * Danh sách config cho admin Cấu hình hệ thống.
+ *
+ * @param includeHidden true = trả cả config kỹ thuật (rate-limit, cache,
+ *                       NO_SHOW buffer...). Mặc định false.
+ */
+export function useAdminConfigs(includeHidden = false) {
   return useQuery({
-    queryKey: ['admin', 'configs'],
+    queryKey: ['admin', 'configs', { includeHidden }],
     queryFn: async () => {
-      const res = await api.get<ApiResponse<AdminConfigItem[]>>('/api/configs')
+      const res = await api.get<ApiResponse<AdminConfigItem[]>>('/api/configs', {
+        params: { includeHidden },
+      })
       return res.data.data ?? []
     },
   })
@@ -48,9 +75,8 @@ export function useUpdateConfig() {
       await api.put(`/api/configs/${key}`, { value })
     },
     onSuccess: () => {
-      toast.success('Cập nhật thành công')
+      toast.success('Đã lưu cấu hình')
       qc.invalidateQueries({ queryKey: ['admin', 'configs'] })
-      // Public config cùng key có thể đã đổi — invalidate hết
       qc.invalidateQueries({ queryKey: ['config', 'public'] })
     },
     onError: (e) => toast.error(getErrorMessage(e, 'Lỗi cập nhật cấu hình')),

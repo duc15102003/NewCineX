@@ -1,5 +1,7 @@
 package com.cinex.module.showtime.dto;
 
+import com.cinex.module.showtime.entity.ShowtimeFormat;
+import com.cinex.module.showtime.entity.ShowtimeLanguage;
 import com.cinex.module.showtime.entity.ShowtimeStatus;
 import lombok.Builder;
 import lombok.Getter;
@@ -26,7 +28,7 @@ public class ShowtimeListResponse {
     private Long roomId;
     private String roomName;
     private String roomType;
-    /** Chi nhánh chứa room — phục vụ FE grouped view khi SUPER_ADMIN xem 'Tất cả'. */
+    /** Chi nhánh chứa room — breadcrumb + audit (FE đã force theater pick, bỏ grouped view). */
     private Long theaterId;
     private String theaterName;
     private String theaterCity;
@@ -58,6 +60,23 @@ public class ShowtimeListResponse {
     private List<AppliedPricingRule> appliedRules;
 
     private ShowtimeStatus status;
+
+    /** Định dạng (2D/3D/IMAX/4DX/Screen-X) — null cho legacy. FE hiển thị badge cạnh tên phim. */
+    private ShowtimeFormat format;
+
+    /** Mode ngôn ngữ (SUB_VI/DUB_VI/ORIGINAL) — null cho legacy. */
+    private ShowtimeLanguage languageMode;
+
+    /**
+     * Số ghế còn trống = totalSeats - ghế HOLDING/BOOKED. FE hiển thị urgency
+     * "Còn N/M ghế" trên movie detail card. Null cho legacy/admin list (BE
+     * compute on-demand vì N+1 với showtime list dài).
+     */
+    private Integer availableSeats;
+
+    /** Tổng ghế phòng — kèm availableSeats để FE tính %. Null khi cùng lý do. */
+    private Integer totalSeats;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

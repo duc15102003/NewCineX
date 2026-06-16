@@ -1,5 +1,6 @@
 package com.cinex.module.booking.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -28,4 +29,12 @@ public class HoldSeatsRequest {
     @Pattern(regexp = "^$|^[A-Z0-9-]{3,20}$",
              message = "Mã voucher chỉ gồm chữ in hoa, số và dấu gạch ngang, 3-20 ký tự")
     private String voucherCode;
+
+    /**
+     * Số điểm khách muốn dùng để giảm giá vé (0 hoặc bỏ qua = không dùng điểm).
+     * BE sẽ validate: user đủ điểm + ≥ loyalty.min_redeem_points (mặc định 100).
+     * Mỗi điểm quy đổi thành tiền theo {@code loyalty.redeem_value} (1000đ/điểm).
+     */
+    @Min(value = 0, message = "Số điểm đổi phải >= 0")
+    private Integer redeemPoints;
 }

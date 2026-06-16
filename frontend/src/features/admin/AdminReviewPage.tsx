@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { X, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import Loading from '@/components/common/Loading'
+import TableSkeleton from '@/components/common/TableSkeleton'
 import EmptyState from '@/components/common/EmptyState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
@@ -23,14 +24,18 @@ import {
   useAdminRestoreReviewMutation,
   type AdminReviewFilter,
 } from '@/hooks/useAdminReviews'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const PAGE_SIZE = 20
 const MOVIES_DROPDOWN_SIZE = 200  // load nhiều cho filter dropdown — không phải list page admin
 const EMPTY_FILTER: AdminReviewFilter = { includeDeleted: true }
 
 export default function AdminReviewPage() {
+  usePageTitle('Quản lý đánh giá')
   const [page, setPage] = useState(0)
-  const [keyword, setKeyword] = useState('')
+  const [keywordInput, setKeywordInput] = useState('')
+  const keyword = useDebouncedValue(keywordInput, 400)
+  useEffect(() => { setPage(0) }, [keyword])
   const [appliedFilter, setAppliedFilter] = useState<AdminReviewFilter>(EMPTY_FILTER)
   const [draftFilter, setDraftFilter] = useState<AdminReviewFilter>(EMPTY_FILTER)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -128,7 +133,7 @@ export default function AdminReviewPage() {
     })
   }
 
-  if (isLoading && !data) return <Loading />
+  const showSkeleton = isLoading && !data
 
   return (
     <div className="space-y-4">
@@ -138,8 +143,8 @@ export default function AdminReviewPage() {
           <div className="flex-1 max-w-sm">
             <Input
               placeholder="Tìm theo user, phim, nội dung..."
-              value={keyword}
-              onChange={(e) => { setKeyword(e.target.value); setPage(0) }}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
             />
           </div>
           <FilterTrigger
@@ -165,8 +170,12 @@ export default function AdminReviewPage() {
       </div>
 
       {/* Table */}
-      {reviews.length === 0 ? (
-        <EmptyState message="Không có đánh giá nào" />
+      {!showSkeleton && reviews.length === 0 ? (
+        <EmptyState
+          icon={MessageSquare}
+          message={keywordInput ? `Không tìm thấy đánh giá khớp "${keywordInput}"` : 'Chưa có đánh giá nào'}
+          description={keywordInput ? 'Thử dùng từ khoá khác hoặc xoá bộ lọc.' : 'Đánh giá sẽ xuất hiện khi khách review phim.'}
+        />
       ) : (
         <div className="rounded-2xl border border-[#3f382d] overflow-clip">
           <Table>
@@ -190,6 +199,7 @@ export default function AdminReviewPage() {
                 <TableHead className="text-gray-400 text-right pr-4">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
+            {showSkeleton ? <TableSkeleton rows={PAGE_SIZE} columns={9} /> : (
             <TableBody>
               {reviews.map((r, index) => (
                 <ReviewRow
@@ -203,6 +213,7 @@ export default function AdminReviewPage() {
                 />
               ))}
             </TableBody>
+            )}
           </Table>
         </div>
       )}

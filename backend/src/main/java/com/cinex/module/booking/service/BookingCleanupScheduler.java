@@ -6,6 +6,7 @@ import com.cinex.module.booking.entity.BookingSeatStatus;
 import com.cinex.module.booking.entity.BookingStatus;
 import com.cinex.module.booking.repository.BookingRepository;
 import com.cinex.module.config.service.SystemConfigService;
+import com.cinex.module.loyalty.service.LoyaltyService;
 import com.cinex.module.voucher.entity.VoucherUsage;
 import com.cinex.module.voucher.repository.VoucherRepository;
 import com.cinex.module.voucher.repository.VoucherUsageRepository;
@@ -29,6 +30,7 @@ public class BookingCleanupScheduler {
     private final SeatWebSocketService seatWebSocketService;
     private final VoucherUsageRepository voucherUsageRepository;
     private final VoucherRepository voucherRepository;
+    private final LoyaltyService loyaltyService;
 
     @Scheduled(fixedRate = 60000)
     @SchedulerLock(name = "bookingCleanup", lockAtLeastFor = "PT30S", lockAtMostFor = "PT5M")
@@ -75,6 +77,10 @@ public class BookingCleanupScheduler {
             log.info("Voucher {} returned for expired booking {}",
                     usage.getVoucher().getCode(), booking.getBookingCode());
         }
+
+        // Loyalty points refund: nếu user đã redeem điểm khi hold → hoàn lại.
+        // Không cho khách "mất điểm vĩnh viễn" vì để timeout 10 phút.
+        loyaltyService.refundPointsForBooking(booking);
 
         // Real-time: ghế hết hạn → notify AVAILABLE cho tất cả user đang xem.
         // WS errors đã được isolate trong SeatWebSocketService.notifySeatChanged.

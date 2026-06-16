@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Plus, X, DoorOpen } from 'lucide-react'
 import { toast } from 'sonner'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,10 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
-import TheaterGroupHeaderRow from '@/components/admin/TheaterGroupHeaderRow'
 
 import RoomFormDialog from './components/RoomFormDialog'
-import GenerateSeatsDialog from './components/GenerateSeatsDialog'
 import RoomFilterDrawer, { type RoomFilterDraft } from './components/RoomFilterDrawer'
 import RoomRow from './components/RoomRow'
 
@@ -20,24 +19,19 @@ import type { AdminRoom, AdminRoomParams } from '@/hooks/useAdminRooms'
 import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const EMPTY_ROOM_FILTER: RoomFilterDraft = {
   type: '', status: '', minSeats: '', maxSeats: '', includeDeleted: true,
 }
 
-interface RoomGroup {
-  theaterId: number
-  theaterName: string
-  theaterCity: string
-  rooms: AdminRoom[]
-}
-
 export default function AdminRoomPage() {
-  const [keyword, setKeyword] = useState('')
+  usePageTitle('Quản lý phòng chiếu')
+  const [keywordInput, setKeywordInput] = useState('')
+  const keyword = useDebouncedValue(keywordInput, 400)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<AdminRoom | null>(null)
-  const [generateRoomId, setGenerateRoomId] = useState<number | null>(null)
 
   const [appliedFilter, setAppliedFilter] = useState<RoomFilterDraft>(EMPTY_ROOM_FILTER)
   const [draftFilter, setDraftFilter] = useState<RoomFilterDraft>(EMPTY_ROOM_FILTER)
@@ -78,35 +72,6 @@ export default function AdminRoomPage() {
   const bulkDeleteMut = useBulkDeleteRooms()
   const bulkRestoreMut = useBulkRestoreRooms()
 
-  // Grouped view: SUPER_ADMIN chọn "Tất cả chi nhánh" → gom phòng theo theater.
-  const showGrouped = !adminTheater
-  const groupedRooms = useMemo<RoomGroup[] | null>(() => {
-    if (!showGrouped) return null
-    const map = new Map<number, RoomGroup>()
-    for (const r of rooms) {
-      if (r.theaterId == null) continue
-      if (!map.has(r.theaterId)) {
-        map.set(r.theaterId, {
-          theaterId: r.theaterId,
-          theaterName: r.theaterName ?? `Chi nhánh #${r.theaterId}`,
-          theaterCity: r.theaterCity ?? '',
-          rooms: [],
-        })
-      }
-      map.get(r.theaterId)!.rooms.push(r)
-    }
-    return Array.from(map.values()).sort((a, b) => a.theaterName.localeCompare(b.theaterName))
-  }, [rooms, showGrouped])
-
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
-  const toggleGroup = (theaterId: number) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      next.has(theaterId) ? next.delete(theaterId) : next.add(theaterId)
-      return next
-    })
-  }
-
   function openFilter() {
     setDraftFilter(appliedFilter)
     setFilterOpen(true)
@@ -143,10 +108,6 @@ export default function AdminRoomPage() {
     setEditingItem(room)
     setDialogOpen(true)
   }
-  function openGenerate(id: number) {
-    setGenerateRoomId(id)
-  }
-
   function toggleSelect(id: number) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -171,7 +132,6 @@ export default function AdminRoomPage() {
       selected={selectedIds.has(r.id)}
       onToggleSelect={toggleSelect}
       onEdit={openEdit}
-      onGenerateSeats={openGenerate}
     />
   )
 
@@ -183,8 +143,8 @@ export default function AdminRoomPage() {
           <div className="flex-1 max-w-sm">
             <Input
               placeholder="Tìm theo tên phòng..."
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
             />
           </div>
           <FilterTrigger onClick={openFilter} activeCount={activeFilterCount} />
@@ -239,31 +199,22 @@ export default function AdminRoomPage() {
           <TableBody>
             {rooms.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-gray-500 py-10">Chưa có phòng chiếu</TableCell>
+                <TableCell colSpan={8} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2 text-gray-500">
+                    <DoorOpen size={32} className="text-gray-600" />
+                    <p className="text-sm">{keywordInput ? `Không tìm thấy phòng khớp "${keywordInput}"` : 'Chưa có phòng chiếu'}</p>
+                    {!keywordInput && activeFilterCount === 0 && (
+                      <button onClick={openCreate}
+                        className="text-xs text-[#ffc107] hover:underline">
+                        Thêm phòng đầu tiên
+                      </button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             )}
 
-            {/* GROUPED VIEW */}
-            {showGrouped && groupedRooms && groupedRooms.map((group) => {
-              const isCollapsed = collapsedGroups.has(group.theaterId)
-              return (
-                <React.Fragment key={`group-${group.theaterId}`}>
-                  <TheaterGroupHeaderRow
-                    collapsed={isCollapsed}
-                    onToggle={() => toggleGroup(group.theaterId)}
-                    theaterName={group.theaterName}
-                    theaterCity={group.theaterCity}
-                    itemCount={group.rooms.length}
-                    itemLabel="phòng"
-                    colSpan={8}
-                  />
-                  {!isCollapsed && group.rooms.map((r, idx) => renderRoomRow(r, idx, true))}
-                </React.Fragment>
-              )
-            })}
-
-            {/* FLAT VIEW */}
-            {!showGrouped && rooms.map((r, idx) => renderRoomRow(r, idx))}
+            {rooms.map((r, idx) => renderRoomRow(r, idx))}
           </TableBody>
         </Table>
       </div>
@@ -275,11 +226,6 @@ export default function AdminRoomPage() {
         editingItem={editingItem}
         scopedTheaterId={scopedTheaterId}
         theaterLocked={theaterLocked}
-      />
-
-      <GenerateSeatsDialog
-        roomId={generateRoomId}
-        onClose={() => setGenerateRoomId(null)}
       />
 
       <ConfirmDialog

@@ -3,6 +3,8 @@ package com.cinex.module.showtime.controller;
 import com.cinex.common.dto.BulkDeleteRequest;
 import com.cinex.common.response.ApiResponse;
 import com.cinex.common.response.PageResponse;
+import com.cinex.module.showtime.dto.AutoScheduleRequest;
+import com.cinex.module.showtime.dto.AutoScheduleResult;
 import com.cinex.module.showtime.dto.ShowtimeFilter;
 import com.cinex.module.showtime.dto.ShowtimeListResponse;
 import com.cinex.module.showtime.dto.ShowtimeRequest;
@@ -63,6 +65,15 @@ public class ShowtimeController {
         return ApiResponse.ok("Showtime updated", showtimeService.updateShowtime(id, request));
     }
 
+    @PostMapping("/auto-schedule")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Auto-schedule bulk showtimes for movie × rooms × days")
+    public ApiResponse<AutoScheduleResult> autoSchedule(@Valid @RequestBody AutoScheduleRequest request) {
+        AutoScheduleResult result = showtimeService.autoSchedule(request);
+        String msg = String.format("Tạo %d suất, skip %d", result.getCreated(), result.getSkipped());
+        return ApiResponse.ok(msg, result);
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "(Admin) Soft delete a showtime")
@@ -76,6 +87,37 @@ public class ShowtimeController {
     @Operation(summary = "(Admin) Restore a soft-deleted showtime")
     public ApiResponse<ShowtimeResponse> restoreShowtime(@PathVariable Long id) {
         return ApiResponse.ok("Showtime restored", showtimeService.restoreShowtime(id));
+    }
+
+    /**
+     * Huỷ suất chiếu — cascade refund tất cả vé CONFIRMED + thông báo khách.
+     * Dùng cho case phim bị cut, sự cố kỹ thuật, force majeure (industry pattern
+     * Vista Veezi / Cinetixx).
+     */
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Cancel showtime + cascade refund bookings + notify customers")
+    public ApiResponse<ShowtimeService.CancelShowtimeResult> cancelShowtime(
+            @PathVariable Long id,
+            @RequestBody(required = false) java.util.Map<String, String> body) {
+        String reason = body != null ? body.getOrDefault("reason", "Suất chiếu bị huỷ") : "Suất chiếu bị huỷ";
+        ShowtimeService.CancelShowtimeResult result = showtimeService.cancelShowtime(id, reason);
+        return ApiResponse.ok("Showtime cancelled. Auto-cancelled " + result.cancelledBookings() + " bookings", result);
+    }
+
+    @PostMapping("/{id}/publish")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Publish suất DRAFT → SCHEDULED (visible cho user)")
+    public ApiResponse<ShowtimeResponse> publishShowtime(@PathVariable Long id) {
+        return ApiResponse.ok("Showtime published", showtimeService.publishShowtime(id));
+    }
+
+    @PostMapping("/bulk-publish")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Bulk publish DRAFT → SCHEDULED")
+    public ApiResponse<Integer> bulkPublish(@Valid @RequestBody BulkDeleteRequest request) {
+        int published = showtimeService.bulkPublish(request.getIds());
+        return ApiResponse.ok("Published " + published + " showtimes", published);
     }
 
     @PostMapping("/bulk-delete")

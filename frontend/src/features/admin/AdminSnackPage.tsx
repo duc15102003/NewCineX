@@ -1,6 +1,7 @@
-import React, { useMemo, useState, useRef } from 'react'
-import { Plus, X } from 'lucide-react'
+import { useMemo, useState, useRef } from 'react'
+import { Plus, X, Coffee } from 'lucide-react'
 import { toast } from 'sonner'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import StatusDropdown from '@/components/common/StatusDropdown'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
-import TheaterGroupHeaderRow from '@/components/admin/TheaterGroupHeaderRow'
 
 import SnackFormDialog from './components/SnackFormDialog'
 import SnackFilterDrawer, { type SnackFilterDraft } from './components/SnackFilterDrawer'
@@ -20,7 +20,8 @@ import type { AdminSnack, AdminSnackParams } from '@/hooks/useAdminSnacks'
 import { ADMIN_LIST_PAGE_SIZE } from '@/utils/constants'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
-import { groupByTheater } from '@/utils/groupByTheater'
+import { usePageTitle } from '@/hooks/usePageTitle'
+import { validateImageUpload } from '@/utils/image'
 
 /** Danh mục snack — match BE convention (lưu chuỗi tiếng Việt).
     KHÔNG có 'Combo' vì đã tách module Combo riêng — bán Snack thuần ở đây để không trùng. */
@@ -31,7 +32,9 @@ const EMPTY_SNACK_FILTER: SnackFilterDraft = {
 }
 
 export default function AdminSnackPage() {
-  const [keyword, setKeyword] = useState('')
+  usePageTitle('Quản lý đồ ăn')
+  const [keywordInput, setKeywordInput] = useState('')
+  const keyword = useDebouncedValue(keywordInput, 400)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<AdminSnack | null>(null)
@@ -72,21 +75,6 @@ export default function AdminSnackPage() {
   const { data: pageData } = useAdminSnacks(queryParams)
   const snacks = pageData?.content ?? []
 
-  // Grouped view khi SUPER_ADMIN xem "Tất cả chi nhánh"
-  const showGrouped = !adminTheater
-  const groupedSnacks = useMemo(
-    () => (showGrouped ? groupByTheater(snacks) : null),
-    [snacks, showGrouped],
-  )
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
-  const toggleGroup = (theaterId: number) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      next.has(theaterId) ? next.delete(theaterId) : next.add(theaterId)
-      return next
-    })
-  }
-
   function openFilter() {
     setDraftFilter(appliedFilter)
     setFilterOpen(true)
@@ -118,9 +106,11 @@ export default function AdminSnackPage() {
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file || !uploadId) return
-    uploadImageMut.mutate({ id: uploadId, file })
     e.target.value = ''
+    if (!file || !uploadId) return
+    const err = validateImageUpload(file)
+    if (err) { toast.error(err); return }
+    uploadImageMut.mutate({ id: uploadId, file })
   }
 
   function openCreate() {
@@ -176,8 +166,8 @@ export default function AdminSnackPage() {
           <div className="flex-1 max-w-sm">
             <Input
               placeholder="Tìm theo tên đồ ăn..."
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
             />
           </div>
           <FilterTrigger onClick={openFilter} activeCount={activeFilterCount} />
@@ -235,27 +225,21 @@ export default function AdminSnackPage() {
           <TableBody>
             {snacks.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
+                <TableCell colSpan={8} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2 text-gray-500">
+                    <Coffee size={32} className="text-gray-600" />
+                    <p className="text-sm">{keywordInput ? `Không tìm thấy đồ ăn khớp "${keywordInput}"` : 'Chưa có đồ ăn nào'}</p>
+                    {!keywordInput && activeFilterCount === 0 && (
+                      <button onClick={openCreate}
+                        className="text-xs text-[#ffc107] hover:underline">
+                        Thêm đồ ăn đầu tiên
+                      </button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             )}
-            {showGrouped && groupedSnacks && groupedSnacks.map((group) => {
-              const isCollapsed = collapsedGroups.has(group.theaterId)
-              return (
-                <React.Fragment key={`group-${group.theaterId}`}>
-                  <TheaterGroupHeaderRow
-                    collapsed={isCollapsed}
-                    onToggle={() => toggleGroup(group.theaterId)}
-                    theaterName={group.theaterName}
-                    theaterCity={group.theaterCity}
-                    itemCount={group.items.length}
-                    itemLabel="đồ ăn"
-                    colSpan={8}
-                  />
-                  {!isCollapsed && group.items.map((s, idx) => renderSnackRow(s, idx))}
-                </React.Fragment>
-              )
-            })}
-            {!showGrouped && snacks.map((s, index) => renderSnackRow(s, index))}
+            {snacks.map((s, index) => renderSnackRow(s, index))}
           </TableBody>
         </Table>
       </div>

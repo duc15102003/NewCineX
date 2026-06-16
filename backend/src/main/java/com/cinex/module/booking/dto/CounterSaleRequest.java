@@ -26,9 +26,13 @@ public class CounterSaleRequest {
     @Size(max = 8, message = "Tối đa 8 ghế mỗi lần bán")
     private List<Long> seatIds;
 
-    /** Phương thức thanh toán tại quầy: CASH, MOMO, TRANSFER. */
+    /**
+     * Phương thức thanh toán tại quầy: CASH (tiền mặt), CARD_POS (thẻ qua
+     * máy POS), MOMO (QR scan tại quầy). KHÔNG dùng TRANSFER vì không auto-
+     * confirm được — queue quầy dài, không phù hợp POS.
+     */
     @NotBlank(message = "Vui lòng chọn phương thức thanh toán")
-    @Pattern(regexp = "CASH|MOMO|TRANSFER",
-             message = "Phương thức thanh toán không hợp lệ (CASH/MOMO/TRANSFER)")
+    @Pattern(regexp = "CASH|CARD_POS|MOMO",
+             message = "Phương thức thanh toán tại quầy: CASH, CARD_POS hoặc MOMO")
     private String paymentMethod;
 }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Thêm 2 field metadata per-showtime — chuẩn industry CGV/Lotte/BHD:
+          - format: TWO_D / THREE_D / IMAX / IMAX_3D / FOUR_DX / SCREEN_X
+          - language_mode: SUB_VI / DUB_VI / ORIGINAL
+
+        Cả 2 nullable cho backward-compat: suất đã tạo trước migration giữ NULL,
+        mapper/FE hiển thị "—" hoặc default (TWO_D + SUB_VI) cho user-facing.
+        Suất mới luôn yêu cầu 2 field này ở admin DTO (ShowtimeRequest + AutoScheduleRequest).
+
+        VARCHAR(16) đủ chứa enum dài nhất ("THREE_D"=7, "IMAX_3D"=7, "ORIGINAL"=8,
+        "SUB_VI"=6, "SCREEN_X"=8). Để 16 để buffer rộng cho enum tương lai.
+    -->
+
+    <changeSet id="035-add-showtime-format-language" author="cinex">
+        <addColumn tableName="showtimes">
+            <column name="format" type="VARCHAR(16)"
+                    remarks="Định dạng chiếu: TWO_D/THREE_D/IMAX/IMAX_3D/FOUR_DX/SCREEN_X. Null = legacy showtime trước 035."/>
+            <column name="language_mode" type="VARCHAR(16)"
+                    remarks="Mode ngôn ngữ: SUB_VI/DUB_VI/ORIGINAL. Null = legacy showtime trước 035."/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

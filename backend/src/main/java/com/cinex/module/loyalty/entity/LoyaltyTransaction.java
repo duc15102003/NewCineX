@@ -68,4 +68,20 @@ public class LoyaltyTransaction extends BaseEntity {
     /** Mô tả ngắn (vd "Booking BKG-251208-001", "Đổi voucher 50k", "Hoàn point do hủy vé"). */
     @Column(length = 500)
     private String reason;
+
+    /**
+     * Ngày hết hạn batch EARN — null cho REDEEM/ADJUST/EXPIRE.
+     * Chuẩn industry: 12 tháng từ ngày tích (loyalty.points_expiry_months).
+     */
+    @Column(name = "expires_at")
+    private java.time.LocalDateTime expiresAt;
+
+    /**
+     * Số điểm còn lại của batch EARN — FIFO tracking. Null cho non-EARN tx.
+     *
+     * <p>Khởi tạo = points lúc EARN. REDEEM/EXPIRE trừ batch cũ nhất trước
+     * (FIFO). = 0 nghĩa batch đã được redeem/expire hoàn toàn.
+     */
+    @Column(name = "remaining_points")
+    private Integer remainingPoints;
 }

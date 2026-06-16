@@ -4,6 +4,7 @@ import { Building2, MapPin } from 'lucide-react'
 
 import { useTheaterStore } from '@/store/theaterStore'
 import { useTheaterOptions } from '@/hooks/useAdminTheaters'
+import { FEATURES, DEFAULT_THEATER_CITY } from '@/config/featureFlags'
 
 /**
  * Các route KHÔNG cần theater context — modal không được hiện trên đây.
@@ -38,9 +39,33 @@ export default function TheaterPickerModal() {
   // Render null TRƯỚC khi gọi useTheaterOptions → không gọi API trên các route này
   // (tránh 401 loop khi user chưa login mà API theater còn require auth).
   const skipOnThisRoute = ROUTES_WITHOUT_THEATER.some(p => location.pathname.startsWith(p))
-  if (skipOnThisRoute || currentTheater) return null
+  if (skipOnThisRoute) return null
 
+  // Single-theater mode (cinex-team): auto-pick chi nhánh mặc định, không hiện modal.
+  if (!FEATURES.multiTheater) {
+    return currentTheater ? null : <AutoSelectDefault />
+  }
+
+  if (currentTheater) return null
   return <ModalContent />
+}
+
+/**
+ * Khi flag {@code multiTheater = false}: fetch list theaters → tìm theater có city
+ * khớp {@link DEFAULT_THEATER_CITY} → set vào store. Fallback theater đầu tiên nếu
+ * không có HN. Render null (không UI) — user không thấy bất kỳ thao tác chọn nào.
+ */
+function AutoSelectDefault() {
+  const { setCurrentTheater } = useTheaterStore()
+  const { data: theaters = [] } = useTheaterOptions()
+
+  useEffect(() => {
+    if (theaters.length === 0) return
+    const matched = theaters.find(t => t.city === DEFAULT_THEATER_CITY) ?? theaters[0]
+    setCurrentTheater({ id: matched.id, code: matched.code, name: matched.name, city: matched.city })
+  }, [theaters, setCurrentTheater])
+
+  return null
 }
 
 /** Tách content ra subcomponent để hook useTheaterOptions chỉ chạy khi thực sự cần. */

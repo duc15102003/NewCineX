@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { Plus, X, MapPin, Phone } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, X, MapPin, Phone, Building2 } from 'lucide-react'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,7 @@ import type { TheaterParams } from '@/hooks/useAdminTheaters'
 import { useAuthStore } from '@/store/authStore'
 import { label, STORAGE_STATE_LABELS } from '@/utils/labels'
 import { THEATER_STATUS_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const THEATER_STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Hoạt động',
@@ -38,9 +40,15 @@ const EMPTY_FILTER: TheaterParams = {
 }
 
 export default function AdminTheaterPage() {
+  usePageTitle('Quản lý chi nhánh')
   const [appliedFilter, setAppliedFilter] = useState<TheaterParams>(EMPTY_FILTER)
   const [draftFilter, setDraftFilter] = useState<TheaterParams>(EMPTY_FILTER)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [keywordInput, setKeywordInput] = useState('')
+  const debouncedKeyword = useDebouncedValue(keywordInput, 400)
+  useEffect(() => {
+    setAppliedFilter(f => ({ ...f, keyword: debouncedKeyword }))
+  }, [debouncedKeyword])
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -112,8 +120,8 @@ export default function AdminTheaterPage() {
           <div className="flex-1 max-w-sm">
             <Input
               placeholder="Tìm theo tên, mã, địa chỉ..."
-              value={appliedFilter.keyword ?? ''}
-              onChange={(e) => setAppliedFilter(f => ({ ...f, keyword: e.target.value }))}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
             />
           </div>
           <FilterTrigger onClick={() => { setDraftFilter(appliedFilter); setDrawerOpen(true) }} activeCount={activeCount} />
@@ -129,7 +137,7 @@ export default function AdminTheaterPage() {
         {isSuperAdmin && (
           <div className="flex items-center gap-2">
             <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
-              <Plus size={16} className="mr-1" /> Thêm chi nhánh
+              <Plus size={16} className="mr-1" /> Thêm mới
             </Button>
             <StatusDropdown
               onArchive={handleBulkArchive}
@@ -161,7 +169,18 @@ export default function AdminTheaterPage() {
           <TableBody>
             {theaters.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-gray-500 py-10">Không có chi nhánh nào</TableCell>
+                <TableCell colSpan={8} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2 text-gray-500">
+                    <Building2 size={32} className="text-gray-600" />
+                    <p className="text-sm">{keywordInput ? `Không tìm thấy chi nhánh khớp "${keywordInput}"` : 'Chưa có chi nhánh nào'}</p>
+                    {isSuperAdmin && !keywordInput && activeCount === 0 && (
+                      <button onClick={openCreate}
+                        className="text-xs text-[#ffc107] hover:underline">
+                        Thêm chi nhánh đầu tiên
+                      </button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             )}
             {theaters.map((t, idx) => {

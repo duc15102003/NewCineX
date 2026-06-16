@@ -35,7 +35,7 @@ export default function VerifyEmailPage() {
 
     if (!token) {
       setStatus('error')
-      setErrorMsg('Liên kết không hợp lệ — thiếu token xác thực.')
+      setErrorMsg('Liên kết xác thực không hợp lệ. Vui lòng yêu cầu gửi lại email.')
       return
     }
 

@@ -57,13 +57,19 @@ public class SnackOrderService {
         Long scopedTheaterId = securityService.getCurrentUserTheaterId();
         Long targetTheaterId = scopedTheaterId != null ? scopedTheaterId : request.getTheaterId();
         if (targetTheaterId == null) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR);
+            // SUPER_ADMIN không scope theater + FE quên gửi theaterId → message
+            // cụ thể giúp dev/admin debug nhanh hơn là VALIDATION_ERROR chung.
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Vui lòng chọn chi nhánh ở thanh trên cùng trước khi tạo đơn POS");
         }
         Theater theater = theaterRepository.findById(targetTheaterId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.THEATER_NOT_FOUND));
 
         // [IdTracker Pattern] Sinh mã đơn: VD "SNACK-20260527-001"
-        String orderCode = idTrackerService.nextCodeWithDate("SNACK");
+        // Entity type "SNACK_ORDER" match seed ở migration 009 (NOT "SNACK" —
+        // typo này trước đây gây IllegalArgumentException ngay khi POS đồ ăn
+        // tạo đơn đầu tiên).
+        String orderCode = idTrackerService.nextCodeWithDate("SNACK_ORDER");
 
         SnackOrder order = SnackOrder.builder()
                 .theater(theater)
@@ -87,6 +93,20 @@ public class SnackOrderService {
                 if (!combo.getTheater().getId().equals(theater.getId())) {
                     throw new BusinessException(ErrorCode.INVALID_REQUEST,
                             "Combo '" + combo.getName() + "' không thuộc chi nhánh của đơn hàng");
+                }
+                // Effective availability check — combo có nguyên liệu hết hàng
+                // thì không bán được dù admin chưa kịp tắt active. Tránh nhận
+                // order rồi mới phát hiện thiếu snack.
+                List<String> outOfStock = combo.getItems().stream()
+                        .map(it -> it.getSnack())
+                        .filter(s -> s.getStorageState() == StorageState.ARCHIVED || !s.isAvailable())
+                        .map(s -> s.getName())
+                        .distinct()
+                        .toList();
+                if (!outOfStock.isEmpty()) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                            "Combo '" + combo.getName() + "' tạm hết — nguyên liệu thiếu: "
+                                    + String.join(", ", outOfStock));
                 }
                 BigDecimal itemTotal = combo.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity()));
                 total = total.add(itemTotal);

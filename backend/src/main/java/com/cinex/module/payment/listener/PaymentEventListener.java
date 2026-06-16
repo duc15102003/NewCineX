@@ -91,10 +91,10 @@ public class PaymentEventListener {
             String seats = booking.getBookingSeats().stream()
                     .map(bs -> bs.getSeat().getSeatNumber())
                     .collect(Collectors.joining(", "));
-            String totalAmount = VND_FMT.format(booking.getTotalAmount()) + "đ";
+            EmailService.BookingPricing pricing = buildPricing(booking);
 
             emailService.sendBookingConfirmationEmail(
-                    email, bookingCode, movieTitle, roomName, startTime, seats, totalAmount, qrCode);
+                    email, bookingCode, movieTitle, roomName, startTime, seats, pricing, qrCode);
             log.info("[BOOKING_EMAIL] Email enqueued for {} (booking {})", email, bookingCode);
         } catch (Exception e) {
             // Bắt mọi exception (Thymeleaf TemplateProcessingException, NPE, ...) — không để
@@ -102,5 +102,33 @@ public class PaymentEventListener {
             log.error("[BOOKING_EMAIL] Send FAILED for {} (booking {}): {}",
                     email, bookingCode, e.getMessage(), e);
         }
+    }
+
+    /**
+     * Build pricing breakdown đã format VND cho email template.
+     * Trả "" cho field discount = 0 → template ẩn dòng tương ứng.
+     */
+    private EmailService.BookingPricing buildPricing(Booking booking) {
+        java.math.BigDecimal tier = booking.getTierDiscountAmount();
+        java.math.BigDecimal group = booking.getGroupDiscountAmount();
+        String tierLabel = "";
+        if (tier != null && tier.signum() > 0 && booking.getTierAtBooking() != null) {
+            tierLabel = switch (booking.getTierAtBooking()) {
+                case "SILVER" -> "Bạc";
+                case "GOLD" -> "Vàng";
+                case "PLATINUM" -> "Bạch Kim";
+                default -> "";
+            };
+        }
+        return new EmailService.BookingPricing(
+                booking.getSubtotalAmount() != null ? VND_FMT.format(booking.getSubtotalAmount()) + "đ" : "",
+                booking.getVatAmount() != null ? VND_FMT.format(booking.getVatAmount()) + "đ" : "",
+                booking.getVatPercent() != null ? booking.getVatPercent().stripTrailingZeros().toPlainString() : "",
+                (tier != null && tier.signum() > 0) ? VND_FMT.format(tier) + "đ" : "",
+                tierLabel,
+                (group != null && group.signum() > 0) ? VND_FMT.format(group) + "đ" : "",
+                (group != null && group.signum() > 0) ? String.valueOf(booking.getBookingSeats().size()) : "",
+                VND_FMT.format(booking.getTotalAmount()) + "đ"
+        );
     }
 }

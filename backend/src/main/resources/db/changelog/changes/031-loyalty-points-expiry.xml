@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Loyalty points expiry — chuẩn industry (CGV/Lotte/BHD): điểm tích từ
+        booking hết hạn sau 12 tháng. Pattern: FIFO batch tracking.
+
+        Mỗi EARN tx là 1 "batch" có expires_at + remaining_points (số điểm chưa
+        bị redeem/expire). REDEEM/EXPIRE trừ remaining từ batch cũ nhất trước.
+
+        Lifetime points KHÔNG bị giảm khi expire — tier không tụt (industry
+        common: 1 lần lên hạng giữ vĩnh viễn).
+    -->
+
+    <changeSet id="031-add-batch-tracking" author="cinex">
+        <addColumn tableName="loyalty_transactions">
+            <column name="expires_at" type="DATETIME"
+                    remarks="Ngày hết hạn batch EARN — null cho REDEEM/ADJUST/EXPIRE"/>
+            <column name="remaining_points" type="INT"
+                    remarks="Số điểm còn lại của batch EARN — null cho REDEEM/ADJUST/EXPIRE"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="031-backfill-existing-earns" author="cinex">
+        <sql><![CDATA[
+            -- EARN cũ: expires_at = created_at + 12 tháng, remaining = points
+            -- (tạm chấp nhận double-count vs REDEEM cũ — historical data không
+            -- chính xác 100% nhưng nhỏ; mọi EARN mới sẽ tracking đúng).
+            UPDATE loyalty_transactions
+            SET expires_at = DATEADD(MONTH, 12, created_at),
+                remaining_points = points
+            WHERE transaction_type = 'EARN'
+              AND expires_at IS NULL;
+        ]]></sql>
+    </changeSet>
+
+    <changeSet id="031-seed-expiry-config" author="cinex">
+        <sql><![CDATA[
+            INSERT INTO system_config (
+                config_key, config_value, description,
+                label, hint, unit, category, display_order, visible,
+                min_value, max_value
+            ) VALUES (
+                'loyalty.points_expiry_months', '12',
+                N'Điểm tích hết hạn sau bao nhiêu tháng',
+                N'Hạn sử dụng điểm tích',
+                N'Mỗi đợt điểm khách tích từ booking sẽ hết hạn sau X tháng — chuẩn industry CGV/Lotte (12 tháng). Khách phải đổi quà trong khoảng này, hết hạn điểm tự trừ. Lifetime points (xét hạng) KHÔNG bị ảnh hưởng — hạng không tụt.',
+                N'tháng', 'loyalty', 100, 1, 1, 60
+            );
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>

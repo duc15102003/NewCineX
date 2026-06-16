@@ -34,6 +34,31 @@ public class BookingResponse {
     private String roomType;
 
     private List<BookingSeatResponse> seats;
+
+    /**
+     * Pricing breakdown — industry chuẩn (CGV/Lotte) tách 3 dòng trên hóa đơn:
+     * <ul>
+     *   <li>{@code subtotalAmount} — tạm tính chưa VAT</li>
+     *   <li>{@code vatAmount} — tiền VAT (= total - subtotal)</li>
+     *   <li>{@code vatPercent} — VAT% áp dụng lúc bán (history-preserving)</li>
+     *   <li>{@code totalAmount} — tổng cộng (đã VAT, khách trả)</li>
+     * </ul>
+     */
+    /** Giá vé niêm yết gốc trước mọi giảm giá — dùng cho loyalty earn + audit. */
+    private BigDecimal seatTotalAmount;
+    private BigDecimal subtotalAmount;
+    private BigDecimal vatAmount;
+    private BigDecimal vatPercent;
+    /** Tiền giảm theo hạng thành viên — null/0 cho counter-sale + STANDARD tier. */
+    private BigDecimal tierDiscountAmount;
+    /** Hạng thành viên lúc đặt vé — null cho counter-sale. */
+    private String tierAtBooking;
+    /** Tiền giảm group booking — 0 nếu seats < threshold. */
+    private BigDecimal groupDiscountAmount;
+    /** Số điểm khách dùng để đổi giảm giá khi đặt vé. */
+    private Integer pointsRedeemed;
+    /** Tiền giảm tương ứng số điểm đã đổi. */
+    private BigDecimal loyaltyDiscountAmount;
     private BigDecimal totalAmount;
 
     private LocalDateTime confirmedAt;

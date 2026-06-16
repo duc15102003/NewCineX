@@ -11,6 +11,7 @@ import { fmtVnd } from '@/utils/labels'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
 import POSTheaterRequired from './components/POSTheaterRequired'
+import ReceiptDialog, { type SnackReceiptData } from './components/ReceiptDialog'
 
 interface SnackCartItem {
   kind: 'SNACK'
@@ -39,12 +40,15 @@ function cartKey(item: CartItem): string {
 export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [note, setNote] = useState('')
+  const [receipt, setReceipt] = useState<SnackReceiptData | null>(null)
 
-  // POS chuẩn industry (Vista/Veezi): BẮT BUỘC bind 1 theater context cụ thể.
-  // BRANCH_ADMIN có theater từ JWT (set vào store khi login); SUPER_ADMIN chọn "Tất cả CN" → null → chặn.
+  // POS BẮT BUỘC bind 1 theater context cụ thể. BRANCH_ADMIN có theater từ
+  // JWT (set vào store khi login); SUPER_ADMIN chọn "Tất cả CN" → null → chặn.
   const { currentTheater } = useAdminTheaterStore()
-  const { user, isBranchAdmin } = useAuthStore()
-  const theaterId = currentTheater?.id ?? (isBranchAdmin() ? user?.theaterId : null)
+  const user = useAuthStore(s => s.user)
+  // Priority: topbar switcher (SUPER_ADMIN pick) > JWT theaterId (ADMIN + STAFF
+  // đều có sẵn). STAFF không phải chọn lại — đã gắn chi nhánh từ lúc tạo TK.
+  const theaterId = currentTheater?.id ?? user?.theaterId ?? null
 
   const { data: snacks = [], isLoading: loadingSnacks } = useSnacksForPOS(theaterId)
   const { data: combos = [], isLoading: loadingCombos } = usePublicCombos(theaterId)
@@ -92,16 +96,40 @@ export default function POSPage() {
 
   function handleSubmit() {
     if (cart.length === 0) return
+    if (!theaterId) {
+      // SUPER_ADMIN chưa chọn chi nhánh ở topbar → BE sẽ reject. Báo sớm cho UX.
+      return
+    }
+    // Snapshot cart trước khi clear — dùng làm body cho receipt vì state cart
+    // sẽ reset ngay sau onSuccess.
+    const snapshot = cart.map(c => ({
+      kind: c.kind, name: c.name, quantity: c.quantity, price: c.price,
+    }))
+    const snapshotNote = note.trim() || null
     createOrderMut.mutate(
       {
+        // SUPER_ADMIN: BE cần theaterId. BRANCH_ADMIN: BE override từ JWT
+        // (gửi cũng bỏ qua), nhưng FE vẫn gửi để contract đồng nhất.
+        theaterId,
         items: cart.map(c => c.kind === 'SNACK'
           ? { snackId: c.snackId, quantity: c.quantity }
           : { comboId: c.comboId, quantity: c.quantity },
         ),
-        note: note.trim() || null,
+        note: snapshotNote,
       },
       {
-        onSuccess: () => { setCart([]); setNote('') },
+        onSuccess: (resp) => {
+          setReceipt({
+            kind: 'SNACK',
+            orderCode: resp.orderCode,
+            items: snapshot,
+            total: resp.totalAmount,
+            note: snapshotNote,
+            paidAt: new Date().toISOString(),
+          })
+          setCart([])
+          setNote('')
+        },
       },
     )
   }
@@ -220,14 +248,29 @@ export default function POSPage() {
             const key = cartKey(item)
             return (
               <div key={key} className="flex items-center gap-2 bg-white/5 rounded-lg p-2">
+                {/* Thumbnail: ảnh nếu có, fallback icon theo loại */}
+                {item.imageUrl ? (
+                  <img src={item.imageUrl} alt="" className="w-9 h-9 object-cover rounded-md shrink-0" />
+                ) : (
+                  <div className={`w-9 h-9 rounded-md flex items-center justify-center shrink-0 ${
+                    item.kind === 'COMBO' ? 'bg-purple-500/10' : 'bg-[#ffc107]/10'
+                  }`}>
+                    {item.kind === 'COMBO'
+                      ? <Package size={14} className="text-purple-400" />
+                      : <Popcorn size={14} className="text-[#ffc107]" />}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate flex items-center gap-1.5">
+                  {/* truncate + flex CÙNG element không hoạt động (text-overflow
+                      không apply lên flex children). Tách thành flex-row chứa
+                      badge shrink-0 + span name truncate min-w-0. */}
+                  <div className="flex items-center gap-1.5 min-w-0">
                     {item.kind === 'COMBO' && (
-                      <Package size={11} className="text-purple-400 shrink-0" />
+                      <span className="text-[9px] px-1 py-px rounded bg-purple-500/20 text-purple-300 border border-purple-400/30 font-bold uppercase shrink-0">Combo</span>
                     )}
-                    {item.name}
-                  </p>
-                  <p className="text-xs text-[#ffc107]">{fmtVnd(item.price * item.quantity)}</p>
+                    <span className="text-sm text-white truncate min-w-0">{item.name}</span>
+                  </div>
+                  <p className="text-xs text-[#ffc107] mt-0.5">{fmtVnd(item.price * item.quantity)}</p>
                 </div>
                 <div className="flex items-center gap-1">
                   <button onClick={() => updateQty(key, -1)} className="w-6 h-6 rounded bg-white/10 flex items-center justify-center text-gray-300 hover:bg-white/20"><Minus size={12} /></button>
@@ -256,6 +299,14 @@ export default function POSPage() {
           {createOrderMut.isPending ? 'Đang xử lý...' : 'Xác nhận đơn'}
         </Button>
       </div>
+
+      <ReceiptDialog
+        open={!!receipt}
+        onClose={() => setReceipt(null)}
+        data={receipt}
+        theaterName={currentTheater?.name ?? user?.theaterName ?? null}
+        cashierName={user?.username ?? null}
+      />
     </div>
   )
 }

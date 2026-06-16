@@ -24,6 +24,13 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Long>, JpaSp
             Long roomId, List<ShowtimeStatus> statuses, StorageState storageState);
 
     /**
+     * Đếm suất chiếu active của toàn chi nhánh (cross-rooms) — dùng để chặn
+     * archive Theater khi còn suất SCHEDULED/ONGOING.
+     */
+    long countByRoom_Theater_IdAndStatusInAndStorageStateNot(
+            Long theaterId, List<ShowtimeStatus> statuses, StorageState storageState);
+
+    /**
      * Kiểm tra phim có suất chiếu active (SCHEDULED/ONGOING) chưa archived hay không.
      * Dùng để chặn xóa Movie khi vẫn còn suất chiếu phụ thuộc.
      */

@@ -1,19 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
-// [DEMO ĐỒ ÁN] Uncomment để bật lại các tab/menu đã ẩn (đi kèm block dưới):
-// import { Link } from 'react-router-dom'
+import { Outlet, NavLink, Link, useLocation } from 'react-router-dom'
 import {
-  Film, Tags, DoorOpen, Clock, Users,
-  Menu, X, ChevronLeft, LogOut, Clapperboard,
-  Shield, Building2,
+  LayoutDashboard, Film, Tags, DoorOpen, Clock, Ticket, Users, ScanLine,
+  Menu, X, ChevronLeft, LogOut, Home, Coffee, TicketPercent, Clapperboard,
+  Shield, User, Heart, Settings, Receipt, CreditCard, MessageSquare, Building2,
+  Percent, Package,
   type LucideIcon,
 } from 'lucide-react'
-// [DEMO ĐỒ ÁN] Uncomment để bật lại các tab/menu đã ẩn:
-// import {
-//   LayoutDashboard, Ticket, ScanLine, Coffee, TicketPercent,
-//   Settings, Receipt, CreditCard, MessageSquare, Percent, Package,
-//   Home, User, Heart,
-// } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useLogout } from '@/hooks/useAuth'
 import AdminTheaterSelector from '@/components/admin/AdminTheaterSelector'
@@ -37,31 +30,53 @@ import AdminTheaterSelector from '@/components/admin/AdminTheaterSelector'
  * Sidebar menu cấu hình.
  * - `superAdminOnly = true`: chỉ SUPER_ADMIN thấy (vd Chi nhánh, Người dùng, Quy tắc giá, Cấu hình hệ thống).
  *   Branch ADMIN bị ẩn → không click vào page (server-side cũng chặn qua @PreAuthorize).
- *
- * [DEMO ĐỒ ÁN] Giai đoạn báo cáo: chỉ giữ 6 tab core
- * (Thể loại, Phim, Chi nhánh, Phòng chiếu, Suất chiếu, Người dùng).
- * Các tab khác đã comment lại — uncomment khi tính năng sẵn sàng (nhớ uncomment cả import ở đầu file).
  */
-const NAV_ITEMS: { to: string; label: string; icon: LucideIcon; exact?: boolean; superAdminOnly?: boolean }[] = [
-  // { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard, exact: true },
-  { to: '/admin/genres', label: 'Thể loại', icon: Tags },
-  { to: '/admin/movies', label: 'Phim', icon: Film },
-  { to: '/admin/theaters', label: 'Chi nhánh', icon: Building2, superAdminOnly: true },
-  { to: '/admin/rooms', label: 'Phòng chiếu', icon: DoorOpen },
-  { to: '/admin/showtimes', label: 'Suất chiếu', icon: Clock },
-  // { to: '/admin/bookings', label: 'Đặt vé', icon: Ticket },
-  // { to: '/admin/payments', label: 'Giao dịch', icon: CreditCard },
-  // { to: '/admin/snacks', label: 'Đồ ăn', icon: Coffee },
-  // { to: '/admin/combos', label: 'Combo', icon: Package },
-  // { to: '/admin/vouchers', label: 'Khuyến mãi', icon: TicketPercent },
-  { to: '/admin/users', label: 'Người dùng', icon: Users, superAdminOnly: true },
-  // { to: '/admin/reviews', label: 'Đánh giá', icon: MessageSquare },
-  // { to: '/admin/pos', label: 'POS Đồ ăn', icon: Receipt },
-  // { to: '/admin/ticket-pos', label: 'POS Bán vé', icon: Clapperboard },
-  // { to: '/admin/check-in', label: 'Quét vé', icon: ScanLine },
-  // { to: '/admin/pricing', label: 'Quy tắc giá', icon: Percent, superAdminOnly: true },
-  // { to: '/admin/configs', label: 'Cấu hình', icon: Settings, superAdminOnly: true },
+/**
+ * Menu admin panel. Flag visibility theo role:
+ * - {@code superAdminOnly}: chỉ SUPER_ADMIN thấy (Chi nhánh, Người dùng, Quy tắc giá, Cấu hình)
+ * - {@code staffAllowed}: STAFF cũng thấy (operational: POS + check-in). KHÔNG có flag = ADMIN+ only.
+ *
+ * <p>STAFF (nhân viên quầy) chỉ vào được POS Đồ ăn, POS Bán vé, Quét vé — không sửa
+ * được config/room/showtime/pricing (industry pattern CGV/Lotte).
+ */
+import { FEATURES } from '@/config/featureFlags'
+
+type NavItem = {
+  to: string
+  label: string
+  icon: LucideIcon
+  exact?: boolean
+  superAdminOnly?: boolean
+  staffAllowed?: boolean
+  /** Key map sang FEATURES.admin để toggle ẩn/hiện cho cinex-team. */
+  flag: keyof typeof FEATURES.admin
+}
+
+const NAV_ITEMS_ALL: NavItem[] = [
+  // Dashboard hiển thị doanh thu + báo cáo — chỉ ADMIN+ thấy. STAFF KHÔNG
+  // truy cập data tài chính (rạp thật: cashier không xem revenue).
+  { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard, exact: true, flag: 'dashboard' },
+  { to: '/admin/genres', label: 'Thể loại', icon: Tags, flag: 'genres' },
+  { to: '/admin/movies', label: 'Phim', icon: Film, flag: 'movies' },
+  { to: '/admin/theaters', label: 'Chi nhánh', icon: Building2, superAdminOnly: true, flag: 'theaters' },
+  { to: '/admin/rooms', label: 'Phòng chiếu', icon: DoorOpen, flag: 'rooms' },
+  { to: '/admin/showtimes', label: 'Suất chiếu', icon: Clock, flag: 'showtimes' },
+  { to: '/admin/bookings', label: 'Đặt vé', icon: Ticket, flag: 'bookings' },
+  { to: '/admin/payments', label: 'Giao dịch', icon: CreditCard, flag: 'payments' },
+  { to: '/admin/snacks', label: 'Đồ ăn', icon: Coffee, flag: 'snacks' },
+  { to: '/admin/combos', label: 'Combo', icon: Package, flag: 'combos' },
+  { to: '/admin/vouchers', label: 'Khuyến mãi', icon: TicketPercent, flag: 'vouchers' },
+  { to: '/admin/users', label: 'Người dùng', icon: Users, flag: 'users' },
+  { to: '/admin/reviews', label: 'Đánh giá', icon: MessageSquare, flag: 'reviews' },
+  { to: '/admin/pos', label: 'POS Đồ ăn', icon: Receipt, staffAllowed: true, flag: 'pos' },
+  { to: '/admin/ticket-pos', label: 'POS Bán vé', icon: Clapperboard, staffAllowed: true, flag: 'ticketPos' },
+  { to: '/admin/check-in', label: 'Quét vé', icon: ScanLine, staffAllowed: true, flag: 'checkIn' },
+  { to: '/admin/pricing', label: 'Quy tắc giá', icon: Percent, superAdminOnly: true, flag: 'pricing' },
+  { to: '/admin/configs', label: 'Cấu hình', icon: Settings, superAdminOnly: true, flag: 'configs' },
 ]
+
+// Filter theo feature flag — cinex-team chỉ hiện 5-6 mục cốt lõi (xem featureFlags.ts).
+const NAV_ITEMS = NAV_ITEMS_ALL.filter((n) => FEATURES.admin[n.flag])
 
 function getBreadcrumbs(pathname: string): { label: string; to?: string }[] {
   const crumbs: { label: string; to?: string }[] = [{ label: 'Bảng điều khiển', to: '/admin' }]
@@ -105,7 +120,7 @@ export default function AdminLayout() {
     return () => document.removeEventListener('mousedown', handleMouseDown)
   }, [])
   const location = useLocation()
-  const { user, isSuperAdmin } = useAuthStore()
+  const { user, isSuperAdmin, isStaff } = useAuthStore()
   const logout = useLogout()
   const breadcrumbs = getBreadcrumbs(location.pathname)
 
@@ -158,9 +173,15 @@ export default function AdminLayout() {
         </div>
       )}
 
-      {/* Nav items — filter theo role: branch ADMIN không thấy menu superAdminOnly */}
+      {/* Nav items — filter theo role:
+          - SUPER_ADMIN: thấy all
+          - ADMIN (branch): không thấy superAdminOnly
+          - STAFF: chỉ thấy menu có staffAllowed=true (Tổng quan + POS + Check-in) */}
       <nav className="flex-1 py-2 space-y-0.5 px-3 overflow-y-auto">
-        {NAV_ITEMS.filter((n) => !n.superAdminOnly || isSuperAdmin()).map(({ to, label, icon: Icon, exact }) => (
+        {NAV_ITEMS
+          .filter((n) => !n.superAdminOnly || isSuperAdmin())
+          .filter((n) => !isStaff() || n.staffAllowed)
+          .map(({ to, label, icon: Icon, exact }) => (
           <NavLink
             key={to}
             to={to}
@@ -288,8 +309,8 @@ export default function AdminLayout() {
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Theater context selector — admin filter view theo chi nhánh */}
-          <AdminTheaterSelector />
+          {/* Theater context selector — ẩn khi single-theater mode (cinex-team demo). */}
+          {FEATURES.multiTheater && <AdminTheaterSelector />}
 
           {/* User avatar + dropdown */}
           <div className="relative" ref={headerDropdownRef}>
@@ -313,8 +334,6 @@ export default function AdminLayout() {
                   <p className="text-sm font-medium text-white">{user?.username}</p>
                   <p className="text-xs text-gray-400 mt-0.5">Quản trị viên</p>
                 </div>
-                {/* [DEMO ĐỒ ÁN] Uncomment block dưới để bật lại Trang chủ / Hồ sơ / Vé của tôi / Phim yêu thích
-                    (đồng thời uncomment import Link + Home/User/Ticket/Heart ở đầu file).
                 <div className="py-1">
                   <Link to="/"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
@@ -331,14 +350,15 @@ export default function AdminLayout() {
                     onClick={() => setHeaderDropdown(false)}>
                     <Ticket size={16} className="text-gray-400" /> Vé của tôi
                   </Link>
-                  <Link to="/favorites"
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                    onClick={() => setHeaderDropdown(false)}>
-                    <Heart size={16} className="text-gray-400" /> Phim yêu thích
-                  </Link>
+                  {FEATURES.favorites && (
+                    <Link to="/favorites"
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                      onClick={() => setHeaderDropdown(false)}>
+                      <Heart size={16} className="text-gray-400" /> Phim yêu thích
+                    </Link>
+                  )}
                 </div>
                 <hr className="border-white/5 my-1" />
-                */}
                 <button
                   onClick={() => { setHeaderDropdown(false); logout() }}
                   className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-400 hover:bg-red-400/5 transition-colors"

@@ -68,7 +68,7 @@ export default function SnackFilterDrawer(props: SnackFilterDrawerProps) {
         />
       </FilterField>
 
-      <FilterField label="Bao gồm đã lưu trữ" hint="Hiển thị cả bản ghi đã bị xoá mềm (ARCHIVED).">
+      <FilterField label="Bao gồm bản đã lưu trữ" hint="Lưu trữ = ẩn khỏi danh sách thường, có thể khôi phục lại bất cứ lúc nào.">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"

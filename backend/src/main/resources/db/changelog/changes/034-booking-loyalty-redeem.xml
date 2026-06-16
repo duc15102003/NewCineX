@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Wire loyalty redeem vào booking flow — industry chuẩn CGV/Lotte/BHD:
+        khách dùng điểm tích trừ thẳng vào giá vé khi đặt. Bộ điều khiển:
+          - HoldSeatsRequest.redeemPoints (Integer)
+          - BookingService.computePriceBreakdown áp loyaltyDiscount sau group, trước voucher
+          - LoyaltyService.redeemForBooking trừ điểm + log REDEEM tx có booking_id
+          - cancel/expire booking → LoyaltyService.refundPointsForBooking
+            (cộng điểm lại + log ADJUST tx)
+
+        Lưu 2 field vào booking để history-preserving + hoàn điểm chính xác
+        khi cancel.
+    -->
+
+    <changeSet id="034-add-loyalty-redeem-fields" author="cinex">
+        <addColumn tableName="bookings">
+            <column name="points_redeemed" type="INT" defaultValueNumeric="0"
+                    remarks="Số điểm khách dùng đổi khi đặt vé">
+                <constraints nullable="false"/>
+            </column>
+            <column name="loyalty_discount_amount" type="DECIMAL(12,0)" defaultValueNumeric="0"
+                    remarks="Tiền giảm tương ứng = pointsRedeemed × loyalty.redeem_value">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

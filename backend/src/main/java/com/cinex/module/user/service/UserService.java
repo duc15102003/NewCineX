@@ -13,6 +13,7 @@ import com.cinex.module.theater.entity.Theater;
 import com.cinex.module.theater.repository.TheaterRepository;
 import com.cinex.module.user.dto.ChangePasswordRequest;
 import com.cinex.module.user.dto.UpdateProfileRequest;
+import com.cinex.module.user.dto.AdminCreateUserRequest;
 import com.cinex.module.user.dto.AdminUpdateUserRequest;
 import com.cinex.module.user.dto.UpdateRoleRequest;
 import com.cinex.module.user.dto.UserFilter;
@@ -42,6 +43,7 @@ public class UserService {
     private final RefreshTokenService refreshTokenService;
     private final JwtBlacklistService jwtBlacklistService;
     private final TheaterRepository theaterRepository;
+    private final com.cinex.common.service.SecurityService securityService;
 
     /**
      * Lấy profile user hiện tại từ SecurityContext.
@@ -147,10 +149,30 @@ public class UserService {
     }
 
     /**
-     * (ADMIN) Danh sách user — Filter DTO + Specification, thống nhất với mọi module.
+     * (ADMIN) Danh sách user — Filter DTO + Specification.
+     *
+     * <p>RBAC scope: nếu user gọi là branch ADMIN → force filter theaterId =
+     * theater của ADMIN, và chỉ trả USER + STAFF (không cho xem ADMIN/SUPER_ADMIN
+     * khác). SUPER_ADMIN không bị scope, xem tất cả.
      */
     @Transactional(readOnly = true)
     public Page<UserProfileResponse> listUsers(UserFilter filter, Pageable pageable) {
+        // Dùng SecurityService thay vì check role tay — khi single-theater mode
+        // bật (cinex-team), SecurityService return id HN cho MỌI role kể cả
+        // SUPER_ADMIN. Branch ADMIN multi-theater vẫn return id của theater
+        // mình. SUPER_ADMIN multi-theater return null (xem tất cả).
+        Long scopedTheaterId = securityService.getCurrentUserTheaterId();
+        if (scopedTheaterId != null) {
+            filter.setScopedTheaterId(scopedTheaterId);
+            // KHÔNG set excludeAdminRoles → spec inScopedTheaterOrPublicUser
+            // (theater_id = HN OR role = USER) đã đủ filter:
+            //   - cinex.hn (ADMIN, theater HN) → MATCH → hiện (admin thấy mình)
+            //   - cinex.hcm (ADMIN, theater HCM) → KHÔNG match → ẩn ✓
+            //   - admin (SUPER_ADMIN, theater NULL) → KHÔNG match → ẩn ✓
+            //   - user01-08 (USER, theater NULL) → match role=USER → hiện
+            //   - STAFF HN (nếu seed) → match theater HN → hiện
+            // Trước đây excludeAdminRoles loại tất cả ADMIN → ẩn nhầm bản thân.
+        }
         var spec = UserSpecification.fromFilter(filter);
         return userRepository.findAll(spec, pageable)
                 .map(userMapper::toProfileResponse);
@@ -192,6 +214,69 @@ public class UserService {
     }
 
     /**
+     * Admin tạo user mới (cho cả 4 role).
+     *
+     * <p>RBAC:
+     * <ul>
+     *   <li>SUPER_ADMIN: tạo được bất kỳ role, theaterId tự do</li>
+     *   <li>ADMIN (branch): chỉ tạo STAFF + USER, theaterId FORCE = theater của
+     *       ADMIN (FE có gửi sai cũng bị override để tránh leak cross-theater)</li>
+     * </ul>
+     *
+     * <p>Endpoint guard ở Controller (@PreAuthorize). Service double-check role
+     * + override theaterId là defense in depth.
+     */
+    @Transactional
+    @Auditable(action = "CREATE_USER", entityType = "User")
+    public UserProfileResponse adminCreateUser(AdminCreateUserRequest request) {
+        User currentUser = getCurrentUser();
+        Role currentRole = currentUser.getRole();
+        Role requestedRole = request.getRole();
+
+        // Branch ADMIN chỉ được tạo STAFF + USER (không tạo ADMIN/SUPER_ADMIN)
+        if (currentRole == Role.ADMIN
+                && requestedRole != Role.STAFF && requestedRole != Role.USER) {
+            throw new BusinessException(ErrorCode.FORBIDDEN,
+                    "Quản trị chi nhánh chỉ tạo được tài khoản Nhân viên hoặc Khách hàng");
+        }
+
+        // Branch ADMIN: force theaterId = theater của ADMIN (không cho gán CN khác)
+        Long effectiveTheaterId = currentRole == Role.ADMIN
+                ? (currentUser.getTheater() != null ? currentUser.getTheater().getId() : null)
+                : request.getTheaterId();
+        if (currentRole == Role.ADMIN && effectiveTheaterId == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tài khoản admin của bạn chưa được gán chi nhánh — liên hệ Quản trị tổng");
+        }
+
+        if (userRepository.findByUsername(request.getUsername()).isPresent()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tên đăng nhập '" + request.getUsername() + "' đã tồn tại");
+        }
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Email '" + request.getEmail() + "' đã được dùng cho tài khoản khác");
+        }
+
+        User newUser = User.builder()
+                .username(request.getUsername())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .fullName(request.getFullName())
+                .phone(request.getPhone())
+                .role(requestedRole)
+                .enabled(true)
+                .build();
+
+        applyTheaterByRole(newUser, requestedRole, effectiveTheaterId);
+
+        User saved = userRepository.save(newUser);
+        log.info("Admin {} created user {} (role={}, theaterId={})",
+                currentUser.getUsername(), saved.getUsername(), requestedRole, effectiveTheaterId);
+        return userMapper.toProfileResponse(saved);
+    }
+
+    /**
      * (ADMIN) Cập nhật thông tin user: fullName, phone, role, enabled.
      * Admin không thể disable/đổi role chính mình.
      */
@@ -204,6 +289,53 @@ public class UserService {
         String currentUsername = SecurityUtil.getCurrentUsername();
         if (target.getUsername().equals(currentUsername)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "Không thể chỉnh sửa tài khoản của chính mình");
+        }
+
+        // RBAC cho branch ADMIN: chỉ sửa user CÙNG chi nhánh + role thuộc {STAFF, USER}.
+        // SUPER_ADMIN bypass mọi check (đã guard ở Controller).
+        User currentUser = getCurrentUser();
+        if (currentUser.getRole() == Role.ADMIN) {
+            Long adminTheaterId = currentUser.getTheater() != null
+                    ? currentUser.getTheater().getId() : null;
+            Long targetTheaterId = target.getTheater() != null
+                    ? target.getTheater().getId() : null;
+            if (target.getRole() == Role.ADMIN || target.getRole() == Role.SUPER_ADMIN) {
+                throw new BusinessException(ErrorCode.FORBIDDEN,
+                        "Bạn không có quyền sửa tài khoản quản trị khác");
+            }
+            if (adminTheaterId == null || !adminTheaterId.equals(targetTheaterId)) {
+                // Target STAFF khác chi nhánh hoặc USER (không thuộc chi nhánh) — chặn
+                if (target.getRole() == Role.STAFF) {
+                    throw new BusinessException(ErrorCode.FORBIDDEN,
+                            "Bạn chỉ sửa được nhân viên cùng chi nhánh");
+                }
+            }
+            // ADMIN không được promote user lên ADMIN/SUPER_ADMIN
+            if (request.getRole() == Role.ADMIN || request.getRole() == Role.SUPER_ADMIN) {
+                throw new BusinessException(ErrorCode.FORBIDDEN,
+                        "Bạn không có quyền gán vai trò Quản trị");
+            }
+            // ADMIN không được đổi chi nhánh của STAFF sang chi nhánh khác
+            if (request.getRole() == Role.STAFF && request.getTheaterId() != null
+                    && !request.getTheaterId().equals(adminTheaterId)) {
+                throw new BusinessException(ErrorCode.FORBIDDEN,
+                        "Chỉ được gán nhân viên vào chi nhánh của bạn");
+            }
+        }
+
+        // Chặn disable / demote SUPER_ADMIN cuối cùng — tránh lockout hệ thống.
+        // Industry chuẩn (CGV/Lotte): luôn phải có ≥ 1 super admin enabled.
+        boolean isDemotingSuperAdmin = target.getRole() == Role.SUPER_ADMIN
+                && request.getRole() != Role.SUPER_ADMIN;
+        boolean isDisablingSuperAdmin = target.getRole() == Role.SUPER_ADMIN
+                && target.isEnabled() && !request.getEnabled();
+        if (isDemotingSuperAdmin || isDisablingSuperAdmin) {
+            long activeSupers = userRepository.countByRoleAndEnabledTrue(Role.SUPER_ADMIN);
+            if (activeSupers <= 1) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Không thể " + (isDemotingSuperAdmin ? "đổi vai trò" : "vô hiệu hoá") +
+                        " SUPER_ADMIN cuối cùng. Hãy thăng cấp 1 user khác lên SUPER_ADMIN trước.");
+            }
         }
 
         if (request.getFullName() != null) {
@@ -229,14 +361,14 @@ public class UserService {
      * Set theater theo role + validate matrix:
      * <ul>
      *   <li>USER / SUPER_ADMIN: theaterId BẮT BUỘC null → set theater = null</li>
-     *   <li>ADMIN: theaterId BẮT BUỘC NOT NULL → load theater + set</li>
+     *   <li>ADMIN / STAFF: theaterId BẮT BUỘC NOT NULL — cả 2 đều scope theater</li>
      * </ul>
      */
     private void applyTheaterByRole(User target, Role role, Long requestedTheaterId) {
-        if (role == Role.ADMIN) {
+        if (role == Role.ADMIN || role == Role.STAFF) {
             if (requestedTheaterId == null) {
                 throw new BusinessException(ErrorCode.INVALID_REQUEST,
-                        "ADMIN phải được gán 1 chi nhánh — vui lòng chọn theater_id");
+                        role.name() + " phải được gán 1 chi nhánh — vui lòng chọn theater_id");
             }
             Theater theater = theaterRepository.findById(requestedTheaterId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND,

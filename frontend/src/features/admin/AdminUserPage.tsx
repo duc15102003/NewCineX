@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Building2, Globe2, X, Users, Plus } from 'lucide-react'
+import { useAuthStore } from '@/store/authStore'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,11 +10,13 @@ import { FilterTrigger } from '@/components/common/FilterDrawer'
 
 import UserFormDialog from './components/UserFormDialog'
 import UserFilterDrawer from './components/UserFilterDrawer'
+import { FEATURES } from '@/config/featureFlags'
 
 import { useAdminUsers } from '@/hooks/useAdmin'
 import type { AdminUser, AdminUserFilter } from '@/hooks/useAdminUsers'
 import { label, ROLE_LABELS, STORAGE_STATE_LABELS } from '@/utils/labels'
 import { ROLE_COLORS, STORAGE_STATE_COLORS as STATE_COLORS } from '@/utils/colors'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const PAGE_SIZE = 15
 
@@ -25,11 +29,48 @@ const EMPTY_FILTER: AdminUserFilter = {
   includeDeleted: false,
 }
 
+/**
+ * Render cell "Chi nhánh" theo role — sync với pattern badge của
+ * AdminBookingPage/AdminPricingPage:
+ *
+ * <ul>
+ *   <li><b>SUPER_ADMIN</b>: badge gold "Toàn hệ" — không thuộc CN nào, xem mọi CN</li>
+ *   <li><b>ADMIN / STAFF</b>: badge neutral + icon + tên CN + city</li>
+ *   <li><b>USER</b>: "—" gray vì khách không thuộc CN</li>
+ * </ul>
+ */
+function renderTheaterCell(u: AdminUser) {
+  if (u.role === 'SUPER_ADMIN') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border bg-[#ffc107]/10 text-[#ffc107] border-[#ffc107]/30">
+        <Globe2 size={12} /> Toàn hệ
+      </span>
+    )
+  }
+  if (u.theaterName) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-200">
+        <Building2 size={12} className="text-[#ffc107]" />
+        <span>{u.theaterName}</span>
+        {u.theaterCity && <span className="text-gray-500">— {u.theaterCity}</span>}
+      </span>
+    )
+  }
+  return <span className="text-xs text-gray-500">—</span>
+}
+
 export default function AdminUserPage() {
+  usePageTitle('Quản lý người dùng')
   const [page, setPage] = useState(0)
   const [appliedFilter, setAppliedFilter] = useState<AdminUserFilter>(EMPTY_FILTER)
   const [draftFilter, setDraftFilter] = useState<AdminUserFilter>(EMPTY_FILTER)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [keywordInput, setKeywordInput] = useState('')
+  const debouncedKw = useDebouncedValue(keywordInput, 400)
+  useEffect(() => {
+    setAppliedFilter(f => ({ ...f, keyword: debouncedKw }))
+    setPage(0)
+  }, [debouncedKw])
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<AdminUser | null>(null)
@@ -52,8 +93,15 @@ export default function AdminUserPage() {
     return n
   }, [appliedFilter])
 
+  const currentUserRole = useAuthStore(s => s.user?.role)
+  const canCreate = currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'ADMIN'
+
   function openEdit(u: AdminUser) {
     setEditingItem(u)
+    setDialogOpen(true)
+  }
+  function openCreate() {
+    setEditingItem(null)
     setDialogOpen(true)
   }
 
@@ -83,8 +131,8 @@ export default function AdminUserPage() {
           <div className="flex-1 max-w-sm">
             <Input
               placeholder="Tìm theo username/email/họ tên/SĐT..."
-              value={appliedFilter.keyword ?? ''}
-              onChange={(e) => { setAppliedFilter(f => ({ ...f, keyword: e.target.value })); setPage(0) }}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
             />
           </div>
           <FilterTrigger onClick={openDrawer} activeCount={activeCount} />
@@ -96,6 +144,15 @@ export default function AdminUserPage() {
             </Button>
           )}
         </div>
+        {/* RBAC: chỉ SUPER_ADMIN + ADMIN branch tạo được user.
+            STAFF/USER ẩn nút (defense in depth — BE cũng chặn). */}
+        {canCreate && (
+          <div className="flex items-center gap-2">
+            <Button onClick={openCreate} className="bg-[#ffc107] hover:bg-[#e6ac06] text-black font-semibold rounded-lg">
+              <Plus size={16} className="mr-1" /> Thêm mới
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-[#3f382d] overflow-clip">
@@ -108,7 +165,7 @@ export default function AdminUserPage() {
               <TableHead className="text-gray-400">Họ tên</TableHead>
               <TableHead className="text-gray-400">SĐT</TableHead>
               <TableHead className="text-gray-400">Vai trò</TableHead>
-              <TableHead className="text-gray-400">Chi nhánh</TableHead>
+              {FEATURES.multiTheater && <TableHead className="text-gray-400">Chi nhánh</TableHead>}
               <TableHead className="text-gray-400">Trạng thái</TableHead>
               <TableHead className="text-gray-400">Lưu trữ</TableHead>
             </TableRow>
@@ -116,7 +173,12 @@ export default function AdminUserPage() {
           <TableBody>
             {users.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-gray-500 py-10">Không có dữ liệu</TableCell>
+                <TableCell colSpan={FEATURES.multiTheater ? 9 : 8} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2 text-gray-500">
+                    <Users size={32} className="text-gray-600" />
+                    <p className="text-sm">{keywordInput ? `Không tìm thấy người dùng khớp "${keywordInput}"` : 'Chưa có người dùng nào'}</p>
+                  </div>
+                </TableCell>
               </TableRow>
             )}
             {users.map((u, index) => {
@@ -138,9 +200,11 @@ export default function AdminUserPage() {
                     {label(ROLE_LABELS, u.role)}
                   </span>
                 </TableCell>
-                <TableCell className="whitespace-nowrap text-gray-300 text-sm">
-                  {u.theaterName ? <span>{u.theaterName}</span> : <span className="text-gray-600">—</span>}
-                </TableCell>
+                {FEATURES.multiTheater && (
+                  <TableCell className="whitespace-nowrap">
+                    {renderTheaterCell(u)}
+                  </TableCell>
+                )}
                 <TableCell className="whitespace-nowrap">
                   <span className={`text-xs px-2 py-1 rounded border ${u.enabled
                     ? 'bg-green-500/10 text-green-400 border-green-500/30'

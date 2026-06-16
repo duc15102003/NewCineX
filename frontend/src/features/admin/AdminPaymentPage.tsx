@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Building2, X } from 'lucide-react'
+import { X, CreditCard } from 'lucide-react'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
@@ -20,14 +21,18 @@ import {
   type AdminPaymentFilter,
 } from '@/hooks/useAdminPayments'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const PAGE_SIZE = 20
 
 const EMPTY_FILTER: AdminPaymentFilter = {}
 
 export default function AdminPaymentPage() {
+  usePageTitle('Quản lý thanh toán')
   const [page, setPage] = useState(0)
-  const [keyword, setKeyword] = useState('')
+  const [keywordInput, setKeywordInput] = useState('')
+  const keyword = useDebouncedValue(keywordInput, 400)
+  useEffect(() => { setPage(0) }, [keyword])
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [viewItem, setViewItem] = useState<AdminPayment | null>(null)
 
@@ -47,9 +52,7 @@ export default function AdminPaymentPage() {
   const payments = data?.content ?? []
   const totalPages = data?.totalPages ?? 0
 
-  // "Tất cả chi nhánh" → thêm cột Chi nhánh trong row; ẩn nếu đã filter
-  // 1 chi nhánh (redundant). Bỏ grouped view — xem note ở AdminShowtimePage.
-  const showAllTheaters = !adminTheater
+  // Force theater pick (industry standard): admin LUÔN xem 1 CN cụ thể.
 
   const renderPaymentRow = (p: AdminPayment, idx: number) => (
     <TableRow key={p.id} className="border-[#3f382d] hover:bg-white/5 group">
@@ -66,18 +69,6 @@ export default function AdminPaymentPage() {
           </Link>
         )}
       </TableCell>
-      {showAllTheaters && (
-        <TableCell className="whitespace-nowrap">
-          {p.theaterName ? (
-            <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-200">
-              <Building2 size={12} className="text-[#ffc107]" />
-              {p.theaterName}
-            </span>
-          ) : (
-            <span className="text-xs text-gray-500">—</span>
-          )}
-        </TableCell>
-      )}
       <TableCell className="whitespace-nowrap">
         <span className={`text-xs px-2 py-1 rounded border ${PAYMENT_METHOD_COLORS[p.method] ?? ''}`}>
           {label(PAYMENT_METHOD_LABELS, p.method)}
@@ -110,7 +101,7 @@ export default function AdminPaymentPage() {
     setPage(0)
   }
 
-  const tableCols = showAllTheaters ? 8 : 7
+  const tableCols = 7
   const showSkeleton = isLoading && !data
 
   return (
@@ -121,8 +112,8 @@ export default function AdminPaymentPage() {
           <div className="flex-1 max-w-sm">
             <Input
               placeholder="Tìm theo mã giao dịch / mã booking..."
-              value={keyword}
-              onChange={(e) => { setKeyword(e.target.value); setPage(0) }}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
             />
           </div>
           <FilterTrigger onClick={() => setDrawerOpen(true)} activeCount={activeCount} />
@@ -138,7 +129,11 @@ export default function AdminPaymentPage() {
 
       {/* Table */}
       {!showSkeleton && payments.length === 0 ? (
-        <EmptyState message="Không có giao dịch nào" />
+        <EmptyState
+          icon={CreditCard}
+          message={keywordInput ? `Không tìm thấy giao dịch khớp "${keywordInput}"` : 'Chưa có giao dịch nào'}
+          description={keywordInput ? 'Kiểm tra lại mã giao dịch hoặc bỏ bộ lọc đang áp.' : 'Giao dịch sẽ xuất hiện khi khách hoặc POS thanh toán booking.'}
+        />
       ) : (
         <div className="rounded-2xl border border-[#3f382d] overflow-clip">
           <Table>
@@ -147,7 +142,7 @@ export default function AdminPaymentPage() {
                 <TableHead className="text-gray-400 w-12">#</TableHead>
                 <TableHead className="text-gray-400">Mã giao dịch</TableHead>
                 <TableHead className="text-gray-400">Mã booking</TableHead>
-                {showAllTheaters && <TableHead className="text-gray-400">Chi nhánh</TableHead>}
+                {/* Cột "Chi nhánh" bỏ — force theater pick ở topbar */}
                 <TableHead className="text-gray-400">Phương thức</TableHead>
                 <TableHead className="text-gray-400">Số tiền</TableHead>
                 <TableHead className="text-gray-400">Trạng thái</TableHead>

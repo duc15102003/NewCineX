@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Fix seed showtime cũ: file 016-seed-showtimes-vouchers.xml chỉ INSERT
+        base_price + vip_price + couple_price. KHÔNG set sweetbox_price +
+        deluxe_price → NULL trong DB.
+
+        Hệ quả UI: MovieDetailPage check `sweetboxPrice != null` để render →
+        phòng có ghế SWEETBOX/DELUXE nhưng UI không hiện giá → user nhầm
+        tưởng phòng chỉ có 3 loại ghế.
+
+        Fix: auto-fill giá cho mỗi showtime nếu phòng có loại ghế tương ứng,
+        theo multiplier industry chuẩn:
+          - sweetbox = couple × 1.75 (luxury cao cấp, ghế đôi + bàn nhỏ)
+          - deluxe   = vip × 1.5     (recliner ngả lưng)
+
+        Chỉ áp khi phòng THỰC SỰ có ghế loại đó (subquery EXISTS) — phòng
+        không có sweetbox vẫn giữ price NULL.
+    -->
+
+    <changeSet id="041-fill-sweetbox-price" author="cinex-team">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="showtimes"/>
+                <tableExists tableName="seats"/>
+                <columnExists tableName="showtimes" columnName="sweetbox_price"/>
+            </and>
+        </preConditions>
+        <sql>
+            UPDATE s
+            SET s.sweetbox_price = ROUND(ISNULL(s.couple_price, s.base_price) * 1.75, 0)
+            FROM showtimes s
+            WHERE s.sweetbox_price IS NULL
+              AND EXISTS (
+                SELECT 1 FROM seats st
+                WHERE st.room_id = s.room_id
+                  AND st.seat_type = 'SWEETBOX'
+                  AND (st.storage_state IS NULL OR st.storage_state &lt;&gt; 'ARCHIVED')
+              );
+        </sql>
+    </changeSet>
+
+    <changeSet id="041-fill-deluxe-price" author="cinex-team">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="showtimes"/>
+                <tableExists tableName="seats"/>
+                <columnExists tableName="showtimes" columnName="deluxe_price"/>
+            </and>
+        </preConditions>
+        <sql>
+            UPDATE s
+            SET s.deluxe_price = ROUND(ISNULL(s.vip_price, s.base_price) * 1.5, 0)
+            FROM showtimes s
+            WHERE s.deluxe_price IS NULL
+              AND EXISTS (
+                SELECT 1 FROM seats st
+                WHERE st.room_id = s.room_id
+                  AND st.seat_type = 'DELUXE'
+                  AND (st.storage_state IS NULL OR st.storage_state &lt;&gt; 'ARCHIVED')
+              );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

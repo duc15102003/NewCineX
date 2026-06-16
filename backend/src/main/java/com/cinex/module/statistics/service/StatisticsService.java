@@ -1,8 +1,12 @@
 package com.cinex.module.statistics.service;
 
 import com.cinex.common.service.SecurityService;
+import com.cinex.module.statistics.dto.BookingHealthStatistics;
+import com.cinex.module.statistics.dto.OccupancyAggregateStatistics;
 import com.cinex.module.statistics.dto.OccupancyStatistics;
 import com.cinex.module.statistics.dto.OverviewStatistics;
+import com.cinex.module.statistics.dto.RevenueByRoomTypeStatistics;
+import com.cinex.module.statistics.dto.RevenueBreakdownStatistics;
 import com.cinex.module.statistics.dto.RevenueStatistics;
 import com.cinex.module.statistics.dto.TopMovieRunStatistics;
 import com.cinex.module.statistics.dto.TopMovieStatistics;
@@ -95,5 +99,33 @@ public class StatisticsService {
     @Transactional(readOnly = true)
     public List<OccupancyStatistics> getOccupancy(LocalDate date, Long theaterId) {
         return statisticsRepository.findOccupancyByDate(date, resolveTheaterId(theaterId));
+    }
+
+    @Transactional(readOnly = true)
+    @Cacheable(value = "stats-occupancy-aggregate",
+            key = "#from.toString() + '_' + #to.toString() + '_' + (#theaterId != null ? #theaterId : 'all')")
+    public OccupancyAggregateStatistics getOccupancyAggregate(LocalDate from, LocalDate to, Long theaterId) {
+        return statisticsRepository.findOccupancyAggregate(from, to, resolveTheaterId(theaterId));
+    }
+
+    @Transactional(readOnly = true)
+    @Cacheable(value = "stats-booking-health",
+            key = "#from.toString() + '_' + #to.toString() + '_' + (#theaterId != null ? #theaterId : 'all')")
+    public BookingHealthStatistics getBookingHealth(LocalDate from, LocalDate to, Long theaterId) {
+        return statisticsRepository.findBookingHealth(from, to, resolveTheaterId(theaterId));
+    }
+
+    @Transactional(readOnly = true)
+    @Cacheable(value = "stats-revenue-breakdown",
+            key = "#from.toString() + '_' + #to.toString() + '_' + (#theaterId != null ? #theaterId : 'all')")
+    public RevenueBreakdownStatistics getRevenueBreakdown(LocalDate from, LocalDate to, Long theaterId) {
+        return statisticsRepository.findRevenueBreakdown(from, to, resolveTheaterId(theaterId));
+    }
+
+    @Transactional(readOnly = true)
+    @Cacheable(value = "stats-revenue-by-room-type",
+            key = "#from.toString() + '_' + #to.toString() + '_' + (#theaterId != null ? #theaterId : 'all')")
+    public List<RevenueByRoomTypeStatistics> getRevenueByRoomType(LocalDate from, LocalDate to, Long theaterId) {
+        return statisticsRepository.findRevenueByRoomType(from, to, resolveTheaterId(theaterId));
     }
 }

@@ -54,7 +54,7 @@ export default function PaymentFilterDrawer(props: PaymentFilterDrawerProps) {
         </select>
       </FilterField>
 
-      <FilterField label="Khoảng thanh toán (paidAt)">
+      <FilterField label="Ngày thanh toán thành công" hint="Khoảng thời gian giao dịch chuyển sang trạng thái THÀNH CÔNG (đã trừ tiền)">
         <DateRangePicker
           type="datetime-local"
           from={(adv.paidFrom as string) ?? ''}
@@ -63,7 +63,7 @@ export default function PaymentFilterDrawer(props: PaymentFilterDrawerProps) {
         />
       </FilterField>
 
-      <FilterField label="Khoảng tạo (createdAt)">
+      <FilterField label="Ngày tạo giao dịch" hint="Khoảng thời gian giao dịch được khởi tạo (kể cả đang chờ / thất bại / huỷ)">
         <DateRangePicker
           type="datetime-local"
           from={(adv.createdFrom as string) ?? ''}
@@ -85,23 +85,34 @@ export default function PaymentFilterDrawer(props: PaymentFilterDrawerProps) {
         />
       </FilterField>
 
-      <FilterField label="ID người dùng">
-        <Input
-          type="number"
-          placeholder="VD: 5"
-          value={adv.userId ?? ''}
-          onChange={(e) => onPatch({ userId: e.target.value ? Number(e.target.value) : undefined })}
-        />
-      </FilterField>
-
-      <FilterField label="ID booking">
-        <Input
-          type="number"
-          placeholder="VD: 12"
-          value={adv.bookingId ?? ''}
-          onChange={(e) => onPatch({ bookingId: e.target.value ? Number(e.target.value) : undefined })}
-        />
-      </FilterField>
+      {/* Tìm nâng cao theo ID — gập lại mặc định, mở khi admin biết chính xác số ID. */}
+      <details className="rounded-md border border-white/5 bg-white/[0.02] px-3 py-2 group">
+        <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-200 list-none flex items-center justify-between">
+          <span>Tìm nâng cao theo số ID</span>
+          <span className="text-gray-600 group-open:rotate-180 transition-transform">▼</span>
+        </summary>
+        <div className="mt-3 space-y-3 pt-2 border-t border-white/5">
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            Dành cho khi bạn đã biết chính xác mã số nội bộ của khách hoặc booking — thường lấy từ dashboard hoặc báo cáo lỗi.
+          </p>
+          <FilterField label="Số ID khách hàng">
+            <Input
+              type="number"
+              placeholder="VD: 5"
+              value={adv.userId ?? ''}
+              onChange={(e) => onPatch({ userId: e.target.value ? Number(e.target.value) : undefined })}
+            />
+          </FilterField>
+          <FilterField label="Số ID booking">
+            <Input
+              type="number"
+              placeholder="VD: 12"
+              value={adv.bookingId ?? ''}
+              onChange={(e) => onPatch({ bookingId: e.target.value ? Number(e.target.value) : undefined })}
+            />
+          </FilterField>
+        </div>
+      </details>
     </FilterDrawer>
   )
 }

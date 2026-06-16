@@ -2,6 +2,7 @@ package com.cinex.module.seat.controller;
 
 import com.cinex.common.response.ApiResponse;
 import com.cinex.module.seat.dto.BulkUpdateSeatRequest;
+import com.cinex.module.seat.dto.ResizeSeatGridRequest;
 import com.cinex.module.seat.dto.RoomSeatTypeSummaryResponse;
 import com.cinex.module.seat.dto.SeatGenerateRequest;
 import com.cinex.module.seat.dto.SeatMapResponse;
@@ -67,6 +68,15 @@ public class SeatController {
             @PathVariable Long roomId,
             @Valid @RequestBody BulkUpdateSeatRequest request) {
         return ApiResponse.ok("Seats updated", seatService.bulkUpdateSeats(roomId, request));
+    }
+
+    @PutMapping("/dimensions")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "(Admin) Resize seat grid (rows x cols) — preserve existing seats")
+    public ApiResponse<SeatMapResponse> resizeGrid(
+            @PathVariable Long roomId,
+            @Valid @RequestBody ResizeSeatGridRequest request) {
+        return ApiResponse.ok("Đã đổi kích thước sơ đồ ghế", seatService.resizeGrid(roomId, request));
     }
 
     @PutMapping("/{seatId}")

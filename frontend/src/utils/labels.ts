@@ -90,10 +90,28 @@ export const MOVIE_RUN_TYPE_LABELS: Record<string, string> = {
 
 // === Showtime Status ===
 export const SHOWTIME_STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Nháp',
   SCHEDULED: 'Đã lên lịch',
   ONGOING: 'Đang chiếu',
   FINISHED: 'Đã chiếu xong',
   CANCELLED: 'Đã hủy',
+}
+
+// === Showtime Format (2D/3D/IMAX/4DX/Screen-X) ===
+export const SHOWTIME_FORMAT_LABELS: Record<string, string> = {
+  TWO_D: '2D',
+  THREE_D: '3D',
+  IMAX: 'IMAX',
+  IMAX_3D: 'IMAX 3D',
+  FOUR_DX: '4DX',
+  SCREEN_X: 'Screen X',
+}
+
+// === Showtime Language Mode ===
+export const SHOWTIME_LANGUAGE_LABELS: Record<string, string> = {
+  SUB_VI: 'Phụ đề Việt',
+  DUB_VI: 'Lồng tiếng Việt',
+  ORIGINAL: 'Nguyên bản',
 }
 
 // === Booking Status ===
@@ -160,13 +178,23 @@ export const STORAGE_STATE_LABELS: Record<string, string> = {
 // === User Role ===
 export const ROLE_LABELS: Record<string, string> = {
   USER: 'Người dùng',
+  STAFF: 'Nhân viên',
   ADMIN: 'QTV chi nhánh',
   SUPER_ADMIN: 'QTV tổng',
+}
+
+// === Loyalty Tier ===
+export const LOYALTY_TIER_LABELS: Record<string, string> = {
+  STANDARD: 'Thường',
+  SILVER: 'Bạc',
+  GOLD: 'Vàng',
+  PLATINUM: 'Bạch Kim',
 }
 
 /** Mô tả đầy đủ — dùng cho select option / tooltip. */
 export const ROLE_LABELS_FULL: Record<string, string> = {
   USER: 'Người dùng',
+  STAFF: 'Nhân viên quầy (POS + check-in)',
   ADMIN: 'Quản trị viên chi nhánh',
   SUPER_ADMIN: 'Quản trị viên tổng (HQ)',
 }

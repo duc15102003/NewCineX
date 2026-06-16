@@ -9,7 +9,10 @@ import POSShowtimePicker from './components/POSShowtimePicker'
 import POSSeatGrid from './components/POSSeatGrid'
 import POSOrderSummary, { type PosPaymentMethod } from './components/POSOrderSummary'
 import POSTheaterRequired from './components/POSTheaterRequired'
+import ReceiptDialog, { type TicketReceiptData } from './components/ReceiptDialog'
+import ConfirmCounterPaymentDialog from './components/ConfirmCounterPaymentDialog'
 
+import { useAuthStore } from '@/store/authStore'
 import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import {
   usePOSShowtimes, useCutoffMinutes, usePOSSeats, useCounterSale,
@@ -27,14 +30,19 @@ export default function TicketPOSPage() {
   const [showtimeId, setShowtimeId] = useState<number | null>(null)
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
   const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>('CASH')
+  const [receipt, setReceipt] = useState<TicketReceiptData | null>(null)
+  const [confirmPaymentOpen, setConfirmPaymentOpen] = useState(false)
 
-  // POS chuẩn industry (Vista/Veezi): BẮT BUỘC bind 1 theater context cụ thể.
-  // BRANCH_ADMIN có theater từ JWT → store luôn có giá trị; SUPER_ADMIN chọn "Tất cả CN" → null → chặn.
+  // POS BẮT BUỘC bind 1 theater context. Priority: topbar switcher (SUPER_ADMIN
+  // pick) > JWT theaterId (ADMIN + STAFF đều có sẵn). STAFF không phải chọn
+  // lại — đã gắn chi nhánh từ lúc tạo tài khoản.
   const { currentTheater } = useAdminTheaterStore()
+  const user = useAuthStore(s => s.user)
+  const theaterId = currentTheater?.id ?? user?.theaterId ?? null
 
   const today = getTodayLocal()
   const { data: allShowtimes = [], isLoading: loadingShowtimes } =
-    usePOSShowtimes(today, currentTheater?.id)
+    usePOSShowtimes(today, theaterId)
   const { data: cutoffMinutes = 15 } = useCutoffMinutes()
 
   // Chỉ hiện suất chiếu còn đặt được (chưa quá cutoff)
@@ -113,13 +121,57 @@ export default function TicketPOSPage() {
     }
   }
 
+  /** Step 1: NV bấm "Xác nhận bán vé" → mở dialog xác nhận đã thu tiền. */
+  function openPaymentConfirm() {
+    if (!selectedShowtime || selectedSeats.length === 0) return
+    setConfirmPaymentOpen(true)
+  }
+
+  /** Step 2: trong dialog, NV xác nhận tiền đã thu → mới gọi BE tạo booking. */
   function handleConfirmSale() {
+    if (!selectedShowtime) return
+    // Snapshot trước khi clear state — onSuccess sẽ reset selectedSeats.
+    const seatDetails = selectedSeats.map(id => {
+      const seat = allSeats.find(s => s.id === id)
+      if (!seat) return null
+      const st = selectedShowtime
+      const base = st.basePrice
+      const vip = st.vipPrice ?? base
+      const couple = st.couplePrice ?? base
+      let price: number
+      switch (seat.seatType) {
+        case 'VIP':      price = vip; break
+        case 'COUPLE':   price = couple; break
+        case 'SWEETBOX': price = st.sweetboxPrice ?? couple * 2; break
+        case 'DELUXE':   price = st.deluxePrice ?? Math.round(vip * 1.5); break
+        case 'HANDICAP': price = base; break
+        default:         price = base
+      }
+      return { seatNumber: seat.seatNumber, seatType: seat.seatType, price }
+    }).filter((s): s is { seatNumber: string; seatType: string; price: number } => s !== null)
+    const snapshotShowtime = selectedShowtime
+    const snapshotTotal = totalAmount
+    const snapshotMethod = paymentMethod
     saleMut.mutate({ seatIds: selectedSeats, paymentMethod }, {
-      onSuccess: () => setSelectedSeats([]),
+      onSuccess: (data) => {
+        setReceipt({
+          kind: 'TICKET',
+          bookingCode: data.bookingCode,
+          movieTitle: snapshotShowtime.movieTitle,
+          roomName: snapshotShowtime.roomName,
+          startTime: snapshotShowtime.startTime,
+          seats: seatDetails,
+          total: snapshotTotal,
+          paymentMethod: snapshotMethod,
+          paidAt: new Date().toISOString(),
+        })
+        setSelectedSeats([])
+        setConfirmPaymentOpen(false)
+      },
     })
   }
 
-  if (!currentTheater) return <POSTheaterRequired mode="TICKET" />
+  if (!theaterId) return <POSTheaterRequired mode="TICKET" />
   if (loadingShowtimes) return <Loading />
 
   return (
@@ -148,7 +200,7 @@ export default function TicketPOSPage() {
             saleInProgress={saleMut.isPending}
             paymentMethod={paymentMethod}
             onPaymentMethodChange={setPaymentMethod}
-            onConfirmSale={handleConfirmSale}
+            onConfirmSale={openPaymentConfirm}
           />
         </div>
       )}
@@ -161,6 +213,23 @@ export default function TicketPOSPage() {
           </div>
         </div>
       )}
+
+      <ConfirmCounterPaymentDialog
+        open={confirmPaymentOpen}
+        onOpenChange={setConfirmPaymentOpen}
+        paymentMethod={paymentMethod}
+        totalAmount={totalAmount}
+        loading={saleMut.isPending}
+        onConfirm={handleConfirmSale}
+      />
+
+      <ReceiptDialog
+        open={!!receipt}
+        onClose={() => setReceipt(null)}
+        data={receipt}
+        theaterName={currentTheater?.name ?? user?.theaterName ?? null}
+        cashierName={user?.username ?? null}
+      />
     </div>
   )
 }

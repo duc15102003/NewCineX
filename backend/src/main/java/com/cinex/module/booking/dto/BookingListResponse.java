@@ -20,7 +20,7 @@ public class BookingListResponse {
     private String moviePosterUrl;
     private LocalDateTime startTime;
     private String roomName;
-    /** Chi nhánh — qua room.theater. SUPER_ADMIN grouped view dùng để gom rows. */
+    /** Chi nhánh — qua room.theater. Dùng cho breadcrumb + audit log. */
     private Long theaterId;
     private String theaterName;
     private BigDecimal totalAmount;

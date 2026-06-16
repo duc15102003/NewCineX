@@ -43,4 +43,11 @@ public class ShowtimeFilter {
 
     /** basePrice <= maxPrice. */
     private BigDecimal maxPrice;
+
+    /**
+     * Loại showtime DRAFT khỏi kết quả — public-facing list KHÔNG được show suất chưa publish.
+     * Service tự set cờ này = true cho mọi caller không có role admin/staff (anonymous, USER).
+     * Admin caller được phép xem DRAFT để review trước khi đẩy SCHEDULED.
+     */
+    private Boolean excludeDraft;
 }

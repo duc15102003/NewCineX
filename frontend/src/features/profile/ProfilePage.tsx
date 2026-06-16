@@ -14,6 +14,8 @@ import Loading from '@/components/common/Loading'
 import { fmtDate } from '@/utils/labels'
 import { Camera, Loader2 } from 'lucide-react'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import LoyaltyCard from './components/LoyaltyCard'
+import { FEATURES } from '@/config/featureFlags'
 
 // Schema cập nhật thông tin
 const profileSchema = z.object({
@@ -191,6 +193,9 @@ export default function ProfilePage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Loyalty card — hạng + điểm + cảnh báo hết hạn (ẩn khi flag tắt). */}
+        {FEATURES.loyaltyTier && <LoyaltyCard />}
 
         {/* Form chỉnh sửa thông tin */}
         <Card className="bg-[#201b11] border-white/5 text-white rounded-2xl">

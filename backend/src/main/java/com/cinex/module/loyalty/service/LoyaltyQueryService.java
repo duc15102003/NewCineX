@@ -10,12 +10,15 @@ import com.cinex.module.loyalty.dto.LoyaltyAccountResponse;
 import com.cinex.module.loyalty.dto.LoyaltyTransactionResponse;
 import com.cinex.module.loyalty.entity.LoyaltyTier;
 import com.cinex.module.loyalty.entity.LoyaltyTransaction;
+import com.cinex.module.loyalty.entity.LoyaltyTransactionType;
 import com.cinex.module.loyalty.repository.LoyaltyTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 
 /**
  * Query-side service cho Loyalty — đọc account + history.
@@ -53,6 +56,14 @@ public class LoyaltyQueryService {
                 ? null
                 : Math.max(0, nextThreshold - user.getLifetimePoints());
 
+        // Điểm sắp hết hạn 30 ngày tới — warning UI "dùng ngay kẻo phí".
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime in30Days = now.plusDays(30);
+        Integer expiringIn30 = loyaltyTransactionRepository.sumPointsExpiringInWindow(
+                user.getId(), LoyaltyTransactionType.EARN, now, in30Days);
+        LocalDateTime nearestExpiry = loyaltyTransactionRepository.findNearestExpiryDate(
+                user.getId(), LoyaltyTransactionType.EARN, now);
+
         return LoyaltyAccountResponse.builder()
                 .loyaltyPoints(user.getLoyaltyPoints())
                 .lifetimePoints(user.getLifetimePoints())
@@ -60,6 +71,8 @@ public class LoyaltyQueryService {
                 .nextTier(nextTier)
                 .nextTierThreshold(nextThreshold)
                 .pointsToNextTier(pointsToNext)
+                .pointsExpiringIn30Days(expiringIn30 != null ? expiringIn30 : 0)
+                .nearestExpiryDate(nearestExpiry)
                 .build();
     }
 

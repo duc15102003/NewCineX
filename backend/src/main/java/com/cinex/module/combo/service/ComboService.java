@@ -67,18 +67,28 @@ public class ComboService {
         return page.map(this::toResponse);
     }
 
-    /** List public active — user xem ở POS / booking add-on. Yêu cầu theaterId. */
+    /**
+     * List public active — user xem ở POS / booking add-on. Yêu cầu theaterId.
+     *
+     * <p>Filter 2 tầng: active+!ARCHIVED ở DB (index), rồi loại combo có
+     * ingredient hết ở app layer (computed). Không filter ingredient ở DB vì
+     * cần check nested entity — N+1 nếu join, app-level đủ vì list combo nhỏ.
+     */
     @Transactional(readOnly = true)
     public List<ComboResponse> listActiveByTheater(Long theaterId) {
         return comboRepository
                 .findByActiveTrueAndStorageStateNotAndTheaterIdOrderByPriceAsc(StorageState.ARCHIVED, theaterId)
-                .stream().map(this::toResponse).toList();
+                .stream().map(this::toResponse)
+                .filter(ComboResponse::isEffectiveAvailable)
+                .toList();
     }
 
     @Transactional(readOnly = true)
     public List<ComboResponse> listActive() {
         return comboRepository.findByActiveTrueAndStorageStateNotOrderByPriceAsc(StorageState.ARCHIVED)
-                .stream().map(this::toResponse).toList();
+                .stream().map(this::toResponse)
+                .filter(ComboResponse::isEffectiveAvailable)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -104,12 +114,22 @@ public class ComboService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "Mã combo '" + request.getCode() + "' đã tồn tại trong chi nhánh này");
         }
+        String normalizedName = request.getName().trim();
+        if (normalizedName.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tên combo không được rỗng (chỉ có khoảng trắng)");
+        }
+        if (comboRepository.existsByNameIgnoreCaseAndTheaterIdAndStorageState(
+                normalizedName, theater.getId(), StorageState.ACTIVE)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Combo tên '" + normalizedName + "' đã tồn tại trong chi nhánh này");
+        }
         Map<Long, Snack> snackMap = loadSnacks(request.getItems(), theater.getId());
 
         Combo combo = Combo.builder()
                 .theater(theater)
                 .code(request.getCode())
-                .name(request.getName())
+                .name(normalizedName)
                 .description(request.getDescription())
                 .imageUrl(request.getImageUrl())
                 .price(request.getPrice())
@@ -139,9 +159,26 @@ public class ComboService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "Không thể đổi mã combo — vui lòng tạo combo mới");
         }
+        // Theater immutable — fail-fast nếu admin cố đổi (FE đã lock, BE defense)
+        if (request.getTheaterId() != null
+                && !combo.getTheater().getId().equals(request.getTheaterId())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Không thể đổi chi nhánh của combo — tạo combo mới ở chi nhánh khác nếu cần");
+        }
+
+        String normalizedName = request.getName().trim();
+        if (normalizedName.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Tên combo không được rỗng (chỉ có khoảng trắng)");
+        }
+        if (comboRepository.existsByNameIgnoreCaseAndTheaterIdAndIdNotAndStorageState(
+                normalizedName, combo.getTheater().getId(), id, StorageState.ACTIVE)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Combo tên '" + normalizedName + "' đã tồn tại trong chi nhánh này");
+        }
         Map<Long, Snack> snackMap = loadSnacks(request.getItems(), combo.getTheater().getId());
 
-        combo.setName(request.getName());
+        combo.setName(normalizedName);
         combo.setDescription(request.getDescription());
         combo.setImageUrl(request.getImageUrl());
         combo.setPrice(request.getPrice());
@@ -225,6 +262,16 @@ public class ComboService {
                 throw new BusinessException(ErrorCode.INVALID_REQUEST,
                         "Snack '" + s.getName() + "' không thuộc chi nhánh của combo");
             }
+            // Industry chuẩn (CGV/Lotte): combo không thể bundle snack archived
+            // hoặc unavailable — POS load combo sẽ gặp lỗi item missing.
+            if (s.getStorageState() == StorageState.ARCHIVED) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Snack '" + s.getName() + "' đã archived — không thể đưa vào combo");
+            }
+            if (!s.isAvailable()) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                        "Snack '" + s.getName() + "' đang hết hàng (unavailable) — không thể đưa vào combo");
+            }
         }
         return snacks.stream().collect(Collectors.toMap(Snack::getId, s -> s));
     }
@@ -263,6 +310,20 @@ public class ComboService {
         }
 
         Theater theater = combo.getTheater();
+
+        // Compute effective availability — combo chỉ bán được khi tất cả nguyên
+        // liệu còn hàng + chưa bị archived. Industry pattern (CGV/Lotte): hết
+        // 1 ingredient → combo tự ẩn POS, admin thấy lý do trên dashboard.
+        List<String> unavailable = combo.getItems().stream()
+                .map(com.cinex.module.combo.entity.ComboItem::getSnack)
+                .filter(s -> s.getStorageState() == StorageState.ARCHIVED || !s.isAvailable())
+                .map(com.cinex.module.snack.entity.Snack::getName)
+                .distinct()
+                .toList();
+        boolean effectiveAvailable = combo.isActive()
+                && combo.getStorageState() != StorageState.ARCHIVED
+                && unavailable.isEmpty();
+
         return ComboResponse.builder()
                 .id(combo.getId())
                 .storageState(combo.getStorageState() != null ? combo.getStorageState().name() : null)
@@ -281,6 +342,8 @@ public class ComboService {
                 .savingsPercent(savingsPercent)
                 .createdAt(combo.getCreatedAt())
                 .updatedAt(combo.getUpdatedAt())
+                .effectiveAvailable(effectiveAvailable)
+                .unavailableItems(unavailable)
                 .build();
     }
 }

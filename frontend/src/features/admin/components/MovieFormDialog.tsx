@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { CalendarDays } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -86,6 +87,17 @@ export default function MovieFormDialog({ open, onOpenChange, editingId }: Movie
   }, [open, isEditMode, movieDetail, reset])
 
   function onSubmit(data: MovieFormData) {
+    // Genre min validation — match BE @NotEmpty
+    if (!data.genreIds || data.genreIds.length === 0) {
+      toast.error('Phim phải có ít nhất 1 thể loại')
+      return
+    }
+    // Trailer URL format — chỉ YouTube/Vimeo (đồng bộ BE @Pattern)
+    const trailer = (data.trailerUrl ?? '').trim()
+    if (trailer && !TRAILER_URL_RE.test(trailer)) {
+      toast.error('Trailer URL phải là link YouTube hoặc Vimeo')
+      return
+    }
     const payload = {
       ...data,
       duration: Number(data.duration),
@@ -99,6 +111,8 @@ export default function MovieFormDialog({ open, onOpenChange, editingId }: Movie
     }
   }
 
+  const TRAILER_URL_RE = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\/.+/
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl" className="bg-[#201b11] border-[#3f382d] text-white rounded-2xl">
@@ -107,6 +121,19 @@ export default function MovieFormDialog({ open, onOpenChange, editingId }: Movie
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogBody>
+            {/* Callout TRƯỚC form: giải thích trạng thái/lịch chiếu không có ở
+                đây để admin biết phải vào đâu khi cần sửa. */}
+            {isEditMode && (
+              <div className="mb-4 rounded-md border border-blue-500/30 bg-blue-500/[0.06] px-3 py-2 text-xs text-blue-200 leading-relaxed flex items-start gap-2">
+                <CalendarDays size={14} className="mt-0.5 shrink-0 text-blue-300" />
+                <div>
+                  <span className="font-semibold">Trạng thái &amp; lịch chiếu không sửa ở đây.</span>{' '}
+                  Phim hiển thị "Đang chiếu" / "Sắp chiếu" tự động theo các đợt chiếu của từng chi nhánh.
+                  Đóng form này → bấm icon{' '}
+                  <CalendarDays size={11} className="inline mb-0.5" /> trên hàng phim để mở quản lý đợt chiếu.
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-12 gap-4">
               <div className="col-span-12">
                 <label className="text-sm text-gray-400 mb-1.5 block">Tên phim <span className="text-red-400">*</span></label>
@@ -144,15 +171,6 @@ export default function MovieFormDialog({ open, onOpenChange, editingId }: Movie
                 {errors.cast && <p className="text-red-400 text-xs mt-1">{String(errors.cast.message)}</p>}
               </div>
 
-              {/* Hint: vì sao không có status/dates trong form */}
-              {isEditMode && (
-                <div className="col-span-12 rounded-xl border border-[#3f382d] bg-[#2a2317]/40 px-4 py-3 text-xs text-gray-400">
-                  <span className="text-[#ffc107] font-medium">Trạng thái &amp; lịch chiếu:</span>{' '}
-                  được tính tự động từ các <b>đợt chiếu</b> (MovieRun). Bấm icon{' '}
-                  <CalendarDays size={12} className="inline mb-0.5" /> trên hàng phim để quản lý đợt chiếu.
-                </div>
-              )}
-
               <div className="col-span-6">
                 <label className="text-sm text-gray-400 mb-1.5 block">
                   Phân loại tuổi <span className="text-red-400">*</span>
@@ -165,8 +183,9 @@ export default function MovieFormDialog({ open, onOpenChange, editingId }: Movie
                 <p className="text-gray-500 text-xs mt-1">Theo TT 25/2024/BVHTTDL</p>
               </div>
               <div className="col-span-6">
-                <label className="text-sm text-gray-400 mb-1.5 block">Trailer YouTube URL</label>
+                <label className="text-sm text-gray-400 mb-1.5 block">Trailer URL <span className="text-gray-600 text-xs">(YouTube / Vimeo)</span></label>
                 <Input {...register('trailerUrl')} placeholder="https://www.youtube.com/watch?v=..." />
+                <p className="text-gray-500 text-xs mt-1">Chỉ chấp nhận link YouTube hoặc Vimeo</p>
               </div>
               <div className="col-span-12">
                 <label className="text-sm text-gray-400 mb-1.5 block">Thể loại</label>

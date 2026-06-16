@@ -49,7 +49,12 @@ public class MovieSpecification {
         boolean showingMode = Boolean.TRUE.equals(filter.getShowing())
                 || Boolean.TRUE.equals(filter.getHasActiveShowtimes());
 
-        if (showingMode || filter.getStatus() == MovieStatus.NOW_SHOWING) {
+        // Ưu tiên cao nhất: phim đủ điều kiện tạo suất chiếu tại theater (CGV/Lotte/BHD)
+        // = có MovieRun ACTIVE hoặc UPCOMING tại CN, KHÔNG đòi showtime sẵn có.
+        // Dùng cho form tạo suất (đơn lẻ + hàng loạt). Bypass mọi branch khác.
+        if (Boolean.TRUE.equals(filter.getEligibleForShowtime())) {
+            spec = spec.and(hasActiveOrUpcomingRuns(filter.getTheaterId()));
+        } else if (showingMode || filter.getStatus() == MovieStatus.NOW_SHOWING) {
             // "Đang chiếu" = MovieRun ACTIVE today + showtime bookable
             spec = spec.and(hasActiveShowtimes(filter.getTheaterId()));
         } else if (filter.getStatus() == MovieStatus.COMING_SOON) {
@@ -59,7 +64,7 @@ public class MovieSpecification {
             // "Đã kết thúc" = không có MovieRun ACTIVE và cũng không có MovieRun upcoming
             spec = spec.and(hasNoActiveOrUpcomingRuns(filter.getTheaterId()));
         } else if (filter.getTheaterId() != null) {
-            // Không filter status — chỉ scope theo theater
+            // Không filter status — chỉ scope theo theater (phim đã có suất tại CN)
             spec = spec.and(hasShowtimesAtTheater(filter.getTheaterId()));
         }
 
@@ -235,6 +240,48 @@ public class MovieSpecification {
             }
             sub.where(conditions.toArray(new Predicate[0]));
             return cb.not(cb.exists(sub));
+        };
+    }
+
+    /**
+     * Phim đủ điều kiện TẠO SUẤT CHIẾU tại chi nhánh — chuẩn rạp CGV/Lotte/BHD.
+     *
+     * <p>Điều kiện: EXISTS MovieRun (không archived) tại theater (nếu chỉ định)
+     * còn trong vòng đời chiếu — tức {@code endDate IS NULL} (open-ended) hoặc
+     * {@code endDate >= today}. Cover cả 2 trường hợp:
+     * <ul>
+     *   <li>ACTIVE: {@code startDate ≤ today ≤ endDate} → admin xếp suất bổ sung trong đợt đang chiếu</li>
+     *   <li>UPCOMING: {@code startDate > today} → admin pre-schedule cho đợt sắp tới</li>
+     * </ul>
+     *
+     * <p><b>Khác với {@link #hasActiveShowtimes(Long)}:</b> không yêu cầu phim đã có showtime sẵn —
+     * vì mục đích là TẠO MỚI showtime. Đó cũng là lý do tách spec riêng thay vì reuse.
+     *
+     * <p><b>Khác với {@link #hasShowtimesAtTheater(Long)}:</b> không lookup bảng showtimes —
+     * phim mới chưa từng có suất nhưng có MovieRun upcoming vẫn lọt vào dropdown.
+     */
+    public static Specification<Movie> hasActiveOrUpcomingRuns(Long theaterId) {
+        return (root, query, cb) -> {
+            Subquery<Long> sub = query.subquery(Long.class);
+            Root<MovieRun> run = sub.from(MovieRun.class);
+            sub.select(cb.literal(1L));
+            var conditions = new ArrayList<Predicate>();
+            conditions.add(cb.equal(run.get("movie"), root));
+            conditions.add(cb.or(
+                    cb.isNull(run.get("storageState")),
+                    cb.notEqual(run.get("storageState"), StorageState.ARCHIVED)
+            ));
+            // endDate null (open-ended) HOẶC endDate >= today (chưa kết thúc)
+            // → cover cả ACTIVE (startDate ≤ today ≤ endDate) và UPCOMING (startDate > today)
+            conditions.add(cb.or(
+                    cb.isNull(run.get("endDate")),
+                    cb.greaterThanOrEqualTo(run.get("endDate"), LocalDate.now())
+            ));
+            if (theaterId != null) {
+                conditions.add(cb.equal(run.get("theater").get("id"), theaterId));
+            }
+            sub.where(conditions.toArray(new Predicate[0]));
+            return cb.exists(sub);
         };
     }
 

@@ -1,11 +1,12 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import EmptyState from '@/components/common/EmptyState'
 import TableSkeleton from '@/components/common/TableSkeleton'
 import { FilterTrigger } from '@/components/common/FilterDrawer'
-import { Building2, DoorOpen, X } from 'lucide-react'
+import { Building2, DoorOpen, X, Ticket } from 'lucide-react'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { label, BOOKING_STATUS_LABELS, fmtDateTime, fmtVnd } from '@/utils/labels'
 import { BOOKING_STATUS_COLORS as STATUS_COLORS } from '@/utils/colors'
 import { useAdminBookings, type AdminBooking, type AdminBookingFilter } from '@/hooks/useAdminBookings'
@@ -15,13 +16,17 @@ import { useAdminRooms } from '@/hooks/useAdminRooms'
 import { useMovies } from '@/hooks/useMovies'
 import BookingFilterDrawer from './components/BookingFilterDrawer'
 import BookingDetailDialog from './components/BookingDetailDialog'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 const EMPTY_FILTER: AdminBookingFilter = {}
 const PAGE_SIZE = 20
 
 export default function AdminBookingPage() {
+  usePageTitle('Quản lý booking')
   const [page, setPage] = useState(0)
-  const [keyword, setKeyword] = useState('')
+  const [keywordInput, setKeywordInput] = useState('')
+  const keyword = useDebouncedValue(keywordInput, 400)
+  useEffect(() => { setPage(0) }, [keyword])
   const [viewBooking, setViewBooking] = useState<AdminBooking | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [adv, setAdv] = useState<AdminBookingFilter>(EMPTY_FILTER)
@@ -55,11 +60,8 @@ export default function AdminBookingPage() {
   const bookings = data?.content ?? []
   const totalPages = data?.totalPages ?? 0
 
-  // "Tất cả chi nhánh" → thêm cột Chi nhánh trong row để phân biệt; ẩn nếu
-  // đã filter theo 1 chi nhánh (redundant). Bỏ grouped view vì paginate-
-  // then-group gây uneven distribution (9 vs 11/page) — xem note ở
-  // AdminShowtimePage refactor.
-  const showAllTheaters = !adminTheater
+  // Force theater pick (industry standard): admin LUÔN xem 1 CN cụ thể qua
+  // selector ở topbar. Không cần render cột "Chi nhánh" nữa.
 
   // Đếm số filter đang áp dụng (không tính keyword/page/size)
   const activeCount = useMemo(() => {
@@ -77,10 +79,10 @@ export default function AdminBookingPage() {
   }
 
   const renderBookingRow = (b: AdminBooking, idx: number) => (
-    <BookingRow key={b.id} booking={b} index={idx} showTheater={showAllTheaters} onClick={setViewBooking} />
+    <BookingRow key={b.id} booking={b} index={idx} showTheater={false} onClick={setViewBooking} />
   )
 
-  const tableCols = showAllTheaters ? 10 : 9
+  const tableCols = 9
   const showSkeleton = isLoading && !data
 
   return (
@@ -90,8 +92,8 @@ export default function AdminBookingPage() {
           <div className="flex-1 max-w-sm">
             <Input
               placeholder="Tìm theo mã booking..."
-              value={keyword}
-              onChange={(e) => { setKeyword(e.target.value); setPage(0) }}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
             />
           </div>
           <FilterTrigger onClick={() => setDrawerOpen(true)} activeCount={activeCount} />
@@ -106,7 +108,11 @@ export default function AdminBookingPage() {
       </div>
 
       {!showSkeleton && bookings.length === 0 ? (
-        <EmptyState message="Không có booking nào" />
+        <EmptyState
+          icon={Ticket}
+          message={keywordInput ? `Không tìm thấy booking khớp "${keywordInput}"` : 'Chưa có booking nào'}
+          description={keywordInput ? 'Thử kiểm tra lại mã booking hoặc xoá bộ lọc đang áp.' : 'Booking sẽ xuất hiện khi khách đặt vé qua website, hoặc nhân viên tạo vé qua POS Bán vé.'}
+        />
       ) : (
         <div className="rounded-2xl border border-[#3f382d] overflow-clip">
           <Table>
@@ -116,7 +122,7 @@ export default function AdminBookingPage() {
                 <TableHead className="text-gray-400">Mã booking</TableHead>
                 <TableHead className="text-gray-400">Người đặt</TableHead>
                 <TableHead className="text-gray-400">Phim</TableHead>
-                {showAllTheaters && <TableHead className="text-gray-400">Chi nhánh</TableHead>}
+                {/* Cột "Chi nhánh" bỏ — force theater pick ở topbar */}
                 <TableHead className="text-gray-400">Suất chiếu</TableHead>
                 <TableHead className="text-gray-400">Phòng</TableHead>
                 <TableHead className="text-gray-400">Số ghế</TableHead>

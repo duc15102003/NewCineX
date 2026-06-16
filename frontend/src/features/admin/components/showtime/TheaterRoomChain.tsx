@@ -4,6 +4,7 @@ import type { Theater } from '@/hooks/useAdminTheaters'
 import type { AdminRoom } from '@/hooks/useAdminRooms'
 import type { ShowtimeFormData } from './types'
 import { SELECT_CLS } from './types'
+import { FEATURES } from '@/config/featureFlags'
 
 export interface TheaterRoomChainProps {
   register: ReturnType<typeof useForm<ShowtimeFormData>>['register']
@@ -24,6 +25,27 @@ export default function TheaterRoomChain({
   register, errors, theaterLocked, isBranchAdminUser, theaters, filteredRooms,
   selectedTheaterId, onTheaterChange,
 }: TheaterRoomChainProps) {
+  // Single-theater mode: ẨN cột Chi nhánh hoàn toàn. Phòng full width.
+  // Vẫn submit theaterId qua hidden input.
+  if (!FEATURES.multiTheater) {
+    return (
+      <>
+        <input type="hidden" {...register('theaterId', { onChange: onTheaterChange })} />
+        <div className="col-span-12">
+          <label className="text-sm text-gray-400 mb-1.5 block">Phòng chiếu <span className="text-red-400">*</span></label>
+          <select {...register('roomId', { required: 'Vui lòng chọn phòng' })}
+            className={SELECT_CLS}>
+            <option value="">-- Chọn phòng --</option>
+            {filteredRooms.map((r) => (
+              <option key={r.id} value={r.id}>{r.name} ({label(ROOM_TYPE_LABELS, r.type)})</option>
+            ))}
+          </select>
+          {errors.roomId && <p className="text-red-400 text-xs mt-1">{String(errors.roomId.message)}</p>}
+        </div>
+      </>
+    )
+  }
+
   if (theaterLocked) {
     const theater = theaters.find(t => t.id === selectedTheaterId)
     const display = theater ? `${theater.name} — ${theater.city}` : `Chi nhánh #${selectedTheaterId}`

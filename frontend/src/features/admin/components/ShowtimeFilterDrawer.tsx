@@ -2,7 +2,7 @@ import FilterDrawer, { FilterField } from '@/components/common/FilterDrawer'
 import { Input } from '@/components/ui/input'
 import DateRangePicker from '@/components/common/DateRangePicker'
 import NumberRangeInput from '@/components/common/NumberRangeInput'
-import { ROOM_TYPE_LABELS, SHOWTIME_STATUS_LABELS } from '@/utils/labels'
+import { ROOM_TYPE_LABELS, SHOWTIME_STATUS_LABELS, label } from '@/utils/labels'
 import type { AdminMovie } from '@/hooks/useAdminMovies'
 import type { AdminRoom } from '@/hooks/useAdminRooms'
 import type { Theater } from '@/hooks/useAdminTheaters'
@@ -41,11 +41,19 @@ export interface ShowtimeFilterDrawerProps {
    * admin → field bị ẩn vì redundant với theater switcher cấp trên.
    */
   showTheaterFilter: boolean
+  /**
+   * Bật khi user đang ở view Calendar. Khi true:
+   * - Field "Ngày chiếu" (startDate) VẪN cho chọn — đồng bộ với navigator
+   *   calendar, dùng làm shortcut nhảy tới ngày bất kỳ.
+   * - Field "Khoảng giờ chiếu" (startTimeFrom/To) bị khoá vì calendar luôn
+   *   hiển thị full ngày (8h-24h), không support range giờ.
+   */
+  calendarMode?: boolean
 }
 
 /** Filter nâng cao cho list showtime: chi nhánh, phim, phòng, ngày, khoảng giờ, khoảng giá. */
 export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
-  const { open, onOpenChange, draftFilter, onSetDraft, onApply, onReset, movies, rooms, theaters, showTheaterFilter } = props
+  const { open, onOpenChange, draftFilter, onSetDraft, onApply, onReset, movies, rooms, theaters, showTheaterFilter, calendarMode = false } = props
   return (
     <FilterDrawer
       open={open}
@@ -53,6 +61,15 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
       onApply={onApply}
       onReset={onReset}
     >
+      {calendarMode && (
+        <div className="rounded-md border border-[#ffc107]/30 bg-[#ffc107]/10 px-3 py-2 text-xs text-amber-50 leading-relaxed">
+          Đang xem chế độ <span className="font-semibold">Lịch (Calendar)</span>:
+          <ul className="mt-1 ml-4 list-disc space-y-0.5 text-amber-50/90">
+            <li>Chọn "Ngày chiếu" → calendar nhảy thẳng tới ngày đó</li>
+            <li>"Khoảng giờ chiếu" tạm khoá — calendar luôn hiển thị nguyên ngày từ 8:00 đến 24:00</li>
+          </ul>
+        </div>
+      )}
       {showTheaterFilter && (
         <FilterField label="Chi nhánh">
           <select
@@ -83,7 +100,7 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
         </select>
       </FilterField>
 
-      <FilterField label="Phòng chiếu">
+      <FilterField label="Phòng chiếu" hint="Lọc 1 phòng cụ thể (vd Phòng A1). Tên kèm loại trong ngoặc.">
         <select
           value={draftFilter.roomId}
           onChange={(e) => onSetDraft('roomId', e.target.value)}
@@ -91,12 +108,14 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
         >
           <option value="">Tất cả phòng</option>
           {rooms.map((r) => (
-            <option key={r.id} value={r.id}>{r.name}</option>
+            <option key={r.id} value={r.id}>
+              {r.name} ({label(ROOM_TYPE_LABELS, r.type)})
+            </option>
           ))}
         </select>
       </FilterField>
 
-      <FilterField label="Loại phòng">
+      <FilterField label="Loại phòng" hint="Lọc theo công nghệ (vd tất cả phòng IMAX của tất cả CN).">
         <select
           value={draftFilter.roomType}
           onChange={(e) => onSetDraft('roomType', e.target.value)}
@@ -122,21 +141,23 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
         </select>
       </FilterField>
 
-      <FilterField label="Ngày chiếu" hint="Chọn 1 ngày cụ thể (ưu tiên hơn khoảng thời gian)">
+      <FilterField label="Ngày chiếu" hint={calendarMode ? 'Apply → Calendar nhảy tới ngày này' : 'Chọn 1 ngày cụ thể (ưu tiên hơn khoảng thời gian)'}>
         <Input type="date" value={draftFilter.startDate}
           onChange={(e) => onSetDraft('startDate', e.target.value)} />
       </FilterField>
 
-      <FilterField label="Khoảng giờ chiếu" hint="Chỉ áp dụng khi không chọn ngày cụ thể">
-        <DateRangePicker
-          type="datetime-local"
-          from={draftFilter.startTimeFrom}
-          to={draftFilter.startTimeTo}
-          onChange={(from, to) => {
-            onSetDraft('startTimeFrom', from)
-            onSetDraft('startTimeTo', to)
-          }}
-        />
+      <FilterField label="Khoảng giờ chiếu" hint={calendarMode ? 'Calendar luôn hiển thị full ngày — field này tạm khoá' : 'Chỉ áp dụng khi không chọn ngày cụ thể'}>
+        <div className={calendarMode ? 'opacity-50 pointer-events-none' : ''}>
+          <DateRangePicker
+            type="datetime-local"
+            from={draftFilter.startTimeFrom}
+            to={draftFilter.startTimeTo}
+            onChange={(from, to) => {
+              onSetDraft('startTimeFrom', from)
+              onSetDraft('startTimeTo', to)
+            }}
+          />
+        </div>
       </FilterField>
 
       <FilterField label="Khoảng giá vé thường">
@@ -152,7 +173,7 @@ export default function ShowtimeFilterDrawer(props: ShowtimeFilterDrawerProps) {
         />
       </FilterField>
 
-      <FilterField label="Bao gồm đã lưu trữ" hint="Hiển thị cả bản ghi đã bị xoá mềm (ARCHIVED).">
+      <FilterField label="Bao gồm bản đã lưu trữ" hint="Lưu trữ = ẩn khỏi danh sách thường, có thể khôi phục lại bất cứ lúc nào.">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
