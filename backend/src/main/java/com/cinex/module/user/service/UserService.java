@@ -164,7 +164,14 @@ public class UserService {
         Long scopedTheaterId = securityService.getCurrentUserTheaterId();
         if (scopedTheaterId != null) {
             filter.setScopedTheaterId(scopedTheaterId);
-            filter.setExcludeAdminRoles(true);
+            // KHÔNG set excludeAdminRoles → spec inScopedTheaterOrPublicUser
+            // (theater_id = HN OR role = USER) đã đủ filter:
+            //   - cinex.hn (ADMIN, theater HN) → MATCH → hiện (admin thấy mình)
+            //   - cinex.hcm (ADMIN, theater HCM) → KHÔNG match → ẩn ✓
+            //   - admin (SUPER_ADMIN, theater NULL) → KHÔNG match → ẩn ✓
+            //   - user01-08 (USER, theater NULL) → match role=USER → hiện
+            //   - STAFF HN (nếu seed) → match theater HN → hiện
+            // Trước đây excludeAdminRoles loại tất cả ADMIN → ẩn nhầm bản thân.
         }
         var spec = UserSpecification.fromFilter(filter);
         return userRepository.findAll(spec, pageable)
