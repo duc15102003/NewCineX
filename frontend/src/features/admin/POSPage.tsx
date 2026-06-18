@@ -12,6 +12,7 @@ import { useAdminTheaterStore } from '@/store/adminTheaterStore'
 import { useAuthStore } from '@/store/authStore'
 import POSTheaterRequired from './components/POSTheaterRequired'
 import ReceiptDialog, { type SnackReceiptData } from './components/ReceiptDialog'
+import { FEATURES } from '@/config/featureFlags'
 
 interface SnackCartItem {
   kind: 'SNACK'
@@ -51,7 +52,9 @@ export default function POSPage() {
   const theaterId = currentTheater?.id ?? user?.theaterId ?? null
 
   const { data: snacks = [], isLoading: loadingSnacks } = useSnacksForPOS(theaterId)
-  const { data: combos = [], isLoading: loadingCombos } = usePublicCombos(theaterId)
+  // Combo gate: FEATURES.admin.combos=false → skip fetch, không tốn API call.
+  const { data: combos = [], isLoading: loadingCombosRaw } = usePublicCombos(theaterId, FEATURES.admin.combos)
+  const loadingCombos = FEATURES.admin.combos && loadingCombosRaw
   const createOrderMut = useCreateSnackOrder()
 
   if (!theaterId) return <POSTheaterRequired mode="SNACK" />
@@ -144,8 +147,9 @@ export default function POSPage() {
           <Receipt size={20} className="text-[#ffc107]" /> POS Bán hàng
         </h2>
 
-        {/* Combo section — hiển thị trước để khuyến khích bán combo (margin cao hơn) */}
-        {combos.length > 0 && (
+        {/* Combo section — hiển thị trước để khuyến khích bán combo (margin cao hơn).
+            cinex-team: FEATURES.admin.combos=false → ẨN section, POS chỉ bán Snack lẻ. */}
+        {FEATURES.admin.combos && combos.length > 0 && (
           <section>
             <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
               <Package size={16} className="text-purple-400" /> Combo
@@ -223,13 +227,13 @@ export default function POSPage() {
           </section>
         )}
 
-        {/* Empty state: chi nhánh hiện chưa setup món nào */}
-        {combos.length === 0 && snacks.length === 0 && (
+        {/* Empty state — single-tenant: bỏ chữ "chi nhánh", chỉ nhắc Đồ ăn (Combo ẨN). */}
+        {snacks.length === 0 && (!FEATURES.admin.combos || combos.length === 0) && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Popcorn size={48} className="text-[#ffc107]/30 mb-4" />
-            <p className="text-amber-50 font-medium mb-1">Chi nhánh chưa có món nào</p>
+            <p className="text-amber-50 font-medium mb-1">Chưa có món nào</p>
             <p className="text-gray-500 text-sm max-w-sm">
-              Vào "Quản lý đồ ăn" hoặc "Quản lý combo" để thêm món cho chi nhánh này trước khi bán.
+              Vào "Quản lý đồ ăn" để thêm món trước khi bán tại quầy.
             </p>
           </div>
         )}

@@ -134,6 +134,22 @@ public class Booking extends BaseEntity {
     @Builder.Default
     private BigDecimal loyaltyDiscountAmount = BigDecimal.ZERO;
 
+    /**
+     * Mã voucher đã áp lúc đặt — null nếu không dùng voucher. Lưu để hiển thị
+     * trên hóa đơn/vé + audit. Length 20 = pattern cap của HoldSeatsRequest.
+     */
+    @Column(name = "voucher_code", length = 20)
+    private String voucherCode;
+
+    /**
+     * Tiền giảm từ voucher = orderAmount × % hoặc giá trị cố định, capped bởi
+     * maxDiscount. 0 nếu không áp voucher. History-preserving giống tier/group
+     * discount: voucher có thể bị xoá / hết hạn nhưng vé cũ vẫn giữ số tiền đã giảm.
+     */
+    @Column(name = "voucher_discount_amount", nullable = false, precision = 12, scale = 0)
+    @Builder.Default
+    private BigDecimal voucherDiscountAmount = BigDecimal.ZERO;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private BookingStatus status;

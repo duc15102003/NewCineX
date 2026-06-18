@@ -169,6 +169,16 @@ export default function SeatSelectionPage() {
   const showtimeTheaterId = data?.showtime?.theaterId
   const { data: availableVouchers = [] } = useAvailableVouchers(total, showtimeTheaterId)
 
+  // Reset voucher mỗi khi tổng tiền thay đổi (thêm/bỏ ghế) — tránh stale
+  // discount: vd user apply voucher ở total=200k (-20k) rồi bỏ 1 ghế còn
+  // total=50k (< min_order), nhưng UI vẫn hiện "-20.000đ". User giữ ghế →
+  // BE re-validate trả 50k → lệch giữa FE và BE. Clear voucherResult, user
+  // phải apply mã hoặc click voucher khả dụng lại (list cũng tự refetch).
+  useEffect(() => {
+    if (voucherResult) setVoucherResult(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total])
+
   function selectVoucher(v: AvailableVoucher) {
     setVoucherCode(v.code)
     setVoucherResult({ valid: true, code: v.code, discountAmount: v.discountAmount, message: v.description })

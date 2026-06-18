@@ -54,6 +54,8 @@ public class BookingResponseMapper {
                 .groupDiscountAmount(booking.getGroupDiscountAmount())
                 .pointsRedeemed(booking.getPointsRedeemed())
                 .loyaltyDiscountAmount(booking.getLoyaltyDiscountAmount())
+                .voucherCode(booking.getVoucherCode())
+                .voucherDiscountAmount(booking.getVoucherDiscountAmount())
                 .totalAmount(booking.getTotalAmount())
                 .confirmedAt(booking.getConfirmedAt())
                 .cancelledAt(booking.getCancelledAt())

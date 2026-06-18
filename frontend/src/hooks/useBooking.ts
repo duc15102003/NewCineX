@@ -158,16 +158,20 @@ export interface AvailableVoucher {
  * Voucher hợp lệ với 1 đơn (theo orderAmount + theater).
  * BE đã chain logic: theater-specific + global voucher gộp lại.
  * total <= 0 → query disabled, FE không gọi.
+ *
+ * <p>BE trả {@code PageResponse} (paginated) — phải unwrap {@code .content},
+ * KHÔNG cast thẳng sang array (lỗi cũ: availableVouchers thành object → button
+ * gợi ý mã không bao giờ render dù BE trả voucher).
  */
 export function useAvailableVouchers(total: number, theaterId: number | undefined) {
   return useQuery({
     queryKey: ['vouchers', 'available', total, theaterId ?? 'global'],
     enabled: total > 0,
     queryFn: async () => {
-      const res = await api.get<ApiResponse<AvailableVoucher[]>>('/api/vouchers/available', {
+      const res = await api.get<ApiResponse<PageResponse<AvailableVoucher>>>('/api/vouchers/available', {
         params: { orderAmount: total, theaterId },
       })
-      return res.data.data ?? []
+      return res.data.data?.content ?? []
     },
   })
 }

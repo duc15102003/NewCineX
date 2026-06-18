@@ -215,6 +215,17 @@ public class BookingService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
                     "Suất chiếu đã bắt đầu quá " + bookingCutoff + " phút");
         }
+        // Room status guard cho online booking — chuẩn industry. Cùng logic
+        // counter-sale (BookingService.holdSeatsForCounter) để admin đổi phòng
+        // sang MAINTENANCE/CLOSED sau khi đã tạo showtime → không cho khách book
+        // tiếp → tránh check-in fail tại cổng → dispute.
+        Room bookingRoom = showtime.getRoom();
+        if (bookingRoom.getStatus() != RoomStatus.ACTIVE) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "Phòng '" + bookingRoom.getName() + "' đang "
+                            + (bookingRoom.getStatus() == RoomStatus.MAINTENANCE ? "bảo trì" : "đóng")
+                            + " — không thể đặt vé");
+        }
         return showtime;
     }
 
@@ -345,18 +356,23 @@ public class BookingService {
 
         // Voucher discount — validate trên afterLoyalty
         BigDecimal total = afterLoyalty;
+        BigDecimal voucherDiscount = BigDecimal.ZERO;
+        String appliedVoucherCode = null;
         if (voucherCode != null && !voucherCode.isBlank()) {
             Long userId = (user != null) ? user.getId() : null;
             ValidateVoucherResponse voucherResult = voucherService.validateVoucher(
                     voucherCode, afterLoyalty, userId, theaterId);
             if (voucherResult.isValid()) {
-                total = afterLoyalty.subtract(voucherResult.getDiscountAmount());
+                voucherDiscount = voucherResult.getDiscountAmount();
+                appliedVoucherCode = voucherCode;
+                total = afterLoyalty.subtract(voucherDiscount);
             }
         }
         if (total.compareTo(BigDecimal.ZERO) < 0) total = BigDecimal.ZERO;
 
         return new PriceBreakdown(seatTotal, tierDiscount, groupDiscount,
-                afterGroup, redeemPoints, loyaltyDiscount, tier, total);
+                afterGroup, redeemPoints, loyaltyDiscount, tier,
+                appliedVoucherCode, voucherDiscount, total);
     }
 
     /**
@@ -382,6 +398,7 @@ public class BookingService {
                                   BigDecimal groupDiscount, BigDecimal afterGroup,
                                   int pointsRedeemed,
                                   BigDecimal loyaltyDiscount, LoyaltyTier tier,
+                                  String voucherCode, BigDecimal voucherDiscount,
                                   BigDecimal total) {}
 
     /**
@@ -427,6 +444,8 @@ public class BookingService {
                 .groupDiscountAmount(breakdown.groupDiscount())
                 .pointsRedeemed(breakdown.pointsRedeemed())
                 .loyaltyDiscountAmount(breakdown.loyaltyDiscount())
+                .voucherCode(breakdown.voucherCode())
+                .voucherDiscountAmount(breakdown.voucherDiscount())
                 .status(BookingStatus.HOLDING)
                 .bookingCode(bookingCode)
                 .qrToken(generateQrToken())
@@ -778,10 +797,10 @@ public class BookingService {
         securityService.requireAccessToTheater(showtimeTheaterId);
 
         validateShowtimeBookable(showtime);
-        // Room status guard — chặn bán vé tại room MAINTENANCE/CLOSED. Online
-        // booking đã check qua ShowtimeService.holdSeats; counter-sale trước
-        // đây skip → POS có thể bán nhầm cho room đang sửa → khách check-in
-        // fail tại cổng → dispute.
+        // Room status guard — chặn bán vé tại room MAINTENANCE/CLOSED. Cùng
+        // logic với online booking (lockAndValidateShowtime) — đảm bảo cả
+        // 2 luồng (online + POS) không bán vé cho phòng đang sửa → tránh
+        // khách check-in fail tại cổng → dispute.
         Room counterRoom = showtime.getRoom();
         if (counterRoom.getStatus() != RoomStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST,
@@ -843,6 +862,8 @@ public class BookingService {
                 .groupDiscountAmount(breakdown.groupDiscount())
                 .pointsRedeemed(0)
                 .loyaltyDiscountAmount(BigDecimal.ZERO)
+                .voucherCode(breakdown.voucherCode())
+                .voucherDiscountAmount(breakdown.voucherDiscount())
                 .status(BookingStatus.CONFIRMED)
                 .bookingCode(bookingCode)
                 .qrToken(generateQrToken())
