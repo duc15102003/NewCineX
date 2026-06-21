@@ -23,7 +23,7 @@ export const FEATURES = {
   multiTheater: false,
 
   /** Voucher / khuyến mãi: input code + list voucher available trong booking summary. */
-  voucher: false,
+  voucher: true,
 
   /** Loyalty redeem: input đổi điểm trong booking summary. */
   loyaltyRedeem: false,
@@ -56,7 +56,7 @@ export const FEATURES = {
   /** BRANCH_ADMIN cinex.hn chỉ thấy 5 mục cốt lõi: thể loại, phim, phòng, suất, user.
    *  Bật lại các mục bị ẩn → đổi flag tương ứng = true. */
   admin: {
-    dashboard: false,    // Tổng quan — ẨN. Khi /admin truy cập → redirect /admin/users
+    dashboard: true,     // Tổng quan — BẬT. /admin → DashboardPage (KPI + báo cáo)
     genres: true,        // Thể loại
     movies: true,        // Phim
     rooms: true,         // Phòng chiếu
@@ -67,15 +67,15 @@ export const FEATURES = {
     theaters: false,     // Chi nhánh (SUPER_ADMIN — đơn rạp không cần)
     bookings: false,     // Đặt vé (audit booking)
     payments: false,     // Giao dịch
-    snacks: false,       // Đồ ăn
-    combos: false,       // Combo
-    vouchers: false,     // Khuyến mãi
+    snacks: false,        // Đồ ăn
+    combos: false,       // Combo — ẨN menu admin + ẩn section trong POS
+    vouchers: true,      // Khuyến mãi
     reviews: false,      // Đánh giá
     pricing: false,      // Quy tắc giá
     configs: false,      // Cấu hình hệ thống
-    pos: false,          // POS đồ ăn
-    ticketPos: false,    // POS bán vé
-    checkIn: false,      // Quét vé
+    pos: false,           // POS đồ ăn (chỉ bán Snack — section Combo wrap theo flag combos)
+    ticketPos: true,     // POS bán vé
+    checkIn: true,       // Quét vé
   },
 } as const
 

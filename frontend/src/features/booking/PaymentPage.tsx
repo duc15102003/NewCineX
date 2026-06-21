@@ -188,6 +188,12 @@ export default function PaymentPage() {
                   <span>−{fmtVnd(booking.loyaltyDiscountAmount)}</span>
                 </div>
               )}
+              {FEATURES.voucher && booking.voucherDiscountAmount != null && booking.voucherDiscountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-400">
+                  <span>Mã giảm giá {booking.voucherCode ? `(${booking.voucherCode})` : ''}</span>
+                  <span>−{fmtVnd(booking.voucherDiscountAmount)}</span>
+                </div>
+              )}
               {FEATURES.vatDisplay && booking.subtotalAmount != null && booking.vatAmount != null && (
                 <>
                   <div className="flex justify-between text-sm text-gray-400">

@@ -4,7 +4,7 @@ import com.cinex.module.voucher.entity.DiscountType;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -25,8 +25,13 @@ public class VoucherRequest {
      */
     private Long theaterId;
 
+    /**
+     * Mã voucher — pattern phải KHỚP với {@link com.cinex.module.booking.dto.HoldSeatsRequest#voucherCode}
+     * để admin không tạo được voucher mà user nhập vào sẽ bị reject 400.
+     */
     @NotBlank(message = "Mã voucher là bắt buộc")
-    @Size(max = 30, message = "Mã voucher tối đa 30 ký tự")
+    @Pattern(regexp = "^[A-Z0-9-]{3,20}$",
+             message = "Mã voucher chỉ gồm chữ in hoa, số và dấu gạch ngang, 3-20 ký tự")
     private String code;
 
     private String description;

@@ -42,7 +42,7 @@ export default function TicketPOSPage() {
 
   const today = getTodayLocal()
   const { data: allShowtimes = [], isLoading: loadingShowtimes } =
-    usePOSShowtimes(today, theaterId)
+    usePOSShowtimes(today, theaterId ?? undefined)
   const { data: cutoffMinutes = 15 } = useCutoffMinutes()
 
   // Chỉ hiện suất chiếu còn đặt được (chưa quá cutoff)
@@ -147,7 +147,7 @@ export default function TicketPOSPage() {
         case 'HANDICAP': price = base; break
         default:         price = base
       }
-      return { seatNumber: seat.seatNumber, seatType: seat.seatType, price }
+      return { seatNumber: seat.seatNumber, seatType: seat.seatType as string, price }
     }).filter((s): s is { seatNumber: string; seatType: string; price: number } => s !== null)
     const snapshotShowtime = selectedShowtime
     const snapshotTotal = totalAmount

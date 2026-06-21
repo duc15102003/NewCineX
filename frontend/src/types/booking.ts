@@ -124,6 +124,10 @@ export interface BookingDetail {
   pointsRedeemed?: number
   /** Tiền giảm tương ứng số điểm đã đổi. */
   loyaltyDiscountAmount?: number
+  /** Mã voucher đã áp — null nếu không dùng voucher. */
+  voucherCode?: string | null
+  /** Tiền giảm từ voucher — 0/undefined nếu không áp voucher. */
+  voucherDiscountAmount?: number
   totalAmount: number
   confirmedAt: string | null
   cancelledAt: string | null

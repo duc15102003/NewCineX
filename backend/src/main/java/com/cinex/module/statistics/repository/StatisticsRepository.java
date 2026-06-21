@@ -348,6 +348,9 @@ public class StatisticsRepository {
      * trừ vì ghế không thực sự chào bán.
      */
     public OccupancyAggregateStatistics findOccupancyAggregate(LocalDate from, LocalDate to, Long theaterId) {
+        // Sub-query showtime: chỉ tính suất chưa ARCHIVED — nếu admin xoá mềm
+        // showtime sau khi đã chạy, không tính vào occupancy KPI để tránh
+        // báo cáo lệch (showtime cũ vẫn count vô denominator).
         String jpql = "SELECT " +
                 "  COALESCE(SUM(r.totalSeats), 0), " +
                 "  COALESCE((SELECT COUNT(bs) FROM BookingSeat bs " +
@@ -355,6 +358,7 @@ public class StatisticsRepository {
                 "              (SELECT s2 FROM Showtime s2 " +
                 "               WHERE s2.startTime >= :start AND s2.startTime < :end " +
                 "               AND s2.status IN ('ONGOING', 'FINISHED') " +
+                "               AND (s2.storageState IS NULL OR s2.storageState <> 'ARCHIVED') " +
                 (theaterId != null ? "               AND s2.room.theater.id = :theaterId " : "") +
                 "              ) " +
                 "            AND bs.status = 'BOOKED' " +
@@ -363,7 +367,8 @@ public class StatisticsRepository {
                 "FROM Showtime s " +
                 "JOIN s.room r " +
                 "WHERE s.startTime >= :start AND s.startTime < :end " +
-                "AND s.status IN ('ONGOING', 'FINISHED') ";
+                "AND s.status IN ('ONGOING', 'FINISHED') " +
+                "AND (s.storageState IS NULL OR s.storageState <> 'ARCHIVED') ";
         if (theaterId != null) {
             jpql += "AND r.theater.id = :theaterId ";
         }

@@ -57,10 +57,12 @@ export function useAdminCombos(params: { theaterId?: number; page?: number; size
   })
 }
 
-/** Combo active để bán — theaterId bắt buộc nếu muốn lọc theo rạp (POS / booking add-on). */
-export function usePublicCombos(theaterId?: number | null) {
+/** Combo active để bán — theaterId bắt buộc nếu muốn lọc theo rạp (POS / booking add-on).
+ *  enabled=false → skip fetch (vd FEATURES.admin.combos=false thì POS không cần). */
+export function usePublicCombos(theaterId?: number | null, enabled: boolean = true) {
   return useQuery({
     queryKey: ['combos', 'public', theaterId ?? 'all'],
+    enabled,
     queryFn: async () => {
       const params = theaterId ? { theaterId } : undefined
       const res = await api.get<ApiResponse<Combo[]>>('/api/combos/public', { params })

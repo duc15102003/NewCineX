@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Thêm 2 cột voucher vào bookings — history-preserving (giống tier /
+        group / loyalty discount đã có sẵn).
+
+        VÌ SAO CẦN: BookingService đã tính voucher discount để trừ vào total
+        nhưng KHÔNG persist riêng. Kết quả: ticket detail không show được
+        "Giảm voucher: -20.000đ" → user thấy total nhỏ hơn seatTotal mà
+        không hiểu vì sao. Lưu 2 field này = nguồn truth duy nhất cho:
+          - Hiển thị breakdown trên vé (TicketDetailPage / PaymentPage)
+          - Audit / report: voucher nào dùng cho booking nào, giảm bao nhiêu
+          - Decrement usedCount nếu cancel/expire booking sau này
+
+        FIELD:
+          - voucher_code NVARCHAR(20) NULL — mã voucher đã áp (null = không
+            áp voucher). Length 20 khớp với HoldSeatsRequest pattern
+            {3,20} đã siết.
+          - voucher_discount_amount DECIMAL(12,0) NOT NULL default 0 — số
+            tiền giảm. 0 nếu không áp voucher.
+    -->
+
+    <changeSet id="043-booking-add-voucher-fields" author="cinex-team">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="bookings"/>
+                <not>
+                    <columnExists tableName="bookings" columnName="voucher_code"/>
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="bookings">
+            <column name="voucher_code" type="NVARCHAR(20)"/>
+            <column name="voucher_discount_amount" type="DECIMAL(12,0)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

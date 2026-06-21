@@ -102,7 +102,7 @@ function RevenueBreakdownCard({ data }: { data: RevenueBreakdown | undefined }) 
           color="bg-[#ffc107]"
         />
         <BreakdownRow
-          label="Đồ ăn / combo"
+          label="Đồ ăn"
           amount={data?.snackRevenue ?? 0}
           percent={data?.snackPercent ?? 0}
           color="bg-pink-400"

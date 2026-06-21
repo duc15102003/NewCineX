@@ -59,6 +59,10 @@ public class BookingResponse {
     private Integer pointsRedeemed;
     /** Tiền giảm tương ứng số điểm đã đổi. */
     private BigDecimal loyaltyDiscountAmount;
+    /** Mã voucher đã áp — null nếu không dùng voucher. */
+    private String voucherCode;
+    /** Tiền giảm từ voucher — 0 nếu không áp voucher. */
+    private BigDecimal voucherDiscountAmount;
     private BigDecimal totalAmount;
 
     private LocalDateTime confirmedAt;

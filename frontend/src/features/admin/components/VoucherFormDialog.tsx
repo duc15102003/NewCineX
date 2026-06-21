@@ -14,6 +14,7 @@ import { useCreateVoucher, useUpdateVoucher } from '@/hooks/useAdmin'
 import { useTheaterOptions, type Theater } from '@/hooks/useAdminTheaters'
 import type { AdminVoucher } from '@/hooks/useAdminVouchers'
 import LockedTheaterBadge from './LockedTheaterBadge'
+import { FEATURES } from '@/config/featureFlags'
 
 const SELECT_CLS =
   'w-full h-10 rounded-lg border border-white/10 bg-[#2a2317] text-white text-sm px-3 focus:outline-none focus:ring-1 focus:ring-[#ffc107]'
@@ -74,7 +75,7 @@ export default function VoucherFormDialog({
   const createMut = useCreateVoucher()
   const updateMut = useUpdateVoucher()
 
-  const { register, handleSubmit, reset, control, watch, formState: { errors } } = useForm<VoucherFormData>()
+  const { register, handleSubmit, reset, control, watch, setValue, formState: { errors } } = useForm<VoucherFormData>()
   const discountType = watch('discountType')
   const watchedScope = watch('scope')
 
@@ -161,11 +162,15 @@ export default function VoucherFormDialog({
               {watchedScope === 'THEATER' && !editingItem && (
                 branchLocked || scopedTheaterId != null ? (
                   <>
-                    <LockedTheaterBadge
-                      theaterId={scopedTheaterId}
-                      theaters={theaters}
-                      isBranchAdmin={branchLocked}
-                    />
+                    {/* Single-tenant (cinex-team): ẨN badge để không lộ multi-tenant.
+                        Hidden input vẫn submit theaterId từ form defaultValues. */}
+                    {FEATURES.multiTheater && (
+                      <LockedTheaterBadge
+                        theaterId={scopedTheaterId}
+                        theaters={theaters}
+                        isBranchAdmin={branchLocked}
+                      />
+                    )}
                     <input type="hidden" {...register('theaterId')} />
                   </>
                 ) : (
@@ -185,9 +190,22 @@ export default function VoucherFormDialog({
 
               <div className="col-span-12">
                 <label className="text-sm text-gray-400 mb-1.5 block">Mã voucher <span className="text-red-400">*</span></label>
-                <Input {...register('code', { required: 'Mã voucher là bắt buộc', maxLength: { value: 30, message: 'Tối đa 30 ký tự' } })}
-                  disabled={!!editingItem} className="font-mono uppercase" />
+                {/* Constraint phải KHỚP với HoldSeatsRequest.voucherCode regex
+                    `^[A-Z0-9-]{3,20}$` — nếu để rộng, admin tạo được voucher mà
+                    user click áp dụng + giữ ghế sẽ bị BE reject với message:
+                    "Mã voucher chỉ gồm chữ in hoa, số và dấu gạch ngang, 3-20 ký tự". */}
+                <Input {...register('code', {
+                  required: 'Mã voucher là bắt buộc',
+                  pattern: {
+                    value: /^[A-Z0-9-]{3,20}$/,
+                    message: 'Chỉ chữ hoa, số, dấu gạch ngang; độ dài 3-20 ký tự',
+                  },
+                  onChange: (e) => { e.target.value = e.target.value.toUpperCase() },
+                })}
+                  disabled={!!editingItem} className="font-mono uppercase"
+                  placeholder="VD: WELCOME10, SUMMER-2026" />
                 {errors.code && <p className="text-red-400 text-xs mt-1">{String(errors.code.message)}</p>}
+                {!editingItem && <p className="text-gray-500 text-xs mt-1">Chỉ A-Z, 0-9 và dấu gạch ngang (-), 3-20 ký tự</p>}
                 {editingItem && <p className="text-gray-500 text-xs mt-1">Không thể đổi mã — tạo voucher mới nếu cần</p>}
               </div>
               <div className="col-span-12">

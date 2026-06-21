@@ -64,4 +64,12 @@
     <!-- Fix seed showtime cũ: auto-fill sweetbox/deluxe price cho phòng có loại ghế đó -->
     <include file="db/changelog/changes/041-fix-showtime-tier-prices.xml"/>
 
+    <!-- cinex-team Phase 2: dọn data về single-tenant — xoá 4 theater ngoài HN
+         + SUPER_ADMIN + 4 branch admin khác. Stats sẽ khớp với UI list (9 user). -->
+    <include file="db/changelog/changes/042-cinex-team-single-tenant-cleanup.xml"/>
+
+    <!-- Lưu voucher discount vào bookings để TicketDetailPage hiển thị được dòng
+         "Giảm voucher: -X" + phục vụ audit. -->
+    <include file="db/changelog/changes/043-booking-voucher-fields.xml"/>
+
 </databaseChangeLog>

@@ -13,6 +13,7 @@ import { useTheaterOptions, type Theater } from '@/hooks/useAdminTheaters'
 import { useAuthStore } from '@/store/authStore'
 import type { AdminSnack } from '@/hooks/useAdminSnacks'
 import LockedTheaterBadge from './LockedTheaterBadge'
+import { FEATURES } from '@/config/featureFlags'
 
 const SELECT_CLS =
   'w-full h-10 rounded-md border border-white/10 bg-[#2a2317] text-white text-sm px-3 focus:outline-none focus:ring-1 focus:ring-[#ffc107]'
@@ -107,12 +108,16 @@ export default function SnackFormDialog({
             <div className="grid grid-cols-12 gap-4">
               {(editingItem || theaterLocked) ? (
                 <>
-                  <LockedTheaterBadge
-                    theaterId={editingItem ? editingItem.theaterId : scopedTheaterId}
-                    theaters={theaters}
-                    isBranchAdmin={isBranchAdmin()}
-                    isEdit={!!editingItem}
-                  />
+                  {/* Single-tenant (cinex-team): ẨN badge để không lộ multi-tenant.
+                      Hidden input vẫn submit theaterId từ form defaultValues. */}
+                  {FEATURES.multiTheater && (
+                    <LockedTheaterBadge
+                      theaterId={editingItem ? editingItem.theaterId : scopedTheaterId}
+                      theaters={theaters}
+                      isBranchAdmin={isBranchAdmin()}
+                      isEdit={!!editingItem}
+                    />
+                  )}
                   <input type="hidden" {...register('theaterId', { valueAsNumber: true })} />
                 </>
               ) : (
